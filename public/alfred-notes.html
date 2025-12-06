@@ -2401,7 +2401,8 @@
                 selectedAudioFile: null,
                 currentAudio: null, // Currently playing audio element
                 currentAudioButton: null, // Button for currently playing audio
-                soundwaveAnimationId: null // Animation frame ID for sound wave
+                soundwaveAnimationId: null, // Animation frame ID for sound wave
+                isStreamingAudio: false // Whether audio is currently streaming
             },
 
             // Initialize app
@@ -3508,16 +3509,16 @@ JSON:`;
                     // Add conversation history
                     formData.append('conversationHistory', JSON.stringify(this.state.conversationHistory.slice(-10)));
                     
-                    // Add voice configuration if audio is enabled
+                    // Voice configuration for Text-to-Speech (matching exact working implementation)
                     const voiceConfig = {
-                        engine: this.state.settings.ttsEngine || 'kokoro',
-                        voice_id: this.state.settings.voiceId || 'en',
+                        engine: this.state.settings.audioEnabled ? (this.state.settings.ttsEngine || 'elevenlabs') : 'elevenlabs',
+                        voice_id: this.state.settings.voiceId || 'onwK4e9ZLuTAKqWW03F9',
                         speed: 1,
                         enabled: this.state.settings.audioEnabled
                     };
                     
                     // Add engine-specific configuration
-                    if (this.state.settings.ttsEngine === 'elevenlabs') {
+                    if (voiceConfig.engine === 'elevenlabs') {
                         voiceConfig.elevenlabs = {
                             selectedVoice: this.state.settings.voiceId || 'onwK4e9ZLuTAKqWW03F9',
                             model_id: 'eleven_turbo_v2',
@@ -3530,11 +3531,15 @@ JSON:`;
                     
                     formData.append('voiceConfig', JSON.stringify(voiceConfig));
 
+                    const processingMode = this.state.chatMode === 'selected' ? 'rag' : 
+                                          this.state.chatMode === 'notes' ? 'rag' : 'llm';
+                    
                     console.log('🚀 Sending request to /api/voice/converse:', {
                         text: question,
-                        processing_mode: this.state.chatMode,
+                        processing_mode: processingMode,
                         audioEnabled: this.state.settings.audioEnabled,
-                        voiceConfig: voiceConfig
+                        voiceConfig: voiceConfig,
+                        pinnedDidTx: this.state.selectedNoteForChat
                     });
 
                     const response = await fetch(`${this.state.settings.apiBaseUrl}/api/voice/converse`, {
@@ -3545,7 +3550,12 @@ JSON:`;
                         body: formData
                     });
 
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
                     const data = await response.json();
+                    console.log('📥 Response from /api/voice/converse:', data);
 
                     if (data.success || data.dialogueId) {
                         // Open streaming connection to get the actual response
@@ -3561,16 +3571,19 @@ JSON:`;
             },
 
             async handleStreamingResponse(dialogueId) {
+                console.log('🎯 Opening SSE stream for dialogueId:', dialogueId);
                 const streamUrl = `${this.state.settings.apiBaseUrl}/api/voice/open-stream?dialogueId=${dialogueId}`;
                 const eventSource = new EventSource(streamUrl);
                 
                 let accumulatedText = '';
                 let assistantMessageDiv = null;
                 let audioChunks = [];
+                let audioPlaybackStarted = false;
 
                 eventSource.addEventListener('textChunk', (event) => {
                     try {
                         const chunkData = JSON.parse(event.data);
+                        console.log('📝 Text chunk received:', chunkData.text);
                         accumulatedText += chunkData.text || '';
                         
                         // Update existing message or create new one
@@ -3608,18 +3621,28 @@ JSON:`;
                     }
                 });
 
-                eventSource.addEventListener('audioChunk', (event) => {
+                eventSource.addEventListener('audioChunk', async (event) => {
                     try {
                         const chunkData = JSON.parse(event.data);
+                        console.log('🎵 Audio chunk received:', chunkData.audio ? `${chunkData.audio.length} chars` : 'no audio');
+                        
                         if (chunkData.audio && this.state.settings.audioEnabled) {
                             audioChunks.push(chunkData.audio);
+                            
+                            // Start audio playback with the first chunk if not already started
+                            if (!audioPlaybackStarted && audioChunks.length === 1) {
+                                audioPlaybackStarted = true;
+                                console.log('🎵 Starting audio playback...');
+                                this.playStreamedAudioChunks(audioChunks);
+                            }
                         }
                     } catch (error) {
                         console.error('Error processing audio chunk:', error);
                     }
                 });
 
-                eventSource.addEventListener('done', (event) => {
+                eventSource.addEventListener('complete', (event) => {
+                    console.log('🎉 Stream complete event received');
                     eventSource.close();
                     
                     // Add assistant response to history
@@ -3628,43 +3651,21 @@ JSON:`;
                         content: accumulatedText
                     });
                     
-                    // If we have audio chunks and audio is enabled, add play button
-                    if (audioChunks.length > 0 && assistantMessageDiv && this.state.settings.audioEnabled) {
-                        // Combine audio chunks
-                        const combinedAudio = this.combineAudioChunks(audioChunks);
-                        
-                        const contentDiv = assistantMessageDiv.querySelector('.message-content');
-                        if (contentDiv) {
-                            const actionsDiv = document.createElement('div');
-                            actionsDiv.className = 'message-actions';
-                            
-                            const speakerBtn = document.createElement('button');
-                            speakerBtn.className = 'speaker-button';
-                            speakerBtn.innerHTML = `
-                                <svg class="speaker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M11 5L6 9H2v6h4l5 4V5z"/>
-                                    <path d="M15.54 8.46a5 5 0 010 7.07"/>
-                                    <path d="M19.07 4.93a10 10 0 010 14.14"/>
-                                </svg>
-                                <span>Play</span>
-                            `;
-                            speakerBtn.onclick = () => this.playAudio(combinedAudio, speakerBtn);
-                            
-                            actionsDiv.appendChild(speakerBtn);
-                            contentDiv.appendChild(actionsDiv);
-                            
-                            // Auto-play if enabled
-                            if (this.state.settings.autoPlay) {
-                                setTimeout(() => this.playAudio(combinedAudio, speakerBtn), 300);
-                            }
-                        }
-                    }
+                    // Signal that streaming is complete (audio playback will finish playing remaining chunks)
+                    setTimeout(() => {
+                        this.state.isStreamingAudio = false;
+                    }, 1000);
+                    
+                    console.log('✅ Conversation updated. Total messages:', this.state.conversationHistory.length);
                 });
 
                 eventSource.addEventListener('error', (event) => {
-                    console.error('Stream error:', event);
+                    console.error('❌ EventSource error:', event);
                     eventSource.close();
-                    if (!assistantMessageDiv) {
+                    this.state.isStreamingAudio = false;
+                    this.stopSoundwaveVisualization();
+                    
+                    if (!assistantMessageDiv || !accumulatedText) {
                         this.addMessage('assistant', 'Sorry, there was an error streaming the response.');
                     }
                 });
@@ -3674,6 +3675,74 @@ JSON:`;
                 // For now, just return the first chunk
                 // In a more sophisticated implementation, you could concatenate WAV files
                 return chunks[0];
+            },
+
+            async playStreamedAudioChunks(audioChunksArray) {
+                if (!audioChunksArray || audioChunksArray.length === 0) return;
+                
+                console.log('🎵 Starting streamed audio playback');
+                // Start visualization when first audio chunk plays
+                this.startSoundwaveVisualization();
+                
+                let currentChunkIndex = 0;
+                let isPlaying = true;
+                this.state.isStreamingAudio = true;
+                
+                const playNextChunk = async () => {
+                    // Wait for next chunk if we've played all available chunks
+                    while (currentChunkIndex >= audioChunksArray.length && isPlaying) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    
+                    // Check if we should stop (stream complete and no more chunks)
+                    if (!this.state.isStreamingAudio || currentChunkIndex >= audioChunksArray.length) {
+                        console.log('🎵 All audio chunks played');
+                        this.stopSoundwaveVisualization();
+                        this.state.isStreamingAudio = false;
+                        return;
+                    }
+                    
+                    const audioData = audioChunksArray[currentChunkIndex];
+                    console.log(`🎵 Playing chunk ${currentChunkIndex + 1}/${audioChunksArray.length}`);
+                    currentChunkIndex++;
+                    
+                    try {
+                        // Convert base64 to blob
+                        const binaryString = atob(audioData);
+                        const bytes = new Uint8Array(binaryString.length);
+                        for (let i = 0; i < binaryString.length; i++) {
+                            bytes[i] = binaryString.charCodeAt(i);
+                        }
+                        const blob = new Blob([bytes], { type: 'audio/wav' });
+                        const audioUrl = URL.createObjectURL(blob);
+                        
+                        // Create and play audio
+                        const audio = new Audio(audioUrl);
+                        this.state.currentAudio = audio;
+                        
+                        audio.onended = () => {
+                            URL.revokeObjectURL(audioUrl);
+                            // Play next chunk
+                            playNextChunk();
+                        };
+                        
+                        audio.onerror = (error) => {
+                            console.error('Error playing audio chunk:', error);
+                            URL.revokeObjectURL(audioUrl);
+                            this.stopSoundwaveVisualization();
+                            this.state.isStreamingAudio = false;
+                        };
+                        
+                        await audio.play();
+                    } catch (error) {
+                        console.error('Error processing audio chunk:', error);
+                        this.stopSoundwaveVisualization();
+                        this.state.isStreamingAudio = false;
+                    }
+                };
+                
+                // Start playing the first chunk
+                playNextChunk();
             },
 
             addMessage(role, text, audioData = null) {
