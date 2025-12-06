@@ -3487,20 +3487,22 @@ JSON:`;
                 });
 
                 try {
-                    // Always use /api/notes/converse - it supports both text and audio modes
+                    // Always use /api/notes/converse (will add audio support to backend)
                     const requestBody = {
                         question: question,
                         model: this.state.settings.model,
                         conversationHistory: this.state.conversationHistory.slice(-10)
                     };
                     
-                    // Add pinned DID if in selected note mode
+                    // Add note DID if in selected note mode
                     if (this.state.chatMode === 'selected' && this.state.selectedNoteForChat) {
-                        requestBody.pinnedDidTx = this.state.selectedNoteForChat;
+                        requestBody.noteDid = this.state.selectedNoteForChat;
                         console.log('📝 Selected Note mode - using DID:', this.state.selectedNoteForChat);
                     } else if (this.state.chatMode === 'notes') {
+                        requestBody.allNotes = true;
                         console.log('📚 All Notes mode - searching all notes');
                     } else {
+                        requestBody.allNotes = false;
                         console.log('💬 Chat mode - pure LLM');
                     }
                     
