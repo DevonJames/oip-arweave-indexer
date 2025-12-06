@@ -40,6 +40,93 @@ const upload = multer({
 });
 
 /**
+ * Helper function to generate audio for text responses
+ */
+async function generateAudioForResponse(responseText, requestParams) {
+    try {
+        const voice_id = requestParams.voice_id || 'onwK4e9ZLuTAKqWW03F9';
+        const engine = requestParams.engine || 'elevenlabs';
+        const speed = requestParams.speed || 1;
+        
+        console.log(`[Audio Generation] Using engine: ${engine}, voice: ${voice_id}`);
+        
+        // Use alfred helper to preprocess text for TTS
+        const alfredHelper = require('../helpers/alfred');
+        const processedText = alfredHelper.preprocessTextForTTS(responseText);
+        
+        // Limit text length for TTS
+        const maxTextLength = 1000;
+        const textForTTS = processedText.length > maxTextLength 
+            ? processedText.substring(0, maxTextLength) + '...'
+            : processedText;
+        
+        if (engine === 'elevenlabs' && process.env.ELEVENLABS_API_KEY) {
+            // Use ElevenLabs API
+            const axios = require('axios');
+            const elevenLabsResponse = await axios.post(
+                `https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`,
+                {
+                    text: textForTTS,
+                    model_id: 'eleven_turbo_v2',
+                    voice_settings: {
+                        stability: 0.5,
+                        similarity_boost: 0.75,
+                        style: 0.0,
+                        use_speaker_boost: true
+                    },
+                    output_format: 'mp3_44100_128'
+                },
+                {
+                    headers: {
+                        'xi-api-key': process.env.ELEVENLABS_API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    responseType: 'arraybuffer',
+                    timeout: 10000
+                }
+            );
+            
+            const buffer = Buffer.from(elevenLabsResponse.data);
+            console.log(`[Audio Generation] ✅ Generated ElevenLabs audio: ${buffer.length} bytes`);
+            return buffer.toString('base64');
+        } else {
+            // Fallback to local TTS service
+            const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:5002';
+            const axios = require('axios');
+            
+            const ttsParams = {
+                text: textForTTS,
+                engine: engine,
+                voice_id: voice_id,
+                speed: speed,
+                gender: 'male',
+                emotion: 'expressive',
+                exaggeration: 0.5,
+                cfg_weight: 0.7,
+                voice_cloning: false
+            };
+            
+            const ttsResponse = await axios.post(
+                `${TTS_SERVICE_URL}/synthesize`,
+                ttsParams,
+                {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    responseType: 'arraybuffer',
+                    timeout: 30000
+                }
+            );
+            
+            const buffer = Buffer.from(ttsResponse.data);
+            console.log(`[Audio Generation] ✅ Generated ${engine} audio: ${buffer.length} bytes`);
+            return buffer.toString('base64');
+        }
+    } catch (audioError) {
+        console.error('[Audio Generation] ⚠️ Audio generation failed:', audioError.message);
+        return null;
+    }
+}
+
+/**
  * POST /api/notes/from-audio
  * Main ingestion endpoint for audio notes
  * Processes: Audio → Transcription → Chunking → Summary → OIP Records
@@ -1019,7 +1106,13 @@ router.post('/converse', authenticateToken, async (req, res) => {
             
             console.log(`[ALFRED Notes Fast Path] ✅ Response generated (${alfredResponse.answer.length} chars)`);
 
-            return res.json({
+            // Generate audio if requested
+            let audioData = null;
+            if (req.body.return_audio) {
+                audioData = await generateAudioForResponse(alfredResponse.answer, req.body);
+            }
+
+            const response = {
                 success: true,
                 answer: alfredResponse.answer,
                 context: {
@@ -1030,7 +1123,15 @@ router.post('/converse', authenticateToken, async (req, res) => {
                 sources: alfredResponse.sources || [],
                 error: alfredResponse.error || undefined,
                 error_code: alfredResponse.error_code || undefined
-            });
+            };
+            
+            if (audioData) {
+                response.audio_data = audioData;
+                response.has_audio = true;
+                response.engine_used = req.body.engine || 'elevenlabs';
+            }
+            
+            return res.json(response);
         }
         
         // ========================================
@@ -1300,7 +1401,13 @@ Rules:
             
             console.log(`[ALFRED Notes] ✅ Response generated (${alfredResponse.answer.length} chars)`);
 
-            return res.json({
+            // Generate audio if requested
+            let audioData = null;
+            if (req.body.return_audio) {
+                audioData = await generateAudioForResponse(alfredResponse.answer, req.body);
+            }
+
+            const response = {
                 success: true,
                 answer: alfredResponse.answer,
                 context: {
@@ -1310,7 +1417,15 @@ Rules:
                 sources: alfredResponse.sources || [],
                 error: alfredResponse.error || undefined,
                 error_code: alfredResponse.error_code || undefined
-            });
+            };
+            
+            if (audioData) {
+                response.audio_data = audioData;
+                response.has_audio = true;
+                response.engine_used = req.body.engine || 'elevenlabs';
+            }
+            
+            return res.json(response);
         }
 
         // ========================================
@@ -1590,6 +1705,12 @@ ${context.relatedContent.map((item, i) => {
         
         console.log(`[ALFRED Notes RAG] ✅ Response generated (${alfredResponse.answer.length} chars)`);
 
+        // Generate audio if requested
+        let audioData = null;
+        if (req.body.return_audio) {
+            audioData = await generateAudioForResponse(alfredResponse.answer, req.body);
+        }
+
         // Return the response
         const responseContext = {
                 note: {
@@ -1607,7 +1728,7 @@ ${context.relatedContent.map((item, i) => {
             responseContext.search = req.searchContext;
         }
         
-        res.json({
+        const response = {
             success: true,
             answer: alfredResponse.answer,
             context: responseContext,
@@ -1616,7 +1737,16 @@ ${context.relatedContent.map((item, i) => {
             // Include error info if present (e.g., Ollama unavailable)
             error: alfredResponse.error || undefined,
             error_code: alfredResponse.error_code || undefined
-        });
+        };
+        
+        // Add audio data if generated
+        if (audioData) {
+            response.audio_data = audioData;
+            response.has_audio = true;
+            response.engine_used = req.body.engine || 'elevenlabs';
+        }
+        
+        res.json(response);
 
     } catch (error) {
         console.error('[ALFRED Notes RAG] ❌ Error:', error);
