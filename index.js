@@ -11,6 +11,7 @@ const fs = require('fs');
 const http = require('http');
 const socketIo = require('socket.io');
 const apiLogger = require('./middleware/apiLogger');
+const { logAPIActivity } = require('./middleware/activityLogger');
 const { createSwapsIndex, initializeIndices } = require('./config/createIndices');
 const { validateEnvironment } = require('./config/checkEnvironment');
 const dotenv = require('dotenv');
@@ -23,6 +24,7 @@ const scrapeRoutes = require('./routes/scrape');
 const healthRoutes = require('./routes/health');
 const generateRoutes = require('./routes/generate');
 const { router: userRoutes } = require('./routes/user');
+const adminRoutes = require('./routes/admin');
 const walletRoutes = require('./routes/wallet');
 const publishRecords = require('./routes/publish');
 const workoutRoutes = require('./routes/workout');
@@ -204,6 +206,9 @@ app.use(apiLogger);
 
 // MEMORY DIAGNOSTICS: Track memory growth per request (only when enabled via env)
 app.use(trackRequestMemory);
+
+// API ACTIVITY LOGGING: Track user activity for analytics (for authenticated requests)
+app.use(logAPIActivity);
 
 // CORS middleware configuration
 const corsOptions = {
@@ -445,6 +450,7 @@ app.use('/api/generate/media', forceStaticCleanup, express.static(path.join(__di
 // Serve web-accessible media files
 app.use('/media', forceStaticCleanup, express.static(path.join(__dirname, 'data', 'media', 'web'), mediaStaticOptions));
 app.use('/api/user', userRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/workout', workoutRoutes);
 app.use('/api/lit', litRoutes);
