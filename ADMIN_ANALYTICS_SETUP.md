@@ -79,9 +79,18 @@ The system validates admin access through:
 1. **Extracts JWT token** → Gets user's `publicKey`
 2. **Reads `PUBLIC_API_BASE_URL`** → Extracts domain (e.g., "api.yourdomain.com")
 3. **Finds organization** → Searches for org with matching `webUrl`
+   - If multiple organizations match, uses the **most recent one** (sorted by `date` field)
+   - Ensures you're always using the latest organization configuration
 4. **Validates admin** → Checks if user's `publicKey` is in org's `admin_public_keys`
 
 If any step fails, it falls back to checking the traditional `isAdmin` field.
+
+### Multiple Organizations
+
+If you have multiple organization records with the same domain (e.g., updating organization details):
+- The system automatically uses the **most recent** organization based on the `date` field
+- This allows you to update organization configurations by publishing new records
+- Older organization records are ignored for admin validation
 
 ## Key Features
 

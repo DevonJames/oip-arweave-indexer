@@ -4057,18 +4057,39 @@ const getCreatorsInDB = async () => {
 
 async function searchRecordInDB(didTx) {
     // console.log(getFileInfo(), getLineNumber(), 'Searching record in DB for didTx:', didTx);
-        let searchResponse = await getElasticsearchClient().search({
-            index: 'records',
-            body: {
-                query: createDIDQuery(didTx)
-            }
-        });
+    
+    // First, search in the records index
+    let searchResponse = await getElasticsearchClient().search({
+        index: 'records',
+        body: {
+            query: createDIDQuery(didTx)
+        }
+    });
+    
     // console.log(getFileInfo(), getLineNumber(), 'Search response:', JSON.stringify(searchResponse, null, 2));
     let result = null;
     if (searchResponse.hits.hits.length > 0) {
         result = searchResponse.hits.hits[0]._source;
+        searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
+        return result;
     }
     searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
+    
+    // If not found in records, search in organizations index
+    console.log(getFileInfo(), getLineNumber(), 'Record not found in records index, checking organizations index');
+    let orgSearchResponse = await getElasticsearchClient().search({
+        index: 'organizations',
+        body: {
+            query: createDIDQuery(didTx)
+        }
+    });
+    
+    if (orgSearchResponse.hits.hits.length > 0) {
+        result = orgSearchResponse.hits.hits[0]._source;
+        console.log(getFileInfo(), getLineNumber(), 'Record found in organizations index');
+    }
+    orgSearchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
+    
     return result;
 }
 

@@ -83,8 +83,32 @@ async function validateNodeAdmin(req, res, next) {
             });
         }
         
-        // Use the first matching organization
+        // Sort matching organizations by date (most recent first)
+        // Use multiple date fields for robustness
+        matchingOrgs.sort((a, b) => {
+            const dateA = a._source.data?.date || 
+                         a._source.oip?.indexedAt || 
+                         a._source.oip?.inArweaveBlock || 
+                         0;
+            const dateB = b._source.data?.date || 
+                         b._source.oip?.indexedAt || 
+                         b._source.oip?.inArweaveBlock || 
+                         0;
+            
+            // Convert dates to numbers for comparison
+            const numA = typeof dateA === 'string' ? new Date(dateA).getTime() : Number(dateA);
+            const numB = typeof dateB === 'string' ? new Date(dateB).getTime() : Number(dateB);
+            
+            return numB - numA; // Descending order (most recent first)
+        });
+        
+        // Use the most recent matching organization
         const organization = matchingOrgs[0]._source;
+        
+        if (matchingOrgs.length > 1) {
+            console.log(`ℹ️ Found ${matchingOrgs.length} matching organizations, using most recent one`);
+            console.log(`ℹ️ Selected organization: ${organization.data?.name} (${organization.data?.orgHandle})`);
+        }
         console.log('✅ Found organization for node:', organization.data?.name || organization.data?.orgHandle);
         
         // Extract admin public keys from organization
