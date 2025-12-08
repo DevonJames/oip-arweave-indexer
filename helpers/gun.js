@@ -14,6 +14,28 @@ class GunHelper {
         
         this.encryptionEnabled = process.env.GUN_ENABLE_ENCRYPTION === 'true';
         this.defaultPrivacy = process.env.GUN_DEFAULT_PRIVACY === 'true';
+        
+        // CRITICAL FIX: Initialize 404 cache to prevent redundant retries
+        this.missing404Cache = new Map();
+        this.cache404Stats = { hits: 0, total: 0 };
+        
+        // Periodic cache cleanup to prevent memory growth (every hour)
+        this.cacheCleanupInterval = setInterval(() => {
+            const now = Date.now();
+            const maxAge = 3600000; // 1 hour
+            let cleanedCount = 0;
+            
+            for (const [soul, timestamp] of this.missing404Cache.entries()) {
+                if (now - timestamp > maxAge) {
+                    this.missing404Cache.delete(soul);
+                    cleanedCount++;
+                }
+            }
+            
+            if (cleanedCount > 0) {
+                console.log(`🧹 [GUN 404 Cache] Cleaned ${cleanedCount} expired entries, ${this.missing404Cache.size} remain`);
+            }
+        }, 3600000); // Run every hour
     }
 
     /**
@@ -261,6 +283,20 @@ class GunHelper {
      */
     async getRecord(soul, options = {}) {
         try {
+            // CRITICAL FIX: Check 404 cache before attempting fetch
+            this.cache404Stats.total++;
+            if (this.missing404Cache.has(soul)) {
+                this.cache404Stats.hits++;
+                
+                // Log stats periodically (every 100 requests)
+                if (this.cache404Stats.total % 100 === 0) {
+                    const hitRate = ((this.cache404Stats.hits / this.cache404Stats.total) * 100).toFixed(1);
+                    console.log(`📊 [GUN 404 Cache] ${this.cache404Stats.hits}/${this.cache404Stats.total} hits (${hitRate}% cache hit rate, ${this.missing404Cache.size} cached souls)`);
+                }
+                
+                return null; // Skip fetch for known-missing soul
+            }
+            
             // console.log('📡 Sending HTTP GET request to GUN API...'); // Commented out - too verbose
             
             // MEMORY LEAK FIX: Add retry with exponential backoff and socket cleanup for failed requests
@@ -420,6 +456,10 @@ class GunHelper {
                     lastError = error;
                     retryCount++;
                     
+                    // CRITICAL FIX: Check status code BEFORE nulling response
+                    const is404 = error.response && error.response.status === 404;
+                    const statusCode = error.response?.status;
+                    
                     // MEMORY LEAK FIX: Clean up error response buffers immediately
                     if (error.response) {
                         error.response.data = null;
@@ -427,7 +467,19 @@ class GunHelper {
                     }
                     
                     // If 404, don't retry - record doesn't exist
-                    if (error.response && error.response.status === 404) {
+                    if (is404) {
+                        // Track this 404 to avoid future retries
+                        if (!this.missing404Cache) {
+                            this.missing404Cache = new Map();
+                        }
+                        this.missing404Cache.set(soul, Date.now());
+                        
+                        // Limit cache size to prevent memory growth
+                        if (this.missing404Cache.size > 10000) {
+                            const oldestKey = this.missing404Cache.keys().next().value;
+                            this.missing404Cache.delete(oldestKey);
+                        }
+                        
                         return null;
                     }
                     
