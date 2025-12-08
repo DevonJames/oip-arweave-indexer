@@ -46,12 +46,24 @@ Authorization: Bearer <your-jwt-token>
     "org_public_key": "YOUR_PUBLIC_KEY_FROM_REGISTRATION",
     "admin_public_keys": ["YOUR_PUBLIC_KEY_FROM_REGISTRATION"],
     "membership_policy": "Auto-Enroll App Users",
-    "webUrl": "api.yourdomain.com"  // MUST match PUBLIC_API_BASE_URL domain
+    "webUrl": "yourdomain.com"  // Base domain or full domain from PUBLIC_API_BASE_URL
   }
 }
 ```
 
-**Important**: The `webUrl` field must match the domain from `PUBLIC_API_BASE_URL`.
+**Domain Matching**: The system uses flexible domain matching:
+- **Exact match**: `webUrl: "oip.fitnessally.io"` matches `PUBLIC_API_BASE_URL=https://oip.fitnessally.io`
+- **Base domain match**: `webUrl: "fitnessally.io"` matches `PUBLIC_API_BASE_URL=https://oip.fitnessally.io`
+- **Protocol agnostic**: Works with or without `https://` in `webUrl`
+
+**Examples**:
+```javascript
+// If PUBLIC_API_BASE_URL=https://oip.fitnessally.io
+// These webUrl values will all match:
+"webUrl": "fitnessally.io"           // ✅ Base domain match
+"webUrl": "oip.fitnessally.io"       // ✅ Exact match
+"webUrl": "https://fitnessally.io"   // ✅ Base domain match (protocol removed)
+```
 
 ### 3. Get Analytics
 
@@ -235,12 +247,40 @@ curl -X GET "http://localhost:3005/api/admin/user-sessions/YOUR_USER_ID" \
 # Check your configured URL
 grep PUBLIC_API_BASE_URL .env
 
-# Create organization with matching domain
+# Example 1: If PUBLIC_API_BASE_URL=https://oip.fitnessally.io
+# You can use either:
 POST /api/organizations/newOrganization
 {
   "organization": {
-    "webUrl": "api.yourdomain.com"  // Must match PUBLIC_API_BASE_URL
+    "webUrl": "fitnessally.io"  // ✅ Base domain (recommended)
   }
+}
+# OR
+{
+  "organization": {
+    "webUrl": "oip.fitnessally.io"  // ✅ Full subdomain
+  }
+}
+
+# Example 2: If PUBLIC_API_BASE_URL=http://localhost:3005
+{
+  "organization": {
+    "webUrl": "localhost"  // ✅ Works for local development
+  }
+}
+```
+
+**Tip**: The error response now includes available organizations to help you debug:
+```json
+{
+  "error": "Unauthorized",
+  "message": "No organization registered for this node domain 'oip.fitnessally.io'",
+  "availableOrganizations": [
+    {
+      "name": "FitnessAlly",
+      "webUrl": "fitnessally.io"
+    }
+  ]
 }
 ```
 

@@ -60,7 +60,10 @@ Authorization: Bearer <your-jwt-token>
 }
 ```
 
-**Important**: The `webUrl` must match the domain extracted from `PUBLIC_API_BASE_URL`.
+**Important**: The `webUrl` should match your node's domain. The system uses flexible matching:
+- **Exact match**: `webUrl: "oip.fitnessally.io"` matches `PUBLIC_API_BASE_URL=https://oip.fitnessally.io`
+- **Base domain**: `webUrl: "fitnessally.io"` also matches `PUBLIC_API_BASE_URL=https://oip.fitnessally.io`
+- **Protocol agnostic**: Works with or without `https://` prefix
 
 #### 3. Authenticate as Admin
 
