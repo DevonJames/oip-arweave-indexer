@@ -11,7 +11,9 @@ The Admin Analytics API provides comprehensive insights into OIP node activity, 
 The system uses a sophisticated authorization approach that ties admin privileges to organization ownership:
 
 1. **Node Identification**: Uses `PUBLIC_API_BASE_URL` from `.env` to identify the node's domain
-2. **Organization Lookup**: Finds the organization record with matching `webUrl` field
+2. **Organization Lookup**: Finds all organization records with matching `webUrl` field
+   - If multiple organizations match, uses the **most recent** one (sorted by `date` field)
+   - This allows updating organization configurations by publishing new records
 3. **Admin Validation**: Validates that the requesting user's `publicKey` matches one of the organization's `adminPublicKeys`
 
 This approach enables:

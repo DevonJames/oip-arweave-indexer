@@ -54,6 +54,7 @@ This method requires a valid JWT token obtained through the OIP authentication s
 **Supported DID Types:**
 - GUN records: `did:gun:hash:record_id`
 - Arweave records: `did:arweave:transaction_id`
+- Organization records: `did:arweave:organization_transaction_id` (stored in `organizations` index)
 - Any record type with proper ownership verification
 
 ### API Endpoint
@@ -115,13 +116,20 @@ Authorization: Bearer <jwt-token>  # Required for authentication and ownership v
 1. **Authentication Check**: Verify JWT token and extract user's public key
 2. **Request Validation**: Validate JSON format and DID structure
 3. **Record Lookup**: Search for the record in Elasticsearch using `searchRecordInDB`
+   - Searches `records` index first
+   - If not found, searches `organizations` index
+   - Returns the record from whichever index contains it
 4. **Ownership Verification**: Verify user owns the record using the ownership priority system:
    - AccessControl Template: `accessControl.owner_public_key`
    - Conversation Session: `conversationSession.owner_public_key`
    - AccessControl Created By: `accessControl.created_by`
    - GUN Soul Hash: Hash of user's public key in DID
    - Creator Fallback: `oip.creator.publicKey` (legacy server-signed records)
-5. **Deletion**: Use `deleteRecordsByDID('records', did)` - same function as CLI
+   - Organization Admin: `organization.adminPublicKeys` (for organization records)
+5. **Deletion**: Delete from the appropriate index
+   - Try `deleteRecordsByDID('records', did)` first
+   - If not found, try `deleteRecordsByDID('organizations', did)`
+   - Same deletion function as CLI, just tries both indices
 6. **Response**: Return success/failure with appropriate HTTP status codes
 
 ### Examples
@@ -149,6 +157,20 @@ curl -X POST https://api.oip.onl/api/records/deleteRecord \
     }
   }'
 ```
+
+#### Delete an Organization Record
+```bash
+curl -X POST https://api.oip.onl/api/records/deleteRecord \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "delete": {
+      "did": "did:arweave:6zmCRZ06E2XtvN84BEQE_g4laBJdoCzTfQURHD2YlC4"
+    }
+  }'
+```
+
+**Note**: Organization records are stored in the `organizations` index. The API automatically searches both `records` and `organizations` indices, so you use the same endpoint for all record types.
 
 #### JavaScript/Frontend Example
 ```javascript

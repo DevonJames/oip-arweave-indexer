@@ -510,7 +510,18 @@ router.post('/deleteRecord', authenticateToken, async (req, res) => {
         // Only try to delete from local index if not already deleted during blockchain message publishing
         let deleteResponse = { deleted: 0 };
         if (!alreadyDeleted) {
+            // Try deleting from records index first
             deleteResponse = await deleteRecordsByDID('records', didToDelete);
+            
+            // If not found in records, try organizations index
+            if (deleteResponse.deleted === 0) {
+                console.log('Record not found in records index, trying organizations index...');
+                deleteResponse = await deleteRecordsByDID('organizations', didToDelete);
+                
+                if (deleteResponse.deleted > 0) {
+                    console.log('✅ Record deleted from organizations index');
+                }
+            }
         } else {
             // Mark as deleted since it was already handled
             deleteResponse = { deleted: 1 };
