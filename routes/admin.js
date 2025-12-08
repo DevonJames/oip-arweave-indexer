@@ -37,62 +37,97 @@ async function validateNodeAdmin(req, res, next) {
         // Extract domain from PUBLIC_API_BASE_URL
         const nodeDomain = extractDomain(nodeBaseUrl);
         console.log('🔍 Node domain from PUBLIC_API_BASE_URL:', nodeDomain);
+        console.log('🔍 Base domain:', extractBaseDomain(nodeDomain));
         
-        // Find organization record with matching webUrl
+        // Get ALL organizations and filter by domain matching
+        // This is more reliable than complex Elasticsearch queries
         const orgSearchResult = await elasticClient.search({
             index: 'organizations',
             body: {
-                query: {
-                    bool: {
-                        should: [
-                            { term: { 'data.webUrl.keyword': nodeDomain } },
-                            { term: { 'data.webUrl.keyword': nodeBaseUrl } },
-                            { match: { 'data.webUrl': nodeDomain } }
-                        ],
-                        minimum_should_match: 1
-                    }
-                }
+                query: { match_all: {} },
+                size: 1000 // Get all organizations
             }
         });
         
-        if (orgSearchResult.hits.hits.length === 0) {
-            console.warn('⚠️ No organization found for node domain:', nodeDomain);
+        console.log(`🔍 Found ${orgSearchResult.hits.hits.length} total organizations in database`);
+        
+        // Filter organizations by domain matching
+        const matchingOrgs = orgSearchResult.hits.hits.filter(hit => {
+            const orgWebUrl = hit._source.data?.webUrl;
+            const matches = doesOrgMatchDomain(orgWebUrl, nodeDomain);
+            if (matches) {
+                console.log(`✅ Organization "${hit._source.data?.name}" (${orgWebUrl}) matches node domain ${nodeDomain}`);
+            }
+            return matches;
+        });
+        
+        if (matchingOrgs.length === 0) {
+            console.warn('⚠️ No organization found matching node domain:', nodeDomain);
+            console.warn('💡 Available organization webUrls:', 
+                orgSearchResult.hits.hits.map(h => h._source.data?.webUrl).join(', '));
+            
             // Fallback to traditional isAdmin check
             if (user.isAdmin) {
+                console.log('✅ Falling back to isAdmin check - user is admin');
                 req.isNodeAdmin = true;
                 req.nodeOrganization = null;
                 return next();
             }
             return res.status(403).json({ 
                 error: 'Unauthorized',
-                message: 'No organization registered for this node. Please create an organization record with matching webUrl.'
+                message: `No organization registered for this node domain "${nodeDomain}". Please create an organization record with matching webUrl.`,
+                availableOrganizations: orgSearchResult.hits.hits.map(h => ({
+                    name: h._source.data?.name,
+                    webUrl: h._source.data?.webUrl
+                }))
             });
         }
         
-        // Get the organization data
-        const organization = orgSearchResult.hits.hits[0]._source;
+        // Use the first matching organization
+        const organization = matchingOrgs[0]._source;
         console.log('✅ Found organization for node:', organization.data?.name || organization.data?.orgHandle);
         
         // Extract admin public keys from organization
-        let adminPublicKeys = organization.data?.adminPublicKeys || organization.oip?.organization?.adminPublicKeys;
+        // Try multiple locations in the organization object
+        let adminPublicKeys = 
+            organization.data?.adminPublicKeys || 
+            organization.oip?.organization?.adminPublicKeys ||
+            organization.adminPublicKeys;
+        
+        if (!adminPublicKeys) {
+            console.error('❌ No adminPublicKeys found in organization:', JSON.stringify(organization, null, 2));
+            return res.status(500).json({
+                error: 'Configuration error',
+                message: 'Organization record is missing adminPublicKeys field'
+            });
+        }
         
         // Handle both array and string formats
         if (typeof adminPublicKeys === 'string') {
             // Try parsing as JSON array
             try {
-                adminPublicKeys = JSON.parse(adminPublicKeys);
+                const parsed = JSON.parse(adminPublicKeys);
+                if (Array.isArray(parsed)) {
+                    adminPublicKeys = parsed;
+                } else {
+                    adminPublicKeys = [adminPublicKeys]; // Single key as string
+                }
             } catch (e) {
-                // Single admin key as string
+                // Not JSON, treat as single admin key string
                 adminPublicKeys = [adminPublicKeys];
             }
         }
         
         if (!Array.isArray(adminPublicKeys)) {
-            adminPublicKeys = [adminPublicKeys];
+            adminPublicKeys = adminPublicKeys ? [adminPublicKeys] : [];
         }
         
-        console.log('🔑 Organization admin public keys:', adminPublicKeys.length, 'keys');
-        console.log('🔑 Requesting user public key:', user.publicKey);
+        // Filter out any null/undefined values
+        adminPublicKeys = adminPublicKeys.filter(key => key);
+        
+        console.log('🔑 Organization admin public keys:', adminPublicKeys.length, 'key(s)');
+        console.log('🔑 Admin keys:', adminPublicKeys.map(k => k.substring(0, 20) + '...').join(', '));
+        console.log('🔑 Requesting user public key:', user.publicKey?.substring(0, 20) + '...');
         
         // Check if user's public key matches any admin public key
         const isAdmin = adminPublicKeys.some(adminKey => {
@@ -144,6 +179,45 @@ function extractDomain(url) {
     } catch (error) {
         return url;
     }
+}
+
+/**
+ * Extract base domain (without subdomain)
+ * e.g., "oip.fitnessally.io" → "fitnessally.io"
+ */
+function extractBaseDomain(domain) {
+    const parts = domain.split('.');
+    if (parts.length > 2) {
+        // Return last two parts (e.g., "fitnessally.io")
+        return parts.slice(-2).join('.');
+    }
+    return domain;
+}
+
+/**
+ * Check if organization webUrl matches the node domain
+ */
+function doesOrgMatchDomain(orgWebUrl, nodeDomain) {
+    if (!orgWebUrl || !nodeDomain) return false;
+    
+    // Normalize both URLs
+    const normalizedOrgUrl = extractDomain(orgWebUrl.toLowerCase());
+    const normalizedNodeDomain = nodeDomain.toLowerCase();
+    
+    // Exact match
+    if (normalizedOrgUrl === normalizedNodeDomain) {
+        return true;
+    }
+    
+    // Base domain match (e.g., "oip.fitnessally.io" matches "fitnessally.io")
+    const orgBaseDomain = extractBaseDomain(normalizedOrgUrl);
+    const nodeBaseDomain = extractBaseDomain(normalizedNodeDomain);
+    
+    if (orgBaseDomain === nodeBaseDomain) {
+        return true;
+    }
+    
+    return false;
 }
 
 /**
