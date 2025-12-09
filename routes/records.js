@@ -45,6 +45,11 @@ async function getRecordByDidTx(didTx) {
 
 router.get('/', optionalAuthenticateToken, enforceCalendarScope, async (req, res) => {
     try {
+        // DEBUG: Log user info for calendar token debugging
+        if (req.user) {
+            console.log(`👤 [API Request] User: ${req.user.email || req.user.userId}, tokenType: ${req.user.tokenType}, scope: ${req.user.scope}, publicKey: ${req.user.publicKey?.slice(0,20)}...`);
+        }
+        
         const queryParams = { 
             ...req.query,
             user: req.user,                    // NEW: Pass user info

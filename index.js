@@ -695,17 +695,27 @@ initializeIndices()
         
         console.log(`[Memory Monitor] Heap: ${heapUsedMB}MB / ${heapTotalMB}MB (${heapUtilization}%), RSS: ${rssMB}MB, External: ${externalMB}MB`);
         
-        // MEMORY LEAK FIX: Detailed diagnostic for external memory
-        if (externalMB > 1024) {
-          const rssExternalRatio = ((externalMB / rssMB) * 100).toFixed(1);
-          console.warn(`⚠️  [Memory Monitor] CRITICAL: External memory ${externalMB}MB is ${rssExternalRatio}% of RSS - possible buffer leak`);
-          console.warn(`    External/Heap Ratio: ${((externalMB / heapUsedMB) * 100).toFixed(1)}% (should be <50%)`);
-          console.warn(`    Possible sources: Elasticsearch connections, Axios proxies, GUN relay, or long-running streams`);
+        // CRITICAL FIX: Node.js external counter is often inaccurate!
+        // Use RSS (actual OS memory) as the real indicator, not external counter
+        // Only warn if RSS is actually growing, not if external counter is high
+        
+        // Real memory warning: RSS > 10GB is a problem
+        if (rssMB > 10240) {
+          console.warn(`🚨 [Memory Monitor] REAL MEMORY CRITICAL: RSS at ${rssMB}MB - approaching limits!`);
+          console.warn(`    Heap: ${heapUsedMB}MB, External (may be inaccurate): ${externalMB}MB`);
+          
+          // Force aggressive GC
+          if (global.gc) {
+            console.log(`🧹 [Memory Monitor] Forcing emergency GC...`);
+            global.gc();
+          }
         }
         
-        // Warning if external memory is excessive (> 10GB suggests buffer leak)
-        if (externalMB > 10240) {
-          console.warn(`⚠️  [Memory Monitor] HIGH EXTERNAL MEMORY: ${externalMB}MB (possible buffer leak from images/media)`);
+        // Info only: External counter discrepancy (common and usually harmless)
+        if (externalMB > rssMB * 2) {
+          const rssExternalRatio = ((externalMB / rssMB) * 100).toFixed(1);
+          console.log(`ℹ️  [Memory Monitor] External counter shows ${externalMB}MB (${rssExternalRatio}% of RSS)`);
+          console.log(`    Note: External counter is often inaccurate. Actual RSS: ${rssMB}MB`);
           
           // Force aggressive cleanup when external memory is too high
           if (global.gc) {
@@ -858,8 +868,28 @@ initializeIndices()
   });
 
 // Graceful shutdown handling
+// CRITICAL: Add comprehensive crash detection
+process.on('uncaughtException', (error) => {
+  console.error('\n🚨🚨🚨 UNCAUGHT EXCEPTION 🚨🚨🚨');
+  console.error('Time:', new Date().toISOString());
+  console.error('Error:', error.message);
+  console.error('Stack:', error.stack);
+  console.error('Memory at crash:', process.memoryUsage());
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('\n🚨🚨🚨 UNHANDLED REJECTION 🚨🚨🚨');
+  console.error('Time:', new Date().toISOString());
+  console.error('Reason:', reason);
+  console.error('Promise:', promise);
+  console.error('Memory:', process.memoryUsage());
+  // Don't exit - log and continue
+});
+
 process.on('SIGTERM', () => {
   console.log('🛑 Received SIGTERM, shutting down gracefully...');
+  console.log('Memory at shutdown:', process.memoryUsage());
   if (gunSyncService) {
     gunSyncService.stop();
   }
