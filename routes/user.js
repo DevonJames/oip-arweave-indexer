@@ -1343,6 +1343,311 @@ router.post('/import-wallet', async (req, res) => {
     }
 });
 
+// Generate calendar-specific JWT token with limited scope
+// This token allows read-only access to workoutSchedule and mealPlan records only
+router.post('/generate-calendar-jwt', authenticateToken, async (req, res) => {
+    try {
+        console.log('📅 Calendar JWT generation request from user:', req.user?.email);
+        
+        const userId = req.user.userId;
+        const userEmail = req.user.email;
+        const userPublicKey = req.user.publicKey;
+        
+        if (!userId || !userEmail || !userPublicKey) {
+            console.error('❌ Missing required user information in JWT');
+            return res.status(400).json({ 
+                success: false,
+                error: 'Invalid user token - missing required fields' 
+            });
+        }
+        
+        // Generate scoped JWT with limited privileges
+        // Key differences from regular JWT:
+        // 1. Longer expiration (1 year vs 45 days)
+        // 2. Scope field limits access to specific record types
+        // 3. Read-only flag prevents mutations
+        // 4. Still includes publicKey for GUN decryption
+        const calendarJWT = jwt.sign(
+            {
+                userId: userId,
+                email: userEmail,
+                publicKey: userPublicKey, // Required for GUN record decryption
+                scope: 'calendar-read-only',
+                allowedRecordTypes: ['workoutSchedule', 'mealPlan'],
+                tokenType: 'calendar',
+                isAdmin: false
+            },
+            JWT_SECRET,
+            { expiresIn: '365d' } // 1 year expiration
+        );
+        
+        // Create hash of JWT for revocation checking
+        const tokenHash = crypto.createHash('sha256').update(calendarJWT).digest('hex');
+        const createdAt = Date.now();
+        
+        console.log('🔑 Generated calendar JWT hash:', tokenHash.substring(0, 16) + '...');
+        
+        // Search for user to update their record
+        const searchResult = await findUserByEmail(userEmail);
+        
+        if (searchResult.hits.hits.length === 0) {
+            console.error('❌ User not found during calendar JWT generation:', userEmail);
+            return res.status(404).json({ 
+                success: false,
+                error: 'User not found' 
+            });
+        }
+        
+        const userDbId = searchResult.hits.hits[0]._id;
+        
+        // Store token hash in user record for revocation capability
+        await elasticClient.update({
+            index: 'users',
+            id: userDbId,
+            body: {
+                doc: {
+                    calendarTokenHash: tokenHash,
+                    calendarTokenCreatedAt: createdAt,
+                    calendarTokenExpiresAt: createdAt + (365 * 24 * 60 * 60 * 1000) // 1 year from now
+                }
+            },
+            refresh: 'wait_for'
+        });
+        
+        console.log('✅ Calendar JWT generated successfully for user:', userEmail);
+        
+        res.status(200).json({
+            success: true,
+            calendarJWT: calendarJWT,
+            tokenHash: tokenHash,
+            createdAt: createdAt,
+            expiresIn: 31536000, // 1 year in seconds
+            message: 'Calendar token generated successfully. This token provides read-only access to your workout and meal schedules.'
+        });
+        
+    } catch (error) {
+        console.error('❌ Error generating calendar JWT:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to generate calendar token' 
+        });
+    }
+});
+
+// Revoke calendar JWT token
+router.post('/revoke-calendar-jwt', authenticateToken, async (req, res) => {
+    try {
+        console.log('🔒 Calendar JWT revocation request from user:', req.user?.email);
+        
+        const userEmail = req.user.email;
+        
+        // Search for user
+        const searchResult = await findUserByEmail(userEmail);
+        
+        if (searchResult.hits.hits.length === 0) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'User not found' 
+            });
+        }
+        
+        const userDbId = searchResult.hits.hits[0]._id;
+        
+        // Clear calendar token hash to revoke it
+        await elasticClient.update({
+            index: 'users',
+            id: userDbId,
+            body: {
+                doc: {
+                    calendarTokenHash: null,
+                    calendarTokenRevokedAt: Date.now()
+                }
+            },
+            refresh: 'wait_for'
+        });
+        
+        console.log('✅ Calendar JWT revoked successfully for user:', userEmail);
+        
+        res.status(200).json({
+            success: true,
+            message: 'Calendar token revoked successfully. Generate a new token to restore calendar access.'
+        });
+        
+    } catch (error) {
+        console.error('❌ Error revoking calendar JWT:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to revoke calendar token' 
+        });
+    }
+});
+
+// Generate calendar-specific JWT token (scoped, long-lived, read-only)
+router.post('/generate-calendar-token', authenticateToken, async (req, res) => {
+    try {
+        console.log('📅 [Calendar Token] Generation requested by user:', req.user.email);
+        
+        const userId = req.user.userId;
+        const email = req.user.email;
+        const publicKey = req.user.publicKey;
+        
+        if (!userId || !publicKey) {
+            console.error('❌ [Calendar Token] Missing userId or publicKey in JWT');
+            return res.status(400).json({ 
+                success: false,
+                error: 'Invalid user token - missing required fields' 
+            });
+        }
+        
+        // Generate scoped JWT with limited privileges
+        // - 1 year expiration (renewable)
+        // - Read-only access
+        // - Limited to workoutSchedule and mealPlan record types
+        // - Still includes publicKey for GUN decryption
+        const calendarJWT = jwt.sign(
+            {
+                userId: userId,
+                email: email,
+                publicKey: publicKey, // ✅ Still needed for GUN decryption
+                scope: 'calendar-read-only',
+                allowedRecordTypes: ['workoutSchedule', 'mealPlan'],
+                tokenType: 'calendar',
+                isAdmin: false
+            },
+            JWT_SECRET,
+            { expiresIn: '365d' } // 1 year
+        );
+        
+        // Store SHA-256 hash of JWT for revocation capability
+        const tokenHash = crypto.createHash('sha256').update(calendarJWT).digest('hex');
+        
+        console.log('🔐 [Calendar Token] Generated scoped JWT for user:', email);
+        console.log('📋 [Calendar Token] Token hash:', tokenHash.substring(0, 16) + '...');
+        
+        // Update user record with calendar token hash and creation timestamp
+        try {
+            // First, find the user document
+            const searchResult = await elasticClient.search({
+                index: 'users',
+                body: {
+                    query: {
+                        term: { 
+                            'email.keyword': email 
+                        }
+                    }
+                }
+            });
+            
+            if (searchResult.hits.hits.length === 0) {
+                console.error('❌ [Calendar Token] User not found in database:', email);
+                return res.status(404).json({ 
+                    success: false,
+                    error: 'User not found' 
+                });
+            }
+            
+            const userDocId = searchResult.hits.hits[0]._id;
+            
+            // Update user with calendar token hash
+            await elasticClient.update({
+                index: 'users',
+                id: userDocId,
+                body: {
+                    doc: {
+                        calendarTokenHash: tokenHash,
+                        calendarTokenCreatedAt: Date.now(),
+                        calendarTokenLastUsed: null // Will be updated on first use
+                    }
+                },
+                refresh: 'wait_for'
+            });
+            
+            console.log('✅ [Calendar Token] Stored token hash in user record');
+            
+        } catch (dbError) {
+            console.error('⚠️ [Calendar Token] Failed to store token hash (non-fatal):', dbError.message);
+            // Don't fail the request - token generation succeeded
+        }
+        
+        res.json({
+            success: true,
+            calendarJWT: calendarJWT,
+            tokenHash: tokenHash, // Return hash for FitnessAlly to store
+            scope: 'calendar-read-only',
+            allowedRecordTypes: ['workoutSchedule', 'mealPlan'],
+            expiresIn: 31536000, // 1 year in seconds
+            createdAt: Date.now(),
+            message: 'Calendar token generated successfully. This token provides read-only access to workouts and meal plans for 1 year.'
+        });
+        
+    } catch (error) {
+        console.error('❌ [Calendar Token] Generation failed:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to generate calendar token',
+            message: error.message 
+        });
+    }
+});
+
+// Revoke calendar token (allows user to invalidate compromised tokens)
+router.post('/revoke-calendar-token', authenticateToken, async (req, res) => {
+    try {
+        console.log('🚫 [Calendar Token] Revocation requested by user:', req.user.email);
+        
+        const email = req.user.email;
+        
+        // Find user and clear calendar token hash
+        const searchResult = await elasticClient.search({
+            index: 'users',
+            body: {
+                query: {
+                    term: { 
+                        'email.keyword': email 
+                    }
+                }
+            }
+        });
+        
+        if (searchResult.hits.hits.length === 0) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'User not found' 
+            });
+        }
+        
+        const userDocId = searchResult.hits.hits[0]._id;
+        
+        // Clear calendar token data
+        await elasticClient.update({
+            index: 'users',
+            id: userDocId,
+            body: {
+                doc: {
+                    calendarTokenHash: null,
+                    calendarTokenRevokedAt: Date.now()
+                }
+            },
+            refresh: 'wait_for'
+        });
+        
+        console.log('✅ [Calendar Token] Token revoked for user:', email);
+        
+        res.json({
+            success: true,
+            message: 'Calendar token revoked successfully. Generate a new token to restore calendar access.'
+        });
+        
+    } catch (error) {
+        console.error('❌ [Calendar Token] Revocation failed:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to revoke calendar token',
+            message: error.message 
+        });
+    }
+});
+
 module.exports = { 
     router, 
     getUserGunEncryptionSalt, 

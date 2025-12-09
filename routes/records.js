@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken, optionalAuthenticateToken, userOwnsRecord, isServerAdmin, getServerPublicKey } = require('../helpers/utils'); // Import authentication middleware
+const { enforceCalendarScope } = require('../middleware/auth'); // Import scope enforcement
 
 // const path = require('path');
 const { getRecords, searchRecordInDB, getRecordTypesSummary, deleteRecordsByDID } = require('../helpers/elasticsearch');
@@ -42,7 +43,7 @@ async function getRecordByDidTx(didTx) {
     return records.records && records.records.length > 0 ? records.records[0] : null;
 }
 
-router.get('/', optionalAuthenticateToken, async (req, res) => {
+router.get('/', optionalAuthenticateToken, enforceCalendarScope, async (req, res) => {
     try {
         const queryParams = { 
             ...req.query,
@@ -87,7 +88,9 @@ router.get('/', optionalAuthenticateToken, async (req, res) => {
                 user: req.isAuthenticated ? {
                     email: req.user.email,
                     userId: req.user.userId,
-                    publicKey: req.user.publicKey || req.user.publisherPubKey // Include user's public key
+                    publicKey: req.user.publicKey || req.user.publisherPubKey, // Include user's public key
+                    scope: req.user?.scope || 'full', // Include scope information
+                    tokenType: req.user?.tokenType || 'standard'
                 } : null
             }
         };
