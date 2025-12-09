@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'; // Should be in .env file
 
 /**
- * Middleware to authenticate JWT token
+ * Middleware to authenticate JWT token (supports both full and scoped tokens)
  */
 function authenticateToken(req, res, next) {
   // Get auth header
@@ -25,7 +25,13 @@ function authenticateToken(req, res, next) {
     }
     
     // If verified, set user in request
-    req.user = user;
+    // Include scope information (defaults to 'full' for standard tokens)
+    req.user = {
+      ...user,
+      scope: user.scope || 'full',
+      tokenType: user.tokenType || 'standard'
+    };
+    
     next();
   });
 }
@@ -60,15 +66,75 @@ function optionalAuth(req, res, next) {
   // Verify token
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (!err) {
-      // If verified, set user in request
-      req.user = user;
+      // If verified, set user in request with scope info
+      req.user = {
+        ...user,
+        scope: user.scope || 'full',
+        tokenType: user.tokenType || 'standard'
+      };
     }
     next();
   });
 }
 
+/**
+ * Middleware to enforce calendar token scope restrictions
+ * Call this AFTER authenticateToken or optionalAuth
+ */
+function enforceCalendarScope(req, res, next) {
+  // Only enforce if user has calendar scope
+  if (!req.user || req.user.scope !== 'calendar-read-only') {
+    return next(); // Not a calendar token, skip enforcement
+  }
+  
+  console.log('🔒 [Calendar Scope] Enforcing restrictions for calendar token');
+  
+  // RESTRICTION 1: Read-only access (GET requests only)
+  if (req.method !== 'GET') {
+    console.warn('⚠️ [Calendar Scope] Blocked non-GET request:', req.method);
+    return res.status(403).json({ 
+      success: false,
+      error: 'Forbidden', 
+      message: 'Calendar tokens are read-only. Only GET requests are allowed.' 
+    });
+  }
+  
+  // RESTRICTION 2: Limited record types (workoutSchedule, mealPlan only)
+  const recordType = req.query.recordType || req.params.recordType;
+  const allowedTypes = req.user.allowedRecordTypes || ['workoutSchedule', 'mealPlan'];
+  
+  if (recordType && !allowedTypes.includes(recordType)) {
+    console.warn('⚠️ [Calendar Scope] Blocked access to record type:', recordType);
+    return res.status(403).json({ 
+      success: false,
+      error: 'Forbidden', 
+      message: `Calendar tokens can only access: ${allowedTypes.join(', ')}. Requested: ${recordType}` 
+    });
+  }
+  
+  console.log('✅ [Calendar Scope] Request passed scope restrictions');
+  next();
+}
+
+/**
+ * Helper function to check if request has calendar scope
+ */
+function hasCalendarScope(req) {
+  return req.user && req.user.scope === 'calendar-read-only';
+}
+
+/**
+ * Helper function to check if request has full scope
+ */
+function hasFullScope(req) {
+  return req.user && (req.user.scope === 'full' || !req.user.scope);
+}
+
 module.exports = {
   authenticateToken,
   isAdmin,
-  optionalAuth
+  optionalAuth,
+  enforceCalendarScope,
+  hasCalendarScope,
+  hasFullScope
 }; 
