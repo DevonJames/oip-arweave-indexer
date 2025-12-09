@@ -281,8 +281,15 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                         refRecord = await searchRecordInDB(properties[key]);
                         if (refRecord) {
                             console.log(`✅ [Resolution] Successfully fetched record from ES: ${refRecord.data?.basic?.name || properties[key]}`);
-                            // Add to recordsInDB for future resolutions in this batch
-                            recordsInDB.push(refRecord);
+                            
+                            // CRITICAL FIX: Limit recordsInDB size to prevent memory leak
+                            // recordsInDB starts with 5000 records and grows unbounded!
+                            if (recordsInDB.length < 7500) {
+                                // Add to recordsInDB for future resolutions in this batch
+                                recordsInDB.push(refRecord);
+                            } else if (recordsInDB.length === 7500) {
+                                console.warn(`⚠️  [Resolution Cache] Hit 7500 record limit, not caching more (preventing memory leak)`);
+                            }
                         }
                     } catch (error) {
                         console.error(`❌ [Resolution] Error fetching record from ES:`, error.message);
@@ -325,8 +332,13 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                                 refRecord = await searchRecordInDB(properties[key][i]);
                                 if (refRecord) {
                                     console.log(`✅ [Resolution] Successfully fetched record from ES: ${refRecord.data?.basic?.name || properties[key][i]}`);
-                                    // Add to recordsInDB for future resolutions in this batch
-                                    recordsInDB.push(refRecord);
+                                    
+                                    // CRITICAL FIX: Limit recordsInDB size to prevent memory leak
+                                    if (recordsInDB.length < 7500) {
+                                        // Add to recordsInDB for future resolutions in this batch
+                                        recordsInDB.push(refRecord);
+                                    }
+                                    // Don't log warning for arrays (too spammy)
                                 }
                             } catch (error) {
                                 console.error(`❌ [Resolution] Error fetching record from ES:`, error.message);
