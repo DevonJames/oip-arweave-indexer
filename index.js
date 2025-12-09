@@ -417,27 +417,60 @@ const mediaStaticOptions = {
     }
 };
 
-// MEMORY LEAK FIX: Middleware to force buffer cleanup after serving static files
-// This prevents accumulation of file buffers when serving 100+ GIFs/minute
+// CRITICAL FIX: ULTRA-AGGRESSIVE buffer cleanup for static files
+// FitnessAlly serves 100+ GIFs/minute causing 60GB+ external memory leak
+// The previous fix used setImmediate() which was too slow
+
+// Track concurrent GIF requests to prevent buffer accumulation
+let concurrentGifRequests = 0;
+let totalGifRequests = 0;
+let lastGCTime = Date.now();
+
 const forceStaticCleanup = (req, res, next) => {
     const originalEnd = res.end;
-    const originalWrite = res.write;
     let bufferReleased = false;
+    let startTime = Date.now();
+    const isGif = req.path && req.path.endsWith('.gif');
     
-    // Wrap res.end to force cleanup
+    if (isGif) {
+        concurrentGifRequests++;
+        totalGifRequests++;
+        
+        // Log bursts of concurrent requests
+        if (concurrentGifRequests > 10) {
+            console.log(`⚠️  [Static GIF Burst] ${concurrentGifRequests} concurrent GIF requests!`);
+        }
+    }
+    
+    // Wrap res.end to force IMMEDIATE cleanup
     res.end = function(...args) {
         const result = originalEnd.apply(this, args);
         
-        // Force buffer release after response is sent
+        if (isGif) {
+            concurrentGifRequests--;
+        }
+        
+        // CRITICAL: Force IMMEDIATE buffer release (not setImmediate!)
         if (!bufferReleased && global.gc) {
             bufferReleased = true;
-            setImmediate(() => {
-                global.gc();
-                // Only log occasionally to avoid log spam
-                if (Math.random() < 0.01) { // 1% of requests
-                    console.log(`🧹 [Static] Forced GC after serving ${req.path}`);
-                }
-            });
+            
+            const timeSinceLastGC = Date.now() - lastGCTime;
+            
+            // Force GC more aggressively for GIFs or if it's been >1 second since last GC
+            if (isGif || timeSinceLastGC > 1000) {
+                lastGCTime = Date.now();
+                
+                // Use process.nextTick for MUCH faster GC (runs before setImmediate)
+                process.nextTick(() => {
+                    global.gc();
+                    
+                    // Log every 10th GIF to monitor without spamming
+                    if (isGif && totalGifRequests % 10 === 0) {
+                        const duration = Date.now() - startTime;
+                        console.log(`🧹 [Static GIF #${totalGifRequests}] Forced GC (${duration}ms) | Concurrent: ${concurrentGifRequests}`);
+                    }
+                });
+            }
         }
         
         return result;
