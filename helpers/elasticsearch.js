@@ -2491,7 +2491,7 @@ async function getRecords(queryParams) {
         
         // DEBUG: Log the full ES query for date filters
         if (dateStart || dateEnd) {
-            // console.log(`🔍 [ES Query DEBUG] Full query:`, JSON.stringify(esQuery, null, 2));
+            console.log(`🔍 [ES Query DEBUG] Full query:`, JSON.stringify(esQuery, null, 2));
             
             // DEBUG: Test if ANY workoutSchedule records exist at all
             try {
@@ -2586,6 +2586,17 @@ async function getRecords(queryParams) {
         console.log('🔍 [DEBUG] ES returned', records.length, 'records');
         if (records.length > 0 && records.length <= 3) {
             records.forEach(r => console.log('  -', r.oip?.recordType, r.oip?.did, r.data?.workoutSchedule?.scheduled_date));
+        }
+        
+        // DEBUG: For meal plans, show sample dates
+        if (recordType === 'mealPlan' && records.length > 0) {
+            const sampleMealPlans = records.slice(0, 5);
+            console.log(`🍽️  [DEBUG] Sample mealPlan dates from ES:`);
+            sampleMealPlans.forEach(r => {
+                const mealDate = r.data?.mealPlan?.meal_date;
+                const did = r.oip?.did;
+                console.log(`   - ${did}: meal_date = ${mealDate}`);
+            });
         }
         
         // console.log(`✅ [ES Query] Retrieved ${records.length} records (total: ${totalHits})`);
@@ -4285,6 +4296,8 @@ const buildElasticsearchQuery = (params) => {
     } else if (params.user) {
         // Authenticated users: show public records + their own private records + organization records (membership checked in post-processing)
         const userPubKey = params.user.publicKey || params.user.publisherPubKey;
+        
+        console.log(`🔑 [Privacy Filter] Filtering for user with publicKey: ${userPubKey?.slice(0, 20)}... (source: ${params.user.publicKey ? 'publicKey' : 'publisherPubKey'})`);
         
         if (userPubKey) {
             must.push({
