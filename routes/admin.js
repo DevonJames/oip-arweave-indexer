@@ -261,6 +261,7 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
         
         console.log('📊 Node analytics request from admin:', req.user.email);
         console.log('📊 Time range:', timeRange);
+        console.log('📊 Time filter:', timeFilter || 'none (all time)');
         
         // Calculate time filter
         const timeFilter = calculateTimeFilter(timeRange);
@@ -333,18 +334,26 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
             }
         });
         
-        // Get activity by user
+        // Get activity by user (only authenticated users)
         const activityByUserResult = await elasticClient.search({
             index: 'user_activity',
             body: {
-                query: baseQuery,
+                query: {
+                    bool: {
+                        must: [
+                            ...baseQuery.bool.must,
+                            { exists: { field: 'userEmail' } } // Only include authenticated requests
+                        ]
+                    }
+                },
                 size: 0,
                 aggs: {
                     by_user: {
                         terms: {
                             field: 'userEmail.keyword',
                             size: 1000,
-                            order: { _count: 'desc' }
+                            order: { _count: 'desc' },
+                            min_doc_count: 1 // Only show users with at least 1 request
                         },
                         aggs: {
                             by_request_type: {
@@ -369,18 +378,29 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
             }
         });
         
-        // Get recent logins
+        // Get recent logins (within time range)
+        const loginQuery = {
+            bool: {
+                must: [
+                    { term: { requestType: 'user_login' } },
+                    { term: { success: true } }
+                ]
+            }
+        };
+        
+        // Add time filter if specified
+        if (timeFilter) {
+            loginQuery.bool.must.push({
+                range: {
+                    timestamp: { gte: timeFilter }
+                }
+            });
+        }
+        
         const recentLoginsResult = await elasticClient.search({
             index: 'user_activity',
             body: {
-                query: {
-                    bool: {
-                        must: [
-                            { term: { requestType: 'user_login' } },
-                            { term: { success: true } }
-                        ]
-                    }
-                },
+                query: loginQuery,
                 size: 100,
                 sort: [{ timestamp: 'desc' }],
                 _source: ['timestamp', 'userEmail', 'ip', 'userAgent']
@@ -406,6 +426,27 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
                             },
                             success_rate: {
                                 avg: { field: 'success' }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Get authenticated vs unauthenticated breakdown
+        const authBreakdownResult = await elasticClient.search({
+            index: 'user_activity',
+            body: {
+                query: baseQuery,
+                size: 0,
+                aggs: {
+                    authenticated: {
+                        filter: { exists: { field: 'userEmail' } }
+                    },
+                    unauthenticated: {
+                        filter: { 
+                            bool: {
+                                must_not: { exists: { field: 'userEmail' } }
                             }
                         }
                     }
@@ -439,6 +480,15 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
             }
         });
         
+        // Log analytics summary
+        console.log('📊 Analytics Summary:');
+        console.log(`   - Total requests: ${totalActivityResult.count}`);
+        console.log(`   - Authenticated: ${authBreakdownResult.aggregations.authenticated.doc_count}`);
+        console.log(`   - Unauthenticated: ${authBreakdownResult.aggregations.unauthenticated.doc_count}`);
+        console.log(`   - Active users: ${activityByUserResult.aggregations.by_user.buckets.length}`);
+        console.log(`   - Recent logins: ${recentLoginsResult.hits.hits.length}`);
+        console.log(`   - Top request types:`, activityByTypeResult.aggregations.by_request_type.buckets.slice(0, 5).map(b => `${b.key}(${b.doc_count})`).join(', '));
+        
         // Compile response
         const response = {
             nodeInfo: {
@@ -455,21 +505,25 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
             
             users: {
                 totalRegistered: registeredUsers.length,
+                activeUsers: activityByUserResult.aggregations.by_user.buckets.length, // Users who made requests in time range
                 users: registeredUsers
             },
             
             activity: {
                 totalRequests: totalActivityResult.count,
+                authenticatedRequests: authBreakdownResult.aggregations.authenticated.doc_count,
+                unauthenticatedRequests: authBreakdownResult.aggregations.unauthenticated.doc_count,
                 
                 byRequestType: activityByTypeResult.aggregations.by_request_type.buckets.map(bucket => ({
                     type: bucket.key,
-                    count: bucket.doc_count
+                    count: bucket.doc_count,
+                    percentage: ((bucket.doc_count / totalActivityResult.count) * 100).toFixed(1) + '%'
                 })),
                 
                 byUser: activityByUserResult.aggregations.by_user.buckets.map(bucket => ({
                     email: bucket.key,
                     totalRequests: bucket.doc_count,
-                    avgDuration: Math.round(bucket.avg_duration.value),
+                    avgDuration: Math.round(bucket.avg_duration.value) || 0,
                     successRate: (bucket.success_rate.value * 100).toFixed(2) + '%',
                     requestBreakdown: bucket.by_request_type.buckets.map(typeBucket => ({
                         type: typeBucket.key,
@@ -480,7 +534,7 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
                 topEndpoints: topEndpointsResult.aggregations.top_endpoints.buckets.map(bucket => ({
                     endpoint: bucket.key,
                     count: bucket.doc_count,
-                    avgDuration: Math.round(bucket.avg_duration.value),
+                    avgDuration: Math.round(bucket.avg_duration.value) || 0,
                     successRate: (bucket.success_rate.value * 100).toFixed(2) + '%'
                 })),
                 
