@@ -314,6 +314,29 @@ router.get('/media', (req, res) => {
         res.setHeader('Content-Length', chunksize);
         res.setHeader('Content-Type', getContentType(filePath));
         
+        // CRITICAL FIX: Add stream cleanup handlers to prevent buffer leaks
+        file.on('error', (err) => {
+            console.error('❌ Stream error for', id, err.message);
+            if (!res.headersSent) {
+                res.status(500).send('Stream error');
+            }
+            file.destroy();
+        });
+        
+        file.on('end', () => {
+            // Force GC for large files (> 100KB) to prevent buffer accumulation
+            if (chunksize > 102400 && global.gc) {
+                setImmediate(() => global.gc());
+            }
+        });
+        
+        // Clean up on client disconnect
+        res.on('close', () => {
+            if (!file.destroyed) {
+                file.destroy();
+            }
+        });
+        
         // Pipe the file stream
         file.pipe(res);
         
@@ -323,6 +346,30 @@ router.get('/media', (req, res) => {
         res.setHeader('Content-Type', getContentType(filePath));
         
         const file = fs.createReadStream(filePath);
+        
+        // CRITICAL FIX: Add stream cleanup handlers to prevent buffer leaks
+        file.on('error', (err) => {
+            console.error('❌ Stream error for', id, err.message);
+            if (!res.headersSent) {
+                res.status(500).send('Stream error');
+            }
+            file.destroy();
+        });
+        
+        file.on('end', () => {
+            // Force GC for large files (> 100KB) to prevent buffer accumulation
+            if (fileSize > 102400 && global.gc) {
+                setImmediate(() => global.gc());
+            }
+        });
+        
+        // Clean up on client disconnect
+        res.on('close', () => {
+            if (!file.destroyed) {
+                file.destroy();
+            }
+        });
+        
         file.pipe(res);
     }
 });
