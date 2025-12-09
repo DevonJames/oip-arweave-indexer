@@ -26,30 +26,41 @@ async function logAPIActivity(req, res, next) {
 
 async function logActivity(req, res, duration, responseBody) {
     try {
+        // Get full path including base URL (e.g., /api/records instead of just /records)
+        const fullPath = req.baseUrl + req.path;
+        
         // Skip logging for certain endpoints (to avoid infinite loops or noise)
         const skipEndpoints = [
             '/api/admin/node-analytics', // Don't log the analytics endpoint itself
             '/health',
-            '/metrics'
+            '/metrics',
+            '/config.js' // Skip config endpoint
         ];
         
-        if (skipEndpoints.some(endpoint => req.path.startsWith(endpoint))) {
+        if (skipEndpoints.some(endpoint => fullPath.startsWith(endpoint))) {
             return;
         }
         
         // Extract user info from JWT (if authenticated)
+        // Authentication middleware sets req.user for authenticated requests
         const user = req.user || null;
+        
+        // Extract user data with fallbacks for different token types
+        const userId = user?.userId || user?.id || null;
+        const userEmail = user?.email || null;
+        const userPublicKey = user?.publicKey || user?.publisherPubKey || null;
+        const isAdmin = user?.isAdmin || false;
         
         const activityLog = {
             timestamp: new Date().toISOString(),
-            userId: user?.userId || null,
-            userEmail: user?.email || null,
-            userPublicKey: user?.publicKey || null,
-            isAdmin: user?.isAdmin || false,
+            userId: userId,
+            userEmail: userEmail,
+            userPublicKey: userPublicKey,
+            isAdmin: isAdmin,
             
             // Request details
             method: req.method,
-            endpoint: req.path,
+            endpoint: fullPath, // Use full path with /api prefix
             fullUrl: req.originalUrl,
             queryParams: req.query,
             
@@ -59,11 +70,11 @@ async function logActivity(req, res, duration, responseBody) {
             success: res.statusCode >= 200 && res.statusCode < 400,
             
             // Additional context
-            ip: req.ip || req.connection.remoteAddress,
-            userAgent: req.headers['user-agent'],
+            ip: req.ip || req.connection?.remoteAddress || null,
+            userAgent: req.headers['user-agent'] || null,
             
             // Categorize request type
-            requestType: categorizeRequest(req.path, req.method),
+            requestType: categorizeRequest(fullPath, req.method),
             
             // Record type if publishing/querying records
             recordType: extractRecordType(req),
@@ -71,6 +82,11 @@ async function logActivity(req, res, duration, responseBody) {
             // Error info if failed
             error: res.statusCode >= 400 ? (responseBody?.error || responseBody?.message) : null
         };
+        
+        // Only log if we have meaningful data (skip static file requests, etc.)
+        if (!fullPath || fullPath === '/') {
+            return;
+        }
         
         // Ensure activity index exists
         await ensureActivityIndexExists();
@@ -81,6 +97,11 @@ async function logActivity(req, res, duration, responseBody) {
             body: activityLog
         });
         
+        // Debug log for first few requests to verify it's working
+        if (Math.random() < 0.05) { // 5% sampling for debugging
+            console.log(`📊 [Activity] ${user?.email || 'anonymous'} - ${req.method} ${fullPath} - ${activityLog.requestType}`);
+        }
+        
     } catch (error) {
         // Silently fail - don't break the API if logging fails
         console.error('Error in logActivity:', error);
@@ -89,19 +110,51 @@ async function logActivity(req, res, duration, responseBody) {
 
 /**
  * Categorize the request for easier analytics
+ * Order matters - check most specific paths first
  */
 function categorizeRequest(path, method) {
+    // User authentication
+    if (path.includes('/login')) return 'user_login';
+    if (path.includes('/register')) return 'user_register';
+    if (path.includes('/mnemonic')) return 'mnemonic_access';
+    if (path.includes('/generate-calendar')) return 'calendar_token';
+    
+    // Record operations (check specific endpoints first)
+    if (path.includes('/deleteRecord')) return 'delete_record';
+    if (path.includes('/newRecord')) return 'publish_record';
     if (path.startsWith('/api/records') && method === 'GET') return 'query_records';
     if (path.startsWith('/api/records') && method === 'POST') return 'publish_record';
     if (path.startsWith('/api/records') && method === 'DELETE') return 'delete_record';
+    
+    // Publishing
     if (path.startsWith('/api/publish')) return 'publish_content';
+    
+    // Media operations
     if (path.startsWith('/api/media')) return 'media_operation';
-    if (path.startsWith('/api/user/login')) return 'user_login';
-    if (path.startsWith('/api/user/register')) return 'user_register';
-    if (path.startsWith('/api/user/mnemonic')) return 'mnemonic_access';
+    
+    // Organizations
     if (path.startsWith('/api/organizations')) return 'organization_operation';
-    if (path.startsWith('/api/alfred')) return 'ai_request';
+    
+    // AI/ALFRED
+    if (path.startsWith('/api/alfred') || path.startsWith('/api/voice')) return 'ai_request';
+    
+    // Admin operations
     if (path.startsWith('/api/admin')) return 'admin_operation';
+    
+    // GUN relay (cross-node sync)
+    if (path.startsWith('/gun-relay')) return 'gun_relay';
+    
+    // Health checks
+    if (path.startsWith('/health') || path.startsWith('/api/health')) return 'health_check';
+    
+    // Templates
+    if (path.startsWith('/api/templates')) return 'template_operation';
+    
+    // Creators
+    if (path.startsWith('/api/creators')) return 'creator_operation';
+    
+    // Workout/fitness
+    if (path.startsWith('/api/workout')) return 'workout_operation';
     
     return 'other';
 }
