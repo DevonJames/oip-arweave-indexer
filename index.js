@@ -339,6 +339,7 @@ app.use(bodyParser.json());
 // These routes proxy requests to the internal gun-relay service
 // Allows external nodes to access gun-relay through the public API
 app.get('/gun-relay/get', async (req, res) => {
+    let response = null;
     try {
         const soul = req.query.soul;
         if (!soul) {
@@ -346,14 +347,31 @@ app.get('/gun-relay/get', async (req, res) => {
         }
         
         const gunRelayUrl = process.env.GUN_PEERS || 'http://gun-relay:8765';
-        const response = await axios.get(`${gunRelayUrl}/get?soul=${encodeURIComponent(soul)}`, {
+        response = await axios.get(`${gunRelayUrl}/get?soul=${encodeURIComponent(soul)}`, {
             timeout: 10000,
             // MEMORY LEAK FIX: Explicitly use global HTTP agents
             httpAgent: httpAgent,
             httpsAgent: httpsAgent
         });
-        res.json(response.data);
+        
+        // CRITICAL FIX: Extract data IMMEDIATELY and null response to free buffers
+        const data = response.data;
+        response.data = null;
+        response = null;
+        
+        res.json(data);
+        
+        // Force immediate GC to clean up buffers
+        if (global.gc) {
+            process.nextTick(() => global.gc());
+        }
     } catch (error) {
+        // MEMORY LEAK FIX: Clean up error response buffers immediately
+        if (error.response) {
+            error.response.data = null;
+            error.response = null;
+        }
+        
         // Silent - 404s are normal when records don't exist
         res.status(error.response?.status || 500).json({ 
             error: error.message,
@@ -363,6 +381,7 @@ app.get('/gun-relay/get', async (req, res) => {
 });
 
 app.post('/gun-relay/put', async (req, res) => {
+    let response = null;
     try {
         const { soul, data } = req.body;
         if (!soul || !data) {
@@ -370,20 +389,38 @@ app.post('/gun-relay/put', async (req, res) => {
         }
         
         const gunRelayUrl = process.env.GUN_PEERS || 'http://gun-relay:8765';
-        const response = await axios.post(`${gunRelayUrl}/put`, req.body, {
+        response = await axios.post(`${gunRelayUrl}/put`, req.body, {
             timeout: 30000,
             headers: { 'Content-Type': 'application/json' },
             // MEMORY LEAK FIX: Explicitly use global HTTP agents
             httpAgent: httpAgent,
             httpsAgent: httpsAgent
         });
-        res.json(response.data);
+        
+        // CRITICAL FIX: Extract data IMMEDIATELY and null response to free buffers
+        const responseData = response.data;
+        response.data = null;
+        response = null;
+        
+        res.json(responseData);
+        
+        // Force immediate GC to clean up buffers
+        if (global.gc) {
+            process.nextTick(() => global.gc());
+        }
     } catch (error) {
+        // MEMORY LEAK FIX: Clean up error response buffers immediately
+        const statusCode = error.response?.status;
+        if (error.response) {
+            error.response.data = null;
+            error.response = null;
+        }
+        
         // Only log non-404 errors
-        if (error.response?.status !== 404) {
+        if (statusCode !== 404) {
             console.error('Gun relay PUT error:', error.message);
         }
-        res.status(error.response?.status || 500).json({ 
+        res.status(statusCode || 500).json({ 
             error: error.message,
             success: false 
         });
