@@ -581,6 +581,61 @@ app.use('/api/documentation', documentationRoutes);
 // Notes routes (Alfred Meeting Notes)
 app.use('/api/notes', notesRoutes);
 
+// Local Media Routes (for custom apps that need to serve local media files)
+// Configure via LOCAL_MEDIA_PATH environment variable
+if (process.env.ENABLE_LOCAL_MEDIA === 'true') {
+  const localMediaPath = process.env.LOCAL_MEDIA_PATH || path.join(publicPath, 'mediamixer', 'local-tracks');
+  
+  console.log(`🎵 Local media enabled: ${localMediaPath}`);
+  
+  // API endpoint to list files in local media directory
+  app.get('/api/local-media', (req, res) => {
+    try {
+      if (!fs.existsSync(localMediaPath)) {
+        return res.json({ tracks: [] });
+      }
+      
+      const files = fs.readdirSync(localMediaPath)
+        .filter(file => {
+          const ext = path.extname(file).toLowerCase();
+          return ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.webm', '.mp4'].includes(ext);
+        })
+        .map(file => ({
+          name: file,
+          path: `/local-media/${file}`,
+          size: fs.statSync(path.join(localMediaPath, file)).size
+        }));
+      
+      res.json({ tracks: files });
+    } catch (error) {
+      console.error('Error listing local media:', error);
+      res.status(500).json({ error: 'Failed to list local media files' });
+    }
+  });
+  
+  // Serve individual local media files
+  app.use('/local-media', express.static(localMediaPath, {
+    setHeaders: (res, filePath) => {
+      // Enable streaming and range requests for audio/video
+      res.setHeader('Accept-Ranges', 'bytes');
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeTypes = {
+        '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav',
+        '.ogg': 'audio/ogg',
+        '.m4a': 'audio/mp4',
+        '.flac': 'audio/flac',
+        '.aac': 'audio/aac',
+        '.webm': 'audio/webm',
+        '.mp4': 'video/mp4'
+      };
+      if (mimeTypes[ext]) {
+        res.setHeader('Content-Type', mimeTypes[ext]);
+      }
+    }
+  }));
+}
+
 // SPA Fallback: Serve index.html for all non-API routes
 // This enables client-side routing for React Router, Vue Router, etc.
 // Must come AFTER all API routes but BEFORE error handlers
@@ -589,7 +644,8 @@ app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/') || 
       req.path === '/config.js' || 
       req.path.startsWith('/gun-relay/') ||
-      req.path.startsWith('/media/')) {
+      req.path.startsWith('/media/') ||
+      req.path.startsWith('/local-media/')) {
     return next();
   }
   
