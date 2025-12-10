@@ -251,7 +251,8 @@ const corsOptions = {
       'https://app.fitnessally.io',
       'https://mini.fitnessally.io',
       'https://mobile.fitnessally.io',
-      'https://rockhoppersgame.com'
+      'https://rockhoppersgame.com',
+      'https://lyra.ninja'
     ];
     
     // Allow any localhost origin in development
