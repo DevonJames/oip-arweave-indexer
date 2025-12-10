@@ -588,6 +588,87 @@ if (process.env.ENABLE_LOCAL_MEDIA === 'true') {
   
   console.log(`🎵 Local media enabled: ${localMediaPath}`);
   
+  // Function to find album art in a directory
+  const findAlbumArt = (albumDir) => {
+    try {
+      if (!fs.existsSync(albumDir)) return null;
+      
+      const files = fs.readdirSync(albumDir);
+      
+      // Find first JPG or PNG file
+      for (const filename of files) {
+        const ext = path.extname(filename).toLowerCase();
+        if (['.jpg', '.jpeg', '.png'].includes(ext)) {
+          const artPath = path.join(albumDir, filename);
+          if (fs.statSync(artPath).isFile()) {
+            const relativePath = path.relative(localMediaPath, artPath);
+            return '/local-media/' + relativePath.replace(/\\/g, '/');
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error finding album art in ${albumDir}:`, error);
+    }
+    return null;
+  };
+  
+  // Recursive function to scan directories for media files
+  const scanMediaDirectory = (dir, baseDir = dir) => {
+    const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.webm', '.mp4'];
+    let results = [];
+    const albumArtCache = {}; // Cache album art lookups
+    
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        
+        if (entry.isDirectory()) {
+          // Recursively scan subdirectories
+          results = results.concat(scanMediaDirectory(fullPath, baseDir));
+        } else if (entry.isFile()) {
+          const ext = path.extname(entry.name).toLowerCase();
+          if (audioExtensions.includes(ext)) {
+            // Get relative path from base directory
+            const relativePath = path.relative(baseDir, fullPath);
+            const urlPath = '/local-media/' + relativePath.replace(/\\/g, '/');
+            
+            // Parse structure: Album/Artist/Track.mp3
+            const pathParts = relativePath.split(path.sep);
+            const album = pathParts.length > 2 ? pathParts[0] : '';
+            const artist = pathParts.length > 2 ? pathParts[1] : (pathParts.length > 1 ? pathParts[0] : '');
+            const filename = pathParts[pathParts.length - 1];
+            
+            // Find album art (cache by album to avoid repeated lookups)
+            let albumArt = null;
+            if (album) {
+              if (albumArtCache[album] === undefined) {
+                const albumDir = path.join(baseDir, album);
+                albumArtCache[album] = findAlbumArt(albumDir);
+              }
+              albumArt = albumArtCache[album];
+            }
+            
+            results.push({
+              name: filename,
+              path: urlPath,
+              relativePath: relativePath,
+              album: album,
+              artist: artist,
+              albumArt: albumArt,
+              size: fs.statSync(fullPath).size
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error scanning directory ${dir}:`, error);
+    }
+    
+    return results;
+  };
+  
   // API endpoint to list files in local media directory
   app.get('/api/local-media', (req, res) => {
     try {
@@ -595,31 +676,24 @@ if (process.env.ENABLE_LOCAL_MEDIA === 'true') {
         return res.json({ tracks: [] });
       }
       
-      const files = fs.readdirSync(localMediaPath)
-        .filter(file => {
-          const ext = path.extname(file).toLowerCase();
-          return ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.webm', '.mp4'].includes(ext);
-        })
-        .map(file => ({
-          name: file,
-          path: `/local-media/${file}`,
-          size: fs.statSync(path.join(localMediaPath, file)).size
-        }));
+      const tracks = scanMediaDirectory(localMediaPath);
+      console.log(`📂 Found ${tracks.length} local media files`);
       
-      res.json({ tracks: files });
+      res.json({ tracks });
     } catch (error) {
       console.error('Error listing local media:', error);
       res.status(500).json({ error: 'Failed to list local media files' });
     }
   });
   
-  // Serve individual local media files
+  // Serve individual local media files and album art
   app.use('/local-media', express.static(localMediaPath, {
     setHeaders: (res, filePath) => {
       // Enable streaming and range requests for audio/video
       res.setHeader('Accept-Ranges', 'bytes');
       const ext = path.extname(filePath).toLowerCase();
       const mimeTypes = {
+        // Audio formats
         '.mp3': 'audio/mpeg',
         '.wav': 'audio/wav',
         '.ogg': 'audio/ogg',
@@ -627,7 +701,14 @@ if (process.env.ENABLE_LOCAL_MEDIA === 'true') {
         '.flac': 'audio/flac',
         '.aac': 'audio/aac',
         '.webm': 'audio/webm',
-        '.mp4': 'video/mp4'
+        '.mp4': 'video/mp4',
+        // Image formats (for album art)
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+        '.svg': 'image/svg+xml'
       };
       if (mimeTypes[ext]) {
         res.setHeader('Content-Type', mimeTypes[ext]);
