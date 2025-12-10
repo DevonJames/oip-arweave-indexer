@@ -210,6 +210,13 @@ GUN_REGISTRY_TIMEOUT_MS=30000
 # Useful for multi-deployment scenarios like RockHoppersGame/public/
 CUSTOM_PUBLIC_PATH=false
 
+# Local Media Configuration (for custom apps with local media files)
+# Enable serving local media files (audio/video) from a directory
+ENABLE_LOCAL_MEDIA=false
+# Path to local media directory (relative to public path or absolute)
+# Default: {publicPath}/mediamixer/local-tracks
+LOCAL_MEDIA_PATH=
+
 # Multi-Stack Deployment Configuration
 # Unique project name to avoid Docker conflicts when running multiple OIP stacks
 # This affects container names, network names, and volume names
