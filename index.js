@@ -580,6 +580,34 @@ app.use('/api/documentation', documentationRoutes);
 // Notes routes (Alfred Meeting Notes)
 app.use('/api/notes', notesRoutes);
 
+// SPA Fallback: Serve index.html for all non-API routes
+// This enables client-side routing for React Router, Vue Router, etc.
+// Must come AFTER all API routes but BEFORE error handlers
+app.get('*', (req, res, next) => {
+  // Don't intercept API routes, config.js, or actual files
+  if (req.path.startsWith('/api/') || 
+      req.path === '/config.js' || 
+      req.path.startsWith('/gun-relay/') ||
+      req.path.startsWith('/media/')) {
+    return next();
+  }
+  
+  // Check if the requested file exists (for static assets like CSS, JS, images)
+  const filePath = path.join(publicPath, req.path);
+  if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+    return next(); // Let express.static handle it
+  }
+  
+  // For all other routes, serve index.html (SPA fallback)
+  const indexPath = path.join(publicPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    console.log(`🔄 SPA Fallback: ${req.path} → index.html`);
+    res.sendFile(indexPath);
+  } else {
+    next(); // No index.html found, continue to 404
+  }
+});
+
 // Make io available to routes
 app.set('io', io);
 
