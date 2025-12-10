@@ -51,24 +51,33 @@ class MemoryDiagnostics {
     async initialize() {
         try {
             // Create directories if they don't exist
-            await fs.mkdir(path.dirname(this.logFilePath), { recursive: true });
-            await fs.mkdir(this.dumpDirectory, { recursive: true });
+            try {
+                await fs.mkdir(path.dirname(this.logFilePath), { recursive: true });
+                await fs.mkdir(this.dumpDirectory, { recursive: true });
+                console.log('📁 [Memory Diagnostics] Created log directories');
+            } catch (dirError) {
+                console.warn('⚠️  [Memory Diagnostics] Could not create log directories:', dirError.message);
+                console.warn('⚠️  [Memory Diagnostics] Will fallback to console-only logging');
+            }
             
             // Take baseline memory snapshot
             this.baselineMemory = this.captureMemorySnapshot();
             this.lastSnapshot = this.baselineMemory;
             
             // Log initial state
-            await this.logDiagnostic('INIT', `Baseline memory: ${this.formatMemory(this.baselineMemory)}`);
+            await this.logDiagnostic('INIT', `Memory Diagnostics ENABLED - Baseline: ${this.formatMemory(this.baselineMemory)}`);
             
             // Start periodic monitoring (every 60 seconds)
             this.snapshotInterval = setInterval(() => {
                 this.periodicCheck();
             }, 60000);
             
-            console.log('🔬 [Memory Diagnostics] Initialized - Monitoring every 60s');
+            console.log('🔬 [Memory Diagnostics] Initialized successfully - Monitoring every 60s');
+            console.log(`📝 [Memory Diagnostics] Log file: ${this.logFilePath}`);
+            console.log(`💾 [Memory Diagnostics] Heap dumps: ${this.dumpDirectory}`);
         } catch (error) {
             console.error('❌ [Memory Diagnostics] Failed to initialize:', error.message);
+            console.error('❌ [Memory Diagnostics] Stack:', error.stack);
             this.enabled = false;
         }
     }
@@ -280,8 +289,9 @@ class MemoryDiagnostics {
         try {
             await fs.appendFile(this.logFilePath, logLine);
         } catch (error) {
-            // Fallback to console if file write fails
+            // Fallback to console if file write fails (permissions, disk full, etc.)
             console.log(`🔬 [Memory Diagnostics] ${logLine.trim()}`);
+            console.error(`⚠️  [Memory Diagnostics] Failed to write to log file: ${error.message}`);
         }
     }
     

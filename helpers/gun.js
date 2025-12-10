@@ -19,6 +19,10 @@ class GunHelper {
         this.missing404Cache = new Map();
         this.cache404Stats = { hits: 0, total: 0 };
         
+        // CRITICAL FIX: Initialize deletion failure cache to prevent repeated 500 errors
+        this.deletionFailureCache = new Map(); // soul -> { count, lastAttempt, error }
+        this.deletionStats = { totalAttempts: 0, cachedSkips: 0, failures: 0 };
+        
         // Periodic cache cleanup to prevent memory growth (every hour)
         this.cacheCleanupInterval = setInterval(() => {
             const now = Date.now();
@@ -32,8 +36,16 @@ class GunHelper {
                 }
             }
             
+            // Clean deletion failure cache
+            for (const [soul, data] of this.deletionFailureCache.entries()) {
+                if (now - data.lastAttempt > maxAge) {
+                    this.deletionFailureCache.delete(soul);
+                    cleanedCount++;
+                }
+            }
+            
             if (cleanedCount > 0) {
-                console.log(`🧹 [GUN 404 Cache] Cleaned ${cleanedCount} expired entries, ${this.missing404Cache.size} remain`);
+                console.log(`🧹 [GUN Cache] Cleaned ${cleanedCount} expired entries (404: ${this.missing404Cache.size}, Del: ${this.deletionFailureCache.size})`);
             }
         }, 3600000); // Run every hour
     }
@@ -614,6 +626,25 @@ class GunHelper {
      * @returns {Promise<boolean>} - Success status
      */
     async deleteRecord(soul) {
+        this.deletionStats.totalAttempts++;
+        
+        // CRITICAL FIX: Check deletion failure cache - skip if failed multiple times
+        const cachedFailure = this.deletionFailureCache.get(soul);
+        if (cachedFailure) {
+            // If it's failed 3+ times, skip silently to prevent log spam and buffer accumulation
+            if (cachedFailure.count >= 3) {
+                this.deletionStats.cachedSkips++;
+                
+                // Log stats every 10 skips
+                if (this.deletionStats.cachedSkips % 10 === 0) {
+                    console.log(`📊 [GUN Delete Stats] Attempts: ${this.deletionStats.totalAttempts}, Skipped (cached failures): ${this.deletionStats.cachedSkips}`);
+                }
+                
+                // Return true to indicate "handled" (not actually deleted, but prevents retry loop)
+                return true;
+            }
+        }
+        
         try {
             // Use HTTP API to delete (put null to the soul)
             const response = await axios.post(`${this.apiUrl}/put`, {
@@ -625,16 +656,38 @@ class GunHelper {
             });
 
             if (response.data && response.data.success) {
+                // Success! Remove from failure cache if it was there
+                this.deletionFailureCache.delete(soul);
                 return true;
             } else {
                 throw new Error(response.data.error || 'Failed to delete record');
             }
         } catch (error) {
+            // MEMORY LEAK FIX: Clean up error response buffers immediately
+            if (error.response) {
+                error.response.data = null;
+                error.response = null;
+            }
+            
             // If record doesn't exist (404), that's fine - already deleted
             if (error.response && error.response.status === 404) {
+                this.deletionFailureCache.delete(soul);
                 return true;
             }
-            console.error(`Error in deleteRecord (${soul}):`, error.message);
+            
+            // Track the failure
+            const failureRecord = cachedFailure || { count: 0, lastAttempt: 0, error: '' };
+            failureRecord.count++;
+            failureRecord.lastAttempt = Date.now();
+            failureRecord.error = error.message;
+            this.deletionFailureCache.set(soul, failureRecord);
+            this.deletionStats.failures++;
+            
+            // Only log the FIRST failure, then cache prevents log spam
+            if (failureRecord.count === 1) {
+                console.error(`Error in deleteRecord (${soul}):`, error.message);
+            }
+            
             throw error;
         }
     }
