@@ -425,52 +425,88 @@ const mediaStaticOptions = {
 let concurrentGifRequests = 0;
 let totalGifRequests = 0;
 let lastGCTime = Date.now();
+let gcCount = 0;
+
+// CRITICAL FIX: Semaphore to limit concurrent file streams (prevents buffer explosion)
+const MAX_CONCURRENT_STREAMS = 20;
+let activeStreams = 0;
+const streamQueue = [];
+
+const acquireStream = () => {
+    return new Promise((resolve) => {
+        if (activeStreams < MAX_CONCURRENT_STREAMS) {
+            activeStreams++;
+            resolve();
+        } else {
+            streamQueue.push(resolve);
+        }
+    });
+};
+
+const releaseStream = () => {
+    activeStreams--;
+    if (streamQueue.length > 0) {
+        const next = streamQueue.shift();
+        activeStreams++;
+        next();
+    }
+};
 
 const forceStaticCleanup = (req, res, next) => {
     const originalEnd = res.end;
     let bufferReleased = false;
     let startTime = Date.now();
     const isGif = req.path && req.path.endsWith('.gif');
+    let streamAcquired = false;
     
     if (isGif) {
         concurrentGifRequests++;
         totalGifRequests++;
         
+        // Wait for stream slot before allowing request through
+        acquireStream().then(() => {
+            streamAcquired = true;
+        });
+        
         // Log bursts of concurrent requests
-        if (concurrentGifRequests > 10) {
-            console.log(`⚠️  [Static GIF Burst] ${concurrentGifRequests} concurrent GIF requests!`);
+        if (concurrentGifRequests > 15) {
+            console.log(`⚠️  [Static GIF Burst] ${concurrentGifRequests} concurrent | Queue: ${streamQueue.length}`);
         }
     }
     
-    // Wrap res.end to force IMMEDIATE cleanup
+    // Wrap res.end to force ULTRA-AGGRESSIVE cleanup
     res.end = function(...args) {
         const result = originalEnd.apply(this, args);
         
-        if (isGif) {
+        if (isGif && streamAcquired) {
+            releaseStream();
             concurrentGifRequests--;
         }
         
-        // CRITICAL: Force IMMEDIATE buffer release (not setImmediate!)
-        if (!bufferReleased && global.gc) {
+        // ULTRA-AGGRESSIVE: Force GC on EVERY GIF response (not throttled)
+        if (!bufferReleased && global.gc && isGif) {
             bufferReleased = true;
+            gcCount++;
             
-            const timeSinceLastGC = Date.now() - lastGCTime;
-            
-            // Force GC more aggressively for GIFs or if it's been >1 second since last GC
-            if (isGif || timeSinceLastGC > 1000) {
-                lastGCTime = Date.now();
+            // Call GC IMMEDIATELY in process.nextTick (before any other I/O)
+            process.nextTick(() => {
+                global.gc();
                 
-                // Use process.nextTick for MUCH faster GC (runs before setImmediate)
-                process.nextTick(() => {
+                // Log every 5th GIF to monitor effectiveness
+                if (totalGifRequests % 5 === 0) {
+                    const duration = Date.now() - startTime;
+                    const mem = process.memoryUsage();
+                    const rssMB = (mem.rss / 1024 / 1024).toFixed(0);
+                    console.log(`🧹 [GIF #${totalGifRequests}] GC #${gcCount} | ${duration}ms | RSS: ${rssMB}MB | Active: ${activeStreams}/${MAX_CONCURRENT_STREAMS}`);
+                }
+            });
+            
+            // DOUBLE GC: Also schedule a second GC after 100ms to catch stragglers
+            setTimeout(() => {
+                if (global.gc) {
                     global.gc();
-                    
-                    // Log every 10th GIF to monitor without spamming
-                    if (isGif && totalGifRequests % 10 === 0) {
-                        const duration = Date.now() - startTime;
-                        console.log(`🧹 [Static GIF #${totalGifRequests}] Forced GC (${duration}ms) | Concurrent: ${concurrentGifRequests}`);
-                    }
-                });
-            }
+                }
+            }, 100);
         }
         
         return result;
