@@ -729,11 +729,10 @@ if (process.env.ENABLE_LOCAL_MEDIA === 'true') {
   }));
 }
 
-// SPA Fallback: Serve index.html for all non-API routes
-// This enables client-side routing for React Router, Vue Router, etc.
-// Must come AFTER all API routes but BEFORE error handlers
+// Open Graph Preview Middleware (for link sharing on Discord, iMessage, Twitter, etc.)
+// This middleware intercepts bot requests and returns HTML with OG meta tags
 app.get('*', (req, res, next) => {
-  // Don't intercept API routes, config.js, or actual files
+  // Skip API routes, config, and actual files
   if (req.path.startsWith('/api/') || 
       req.path === '/config.js' || 
       req.path.startsWith('/gun-relay/') ||
@@ -742,16 +741,94 @@ app.get('*', (req, res, next) => {
     return next();
   }
   
+  // Detect bot user-agents
+  const userAgent = req.get('user-agent') || '';
+  const isBot = /bot|crawler|spider|crawling|facebookexternalhit|twitterbot|slackbot|telegrambot|whatsapp|discordbot|imessagebot|pinterest|LinkedInBot/i.test(userAgent);
+  
+  if (isBot && process.env.ENABLE_LOCAL_MEDIA === 'true') {
+    // Parse MediaMixer URLs like: /listen/local/Album Name/Artist Name/track.mp3
+    const listenMatch = req.path.match(/^\/listen\/local\/(.+)/);
+    
+    if (listenMatch) {
+      const encodedPath = listenMatch[1];
+      const decodedPath = decodeURIComponent(encodedPath);
+      
+      console.log(`🤖 Bot detected (${userAgent.substring(0, 50)}...) requesting: ${req.path}`);
+      
+      // Parse path: Album/Artist/Track.mp3
+      const pathParts = decodedPath.split('/');
+      const album = pathParts[0] || 'Unknown Album';
+      const artist = pathParts.length > 2 ? pathParts[1] : 'Unknown Artist';
+      const filename = pathParts[pathParts.length - 1] || 'Unknown Track';
+      const trackName = path.basename(filename, path.extname(filename));
+      
+      // Determine media type
+      const ext = path.extname(filename).toLowerCase();
+      const isVideo = ['.mp4', '.m4v', '.mov'].includes(ext);
+      const mediaType = isVideo ? 'video.other' : 'music.song';
+      
+      // Look for album art
+      const localMediaPath = process.env.LOCAL_MEDIA_PATH || path.join(publicPath, 'mediamixer', 'local-tracks');
+      const albumDir = path.join(localMediaPath, album);
+      let albumArtUrl = null;
+      
+      try {
+        if (fs.existsSync(albumDir)) {
+          const files = fs.readdirSync(albumDir);
+          for (const file of files) {
+            const fileExt = path.extname(file).toLowerCase();
+            if (['.jpg', '.jpeg', '.png'].includes(fileExt)) {
+              const domain = req.get('host');
+              const protocol = req.get('x-forwarded-proto') || req.protocol || 'https';
+              albumArtUrl = `${protocol}://${domain}/local-media/${encodeURIComponent(album)}/${encodeURIComponent(file)}`;
+              break;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error finding album art for OG tags:', error);
+      }
+      
+      // Generate OG meta tags HTML
+      const ogHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta property="og:title" content="${trackName}" />
+  <meta property="og:description" content="${artist} • ${album}" />
+  ${albumArtUrl ? `<meta property="og:image" content="${albumArtUrl}" />` : ''}
+  <meta property="og:type" content="${mediaType}" />
+  <meta property="og:url" content="${req.protocol}://${req.get('host')}${req.path}" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${trackName}" />
+  <meta name="twitter:description" content="${artist} • ${album}" />
+  ${albumArtUrl ? `<meta name="twitter:image" content="${albumArtUrl}" />` : ''}
+  <title>${trackName} - ${artist}</title>
+  <meta http-equiv="refresh" content="0;url=/" />
+</head>
+<body>
+  <h1>${trackName}</h1>
+  <p>${artist} • ${album}</p>
+  <p>Redirecting to MediaMixer...</p>
+</body>
+</html>`;
+      
+      return res.send(ogHtml);
+    }
+  }
+  
   // Check if the requested file exists (for static assets like CSS, JS, images)
   const filePath = path.join(publicPath, req.path);
   if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
     return next(); // Let express.static handle it
   }
   
-  // For all other routes, serve index.html (SPA fallback)
+  // SPA Fallback: Serve index.html for all non-bot requests
   const indexPath = path.join(publicPath, 'index.html');
   if (fs.existsSync(indexPath)) {
-    console.log(`🔄 SPA Fallback: ${req.path} → index.html`);
+    if (!isBot) {
+      console.log(`🔄 SPA Fallback: ${req.path} → index.html`);
+    }
     res.sendFile(indexPath);
   } else {
     next(); // No index.html found, continue to 404
