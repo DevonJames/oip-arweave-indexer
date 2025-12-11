@@ -614,7 +614,9 @@ if (process.env.ENABLE_LOCAL_MEDIA === 'true') {
   
   // Recursive function to scan directories for media files
   const scanMediaDirectory = (dir, baseDir = dir) => {
-    const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.webm', '.mp4'];
+    const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.webm'];
+    const videoExtensions = ['.mp4', '.m4v', '.mov'];
+    const mediaExtensions = [...audioExtensions, ...videoExtensions];
     let results = [];
     const albumArtCache = {}; // Cache album art lookups
     
@@ -629,15 +631,21 @@ if (process.env.ENABLE_LOCAL_MEDIA === 'true') {
           results = results.concat(scanMediaDirectory(fullPath, baseDir));
         } else if (entry.isFile()) {
           const ext = path.extname(entry.name).toLowerCase();
-          if (audioExtensions.includes(ext)) {
+          if (mediaExtensions.includes(ext)) {
             // Get relative path from base directory
             const relativePath = path.relative(baseDir, fullPath);
             const urlPath = '/local-media/' + relativePath.replace(/\\/g, '/');
             
-            // Parse structure: Album/Artist/Track.mp3
+            // Determine media type
+            const mediaType = videoExtensions.includes(ext) ? 'video' : 'audio';
+            
+            // Parse structure: Album/Artist/Track.mp3 or Album/Video.mp4
             const pathParts = relativePath.split(path.sep);
-            const album = pathParts.length > 2 ? pathParts[0] : '';
-            const artist = pathParts.length > 2 ? pathParts[1] : (pathParts.length > 1 ? pathParts[0] : '');
+            const album = pathParts.length >= 2 ? pathParts[0] : '';
+            
+            // For videos directly in album folder (Album/video.mp4), artist is empty
+            // For audio in nested structure (Album/Artist/track.mp3), artist is the middle folder
+            const artist = pathParts.length > 2 ? pathParts[1] : '';
             const filename = pathParts[pathParts.length - 1];
             
             // Find album art (cache by album to avoid repeated lookups)
@@ -657,6 +665,7 @@ if (process.env.ENABLE_LOCAL_MEDIA === 'true') {
               album: album,
               artist: artist,
               albumArt: albumArt,
+              type: mediaType,
               size: fs.statSync(fullPath).size
             });
           }
@@ -701,7 +710,10 @@ if (process.env.ENABLE_LOCAL_MEDIA === 'true') {
         '.flac': 'audio/flac',
         '.aac': 'audio/aac',
         '.webm': 'audio/webm',
+        // Video formats
         '.mp4': 'video/mp4',
+        '.m4v': 'video/mp4',
+        '.mov': 'video/quicktime',
         // Image formats (for album art)
         '.jpg': 'image/jpeg',
         '.jpeg': 'image/jpeg',
