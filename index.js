@@ -124,28 +124,49 @@ axios.interceptors.response.use(
       response._cleanupTimer = cleanupTimer;
       
     } else if (response.data && typeof response.data === 'object') {
-      // MEMORY LEAK FIX: Also track and cleanup JSON responses from GUN sync
-      // These can accumulate in external memory and not get GC'd promptly
-      try {
-        const dataSize = JSON.stringify(response.data).length;
-        if (dataSize > 100 * 1024) { // Log JSON responses > 100KB
-          console.log(`📦 [Axios JSON] ${(dataSize / 1024).toFixed(1)}KB from ${response.config.url || 'unknown'}`);
-        }
+      // MEMORY LEAK FIX: Track and cleanup JSON responses from GUN sync
+      // CRITICAL FIX: Do NOT use JSON.stringify to measure size - that creates a massive 
+      // temporary string buffer that leaks memory! Use rough estimation instead.
+      
+      // Rough size estimation without allocating memory
+      // For GUN registry data, estimate based on key count and average entry size
+      let estimatedSize = 0;
+      const url = response.config.url || 'unknown';
+      const isGunRequest = url.includes('gun-relay') || url.includes(':8765');
+      
+      if (isGunRequest && response.data.data) {
+        // GUN responses have nested data - count keys as proxy for size
+        const keyCount = Object.keys(response.data.data || {}).length;
+        // Assume ~500 bytes per registry entry (conservative estimate)
+        estimatedSize = keyCount * 500;
+      } else {
+        // For other JSON, use key count with smaller multiplier
+        estimatedSize = Object.keys(response.data).length * 100;
+      }
+      
+      // AGGRESSIVE cleanup for GUN relay responses - these are the main leak source
+      if (isGunRequest) {
+        // Immediate cleanup - copy data synchronously then null response
+        const extractedData = response.data;
         
-        // Add cleanup helper to force GC after response is processed
+        // Schedule aggressive cleanup
+        setImmediate(() => {
+          response.data = null;
+          // Force GC for any GUN request with substantial data
+          if (global.gc && estimatedSize > 10000) {
+            setImmediate(() => global.gc());
+          }
+        });
+      } else {
+        // Standard cleanup for non-GUN requests
         setTimeout(() => {
           if (response.data) {
             response.data = null;
-            if (global.gc && dataSize > 1024 * 1024) {
-              setImmediate(() => {
-                global.gc();
-                console.log(`🧹 [Axios JSON] Released ${(dataSize / 1024).toFixed(1)}KB`);
-              });
+            if (global.gc && estimatedSize > 100000) {
+              setImmediate(() => global.gc());
             }
           }
-        }, 2000); // 2 second delay to allow processing
-      } catch (e) {
-        // Circular reference or other JSON issue, skip tracking
+        }, 500); // Shorter delay than before
       }
     }
     return response;
@@ -341,6 +362,7 @@ app.use(bodyParser.json());
 // Allows external nodes to access gun-relay through the public API
 app.get('/gun-relay/get', async (req, res) => {
     let response = null;
+    
     try {
         const soul = req.query.soul;
         if (!soul) {
@@ -348,36 +370,56 @@ app.get('/gun-relay/get', async (req, res) => {
         }
         
         const gunRelayUrl = process.env.GUN_PEERS || 'http://gun-relay:8765';
+        
+        // MEMORY LEAK FIX: Use responseType 'text' to get raw JSON string
+        // This avoids: 1) axios JSON parsing overhead 2) res.json() re-serialization
+        // We just pipe the raw JSON text straight through - only ONE copy in memory
         response = await axios.get(`${gunRelayUrl}/get?soul=${encodeURIComponent(soul)}`, {
             timeout: 10000,
-            // MEMORY LEAK FIX: Explicitly use global HTTP agents
+            responseType: 'text', // Raw text - no parsing
             httpAgent: httpAgent,
             httpsAgent: httpsAgent
         });
         
-        // CRITICAL FIX: Extract data IMMEDIATELY and null response to free buffers
-        const data = response.data;
+        // Extract raw text and immediately null response to free axios buffers
+        const rawText = response.data;
         response.data = null;
         response = null;
         
-        res.json(data);
+        // CRITICAL: Send raw JSON text directly - no parsing, no re-serialization
+        // This eliminates the double-buffer problem that was causing 50-137MB leaks per request
+        res.setHeader('Content-Type', 'application/json');
+        res.send(rawText);
         
-        // Force immediate GC to clean up buffers
-        if (global.gc) {
-            process.nextTick(() => global.gc());
-        }
+        // Force GC after response is sent
+        res.on('finish', () => {
+            if (global.gc) {
+                setImmediate(() => global.gc());
+            }
+        });
+        
     } catch (error) {
-        // MEMORY LEAK FIX: Clean up error response buffers immediately
+        // MEMORY LEAK FIX: Clean up ALL references immediately
+        if (response) {
+            response.data = null;
+            response = null;
+        }
         if (error.response) {
             error.response.data = null;
             error.response = null;
         }
         
         // Silent - 404s are normal when records don't exist
-        res.status(error.response?.status || 500).json({ 
+        const statusCode = error.response?.status || 500;
+        res.status(statusCode).json({ 
             error: error.message,
             success: false 
         });
+        
+        // Force GC on errors too
+        if (global.gc) {
+            setImmediate(() => global.gc());
+        }
     }
 });
 
@@ -390,27 +432,38 @@ app.post('/gun-relay/put', async (req, res) => {
         }
         
         const gunRelayUrl = process.env.GUN_PEERS || 'http://gun-relay:8765';
+        
+        // Use responseType 'text' for consistency with GET - avoids JSON parsing overhead
         response = await axios.post(`${gunRelayUrl}/put`, req.body, {
             timeout: 30000,
+            responseType: 'text',
             headers: { 'Content-Type': 'application/json' },
-            // MEMORY LEAK FIX: Explicitly use global HTTP agents
             httpAgent: httpAgent,
             httpsAgent: httpsAgent
         });
         
-        // CRITICAL FIX: Extract data IMMEDIATELY and null response to free buffers
-        const responseData = response.data;
+        // Extract raw text and null response immediately
+        const rawText = response.data;
         response.data = null;
         response = null;
         
-        res.json(responseData);
+        // Send raw JSON directly without re-parsing/re-serializing
+        res.setHeader('Content-Type', 'application/json');
+        res.send(rawText);
         
-        // Force immediate GC to clean up buffers
-        if (global.gc) {
-            process.nextTick(() => global.gc());
-        }
+        // Force GC after response is sent
+        res.on('finish', () => {
+            if (global.gc) {
+                setImmediate(() => global.gc());
+            }
+        });
+        
     } catch (error) {
         // MEMORY LEAK FIX: Clean up error response buffers immediately
+        if (response) {
+            response.data = null;
+            response = null;
+        }
         const statusCode = error.response?.status;
         if (error.response) {
             error.response.data = null;
