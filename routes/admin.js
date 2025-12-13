@@ -261,10 +261,10 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
         
         console.log('📊 Node analytics request from admin:', req.user.email);
         console.log('📊 Time range:', timeRange);
-        console.log('📊 Time filter:', timeFilter || 'none (all time)');
         
         // Calculate time filter
         const timeFilter = calculateTimeFilter(timeRange);
+        console.log('📊 Time filter:', timeFilter || 'none (all time)');
         
         // Build base query
         const baseQuery = {
