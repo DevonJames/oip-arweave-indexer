@@ -360,6 +360,17 @@ app.use(bodyParser.json());
 // GUN Relay Proxy Routes - for cross-node synchronization
 // These routes proxy requests to the internal gun-relay service
 // Allows external nodes to access gun-relay through the public API
+// MEMORY LEAK DEBUG: Can be disabled via DISABLE_GUN_RELAY_PROXY=true
+const disableGunRelayProxy = process.env.DISABLE_GUN_RELAY_PROXY === 'true';
+if (disableGunRelayProxy) {
+    console.log('⚠️  GUN relay proxy routes DISABLED (DISABLE_GUN_RELAY_PROXY=true)');
+    app.get('/gun-relay/get', (req, res) => {
+        res.status(503).json({ error: 'GUN relay proxy disabled for maintenance', success: false });
+    });
+    app.post('/gun-relay/put', (req, res) => {
+        res.status(503).json({ error: 'GUN relay proxy disabled for maintenance', success: false });
+    });
+} else {
 app.get('/gun-relay/get', async (req, res) => {
     let response = null;
     
@@ -482,6 +493,7 @@ app.post('/gun-relay/put', async (req, res) => {
 });
 
 console.log('🔄 Gun relay proxy routes enabled at /gun-relay/get and /gun-relay/put');
+} // End of else block for !disableGunRelayProxy
 
 // API routes
 app.use('/api', rootRoute);
