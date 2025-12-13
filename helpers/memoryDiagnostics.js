@@ -39,11 +39,16 @@ class MemoryDiagnostics {
         };
         
         // Memory thresholds for automatic heap dumps (in MB)
+        // Can be disabled via DISABLE_HEAP_DUMPS=true (heap dumps are large and can impact performance)
+        this.heapDumpsDisabled = process.env.DISABLE_HEAP_DUMPS === 'true';
         this.heapDumpThresholds = [2048, 4096, 6144, 8192, 10240]; // 2GB, 4GB, 6GB, 8GB, 10GB
         this.heapDumpsTaken = new Set();
         
         if (this.enabled) {
             console.log('🔬 [Memory Diagnostics] ENABLED - Safe profiling active');
+            if (this.heapDumpsDisabled) {
+                console.log('🔬 [Memory Diagnostics] Heap dumps DISABLED (DISABLE_HEAP_DUMPS=true)');
+            }
             this.initialize();
         }
     }
@@ -251,6 +256,9 @@ class MemoryDiagnostics {
     }
     
     async checkHeapDumpThreshold(snapshot) {
+        // Skip if heap dumps are disabled
+        if (this.heapDumpsDisabled) return;
+        
         const rssMB = snapshot.rss / 1024 / 1024;
         
         for (const threshold of this.heapDumpThresholds) {
