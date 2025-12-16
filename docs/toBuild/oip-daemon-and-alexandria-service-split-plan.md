@@ -1,0 +1,1453 @@
+# Project Split Outline: oip-daemon-service vs alexandria-service
+## Microservices Architecture within Single Docker Compose
+
+## 📊 **High-Level Philosophy**
+
+**oip-daemon-service** = The complete library infrastructure - card catalog, shelves, and access control
+**alexandria-service** = The librarian - helps you find things, creates content, talks to you
+
+### 📚 **Library Card Catalog Analogy**
+
+| Library Concept | OIP Equivalent | Service |
+|-----------------|----------------|---------|
+| **Books** | Content (videos, music, text, images) | Referenced by both |
+| **Shelves/Stacks** | Distribution networks (Web, BitTorrent, IPFS, Arweave storage) | `oip-daemon-service` |
+| **Dewey Decimal System** | DIDs for each record | `oip-daemon-service` |
+| **Card Catalog (Public)** | Arweave index | `oip-daemon-service` |
+| **Card Catalog (Private)** | GUN index | `oip-daemon-service` |
+| **Card Format Standard** | OIP Protocol (templates, compression) | `oip-daemon-service` |
+| **Library Membership** | Organizations, access control | `oip-daemon-service` |
+| **The Librarian** | Alfred AI, RAG queries | `alexandria-service` |
+| **Talking to Librarian** | Voice interface (STT/TTS) | `alexandria-service` |
+| **Writing New Books** | Content generation, podcast creation | `alexandria-service` |
+| **Book Appraisal** | Photo analysis, nutritional analysis | `alexandria-service` |
+| **Acquiring Books** | Web scraping | `alexandria-service` |
+
+> **Note**: This is NOT a split into separate repositories. Both services live in the same project, deployed via the same Docker Compose, sharing infrastructure.
+
+---
+
+## 🏗️ **Architecture Overview**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              Docker Compose                                  │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │                        oip-daemon-service                                ││
+│  │                           (port 3005)                                    ││
+│  │                                                                          ││
+│  │  CARD CATALOG:              SHELVES:              ACCESS CONTROL:        ││
+│  │  ├─ Arweave index           ├─ Media upload       ├─ Organizations       ││
+│  │  ├─ GUN index               ├─ BitTorrent seed    ├─ Member management   ││
+│  │  ├─ Templates               ├─ IPFS storage       ├─ Encryption          ││
+│  │  ├─ DID resolution          ├─ HTTP streaming     └─ Domain policies     ││
+│  │  ├─ Record CRUD             └─ Arweave storage                           ││
+│  │  ├─ dref resolution                                                      ││
+│  │  └─ User auth (HD wallets)                                               ││
+│  └────────────────────────────────────┬────────────────────────────────────┘│
+│                                       │                                      │
+│                                       │ HTTP API calls                       │
+│                                       ▼                                      │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │                        alexandria-service                                ││
+│  │                           (port 3006)                                    ││
+│  │                                                                          ││
+│  │  THE LIBRARIAN:             CONTENT CREATION:      INTERFACES:           ││
+│  │  ├─ Alfred AI/RAG           ├─ Podcast generation  ├─ Voice (STT/TTS)    ││
+│  │  ├─ Semantic search         ├─ Recipe images       ├─ WebSocket          ││
+│  │  ├─ Conversation memory     ├─ Content generation  └─ Client apps        ││
+│  │  └─ Context retrieval       └─ Photo analysis                            ││
+│  │                                                                          ││
+│  │  ACQUISITION:               SPECIALIZED FEATURES:                        ││
+│  │  ├─ Web scraping            ├─ Recipe processing                         ││
+│  │  └─ URL parsing             ├─ Workout processing                        ││
+│  │                             └─ Nutritional lookup                        ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+│                                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐ │
+│  │ elasticsearch │  │  gun-relay   │  │   ollama     │  │   tts/stt       │ │
+│  │   (shared)    │  │  (daemon)    │  │ (alexandria) │  │  (alexandria)   │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🎯 **Part 1: oip-daemon-service** 
+### The Complete Library Infrastructure
+
+#### **Purpose**
+A comprehensive service for blockchain-indexed record storage, retrieval, and distribution using the Open Index Protocol. This includes all index storage (Arweave + GUN), all distribution networks (BitTorrent, IPFS, HTTP), and all access control (organizations, encryption).
+
+#### **Core Responsibilities**
+
+**Card Catalog (Index Storage):**
+- Template-based record compression/decompression
+- Blockchain publishing (Arweave) for public records
+- GUN network for private/encrypted records
+- Elasticsearch indexing and search
+- Record retrieval with dref resolution
+
+**Shelves (Distribution Networks):**
+- Media file upload and storage
+- BitTorrent/WebTorrent seeding
+- IPFS publishing
+- Arweave permanent storage
+- HTTP streaming with range requests
+
+**Access Control:**
+- User authentication (HD wallet/DID-based)
+- Organization registration and management
+- Member enrollment and policies
+- Organization-level encryption
+- Private record encryption (per-user)
+
+---
+
+### **Files/Directories for oip-daemon-service**
+
+#### **Configuration**
+```
+config/
+├── arweave.config.js          # Arweave connection config
+├── checkEnvironment.js        # Environment validation
+├── createIndices.js           # Elasticsearch index setup
+├── templates.config.js        # Template mappings
+├── recordTypesToIndex.js      # Which record types to index
+├── createAdmin.js             # Admin user creation
+├── generateToken.js           # JWT token generation
+├── generateWallet.js          # HD wallet generation
+├── migrateGunSupport.js       # GUN migration utilities
+└── updateElasticsearchMappings.js
+```
+
+#### **Core Helpers**
+```
+helpers/
+├── arweave.js                 # Arweave blockchain integration
+├── arweave-wallet.js          # Wallet management
+├── elasticsearch.js           # ES indexing/search (CORE)
+├── templateHelper.js          # Template expansion/compression
+├── dref-resolver.js           # Reference resolution
+├── generators.js              # Record ID generation
+├── utils.js                   # Utility functions
+├── file.js                    # File operations
+├── urlHelper.js               # URL utilities
+├── apiConfig.js               # API configuration
+│
+# GUN Network (Card Catalog - Private)
+├── gun.js                     # GUN database integration
+├── gunSyncService.js          # Cross-node sync
+├── oipGunRegistry.js          # GUN record registry
+├── privateRecordHandler.js    # Encrypted records
+├── sharedState.js             # State management
+│
+# Media Distribution (Shelves)
+├── media-manager.js           # Media file handling
+├── ipfs.js                    # IPFS integration
+│
+# Access Control (Library Membership)
+├── organizationEncryption.js  # Org-level encryption
+└── organizationDecryptionQueue.js
+```
+
+#### **Services**
+```
+services/
+├── mediaSeeder.js             # BitTorrent/WebTorrent seeding
+└── (other background services)
+```
+
+#### **Core Routes**
+```
+routes/
+├── api.js                     # Root API endpoint
+├── records.js                 # Record CRUD operations (both Arweave + GUN)
+├── templates.js               # Template management
+├── creators.js                # Creator registration/lookup
+├── user.js                    # User auth (register/login)
+├── wallet.js                  # HD wallet operations
+├── publish.js                 # Record publishing (Arweave)
+├── media.js                   # Media upload/streaming/distribution
+├── organizations.js           # Organization management
+├── cleanup.js                 # Template/record cleanup
+└── health.js                  # Health checks (ES, GUN, media seeder)
+```
+
+#### **Middleware**
+```
+middleware/
+├── auth.js                    # JWT authentication
+└── apiLogger.js               # Request logging
+```
+
+#### **GUN Relay**
+```
+gun-relay-server.js            # GUN relay HTTP API
+```
+
+---
+
+### **API Surface (oip-daemon-service)**
+
+```
+═══════════════════════════════════════════════════════════════════
+CARD CATALOG - Record Operations
+═══════════════════════════════════════════════════════════════════
+GET    /api/records                    # Query/search records (Arweave + GUN)
+POST   /api/records/newRecord          # Publish record (?storage=arweave|gun)
+GET    /api/records/recordTypes        # Get record type summary
+POST   /api/records/deleteRecord       # Delete owned record
+
+Template Operations:
+GET    /api/templates                  # Get all templates
+GET    /api/templates/:name            # Get specific template
+POST   /api/templates/new              # Publish new template
+
+Publishing:
+POST   /api/publish/newPost            # Publish post record
+POST   /api/publish/newImage           # Publish image record
+POST   /api/publish/newVideo           # Publish video record
+POST   /api/publish/newTemplate        # Publish template
+GET    /api/publish/schema             # Get schema for record type
+GET    /api/publish/schemas            # List all schemas
+
+Creator Operations:
+GET    /api/creators                   # List creators
+POST   /api/creators/register          # Register creator
+
+═══════════════════════════════════════════════════════════════════
+SHELVES - Media Distribution
+═══════════════════════════════════════════════════════════════════
+POST   /api/media/upload               # Upload media file
+GET    /api/media/:mediaId             # Stream media (HTTP + range requests)
+GET    /api/media/:mediaId/info        # Get media metadata
+POST   /api/media/createRecord         # Create OIP record for media
+POST   /api/media/ipfs-upload          # Upload to IPFS
+POST   /api/media/arweave-upload       # Upload to Arweave
+POST   /api/media/web-setup            # Setup web server access
+
+═══════════════════════════════════════════════════════════════════
+ACCESS CONTROL - Authentication & Organizations
+═══════════════════════════════════════════════════════════════════
+Authentication:
+POST   /api/user/register              # Register user (HD wallet)
+POST   /api/user/login                 # Login user
+GET    /api/user/mnemonic              # Export mnemonic
+POST   /api/user/import-wallet         # Import wallet from mnemonic
+
+Wallet:
+POST   /api/wallet/generate            # Generate HD wallet
+POST   /api/wallet/import              # Import wallet from mnemonic
+
+Organizations:
+POST   /api/organizations/register     # Register organization
+GET    /api/organizations              # List organizations
+GET    /api/organizations/:id          # Get organization details
+POST   /api/organizations/members      # Manage members
+
+═══════════════════════════════════════════════════════════════════
+MAINTENANCE
+═══════════════════════════════════════════════════════════════════
+Cleanup:
+GET    /api/cleanup/analyze-templates  # Analyze unused templates
+POST   /api/cleanup/delete-unused-templates  # Delete unused
+POST   /api/cleanup/delete-template    # Delete specific template
+
+Health:
+GET    /health                         # Basic health check
+GET    /api/health/elasticsearch       # ES connection status
+GET    /api/health/gun-sync            # GUN sync status
+POST   /api/health/gun-sync/force      # Force GUN sync cycle
+GET    /api/health/media-seeder        # Media seeder status
+POST   /api/health/memory/clear-cache  # Clear GUN cache
+```
+
+---
+
+### **Key Dependencies (oip-daemon-service)**
+
+```json
+{
+  "dependencies": {
+    // Core
+    "@elastic/elasticsearch": "^8.17.0",
+    "arweave": "^1.15.5",
+    "express": "^4.19.2",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    
+    // Authentication
+    "jsonwebtoken": "^9.0.2",
+    "bcrypt": "^5.1.1",
+    "bip39": "^3.1.0",
+    "bip32": "^4.0.0",
+    "tiny-secp256k1": "^2.2.3",
+    
+    // GUN Network (Private Card Catalog)
+    "gun": "^0.2020.1240",
+    
+    // Media Distribution (Shelves)
+    "webtorrent": "^1.9.7",
+    "create-torrent": "^4.4.6",
+    "parse-torrent": "^9.1.5",
+    "ipfs-http-client": "^49.0.4",
+    
+    // Utilities
+    "uuid": "^9.0.1",
+    "multer": "^2.0.2",
+    "axios": "^1.7.9"
+  }
+}
+```
+
+**EXCLUDED from oip-daemon-service:**
+- AI/LLM packages (ollama, openai, gpt-tokenizer)
+- Heavy media processing (sharp, canvas, fluent-ffmpeg)
+- Voice processing
+- Web scraping (puppeteer, cheerio, firecrawl)
+- Socket.io (real-time features)
+
+---
+
+## 🌐 **Part 2: alexandria-service**
+### The Librarian - AI, Voice, and Content Services
+
+#### **Purpose**
+The intelligent interface layer that helps users interact with the OIP library. Alexandria doesn't store or index anything itself - it calls `oip-daemon-service` for all data operations. It provides AI-powered search, voice interaction, content generation, and specialized processing.
+
+#### **Core Responsibilities**
+
+**The Librarian (AI/RAG):**
+- Alfred AI assistant
+- RAG (Retrieval-Augmented Generation) via oip-daemon-service
+- Semantic search enhancement
+- Conversation memory and context
+- Multi-LLM support (Ollama, OpenAI, XAI)
+
+**Content Creation:**
+- Podcast generation from records
+- Recipe image generation (DALL-E)
+- Content summarization
+- Audio narration
+
+**Acquisition & Processing:**
+- Web scraping and archiving
+- Recipe ingredient processing
+- Workout exercise resolution
+- Photo analysis (Grok vision)
+- Nutritional information lookup
+
+**Interfaces:**
+- Voice interface (STT/TTS integration)
+- WebSocket real-time features
+- Client application backends
+
+---
+
+### **Files/Directories for alexandria-service**
+
+#### **AI & Voice Services**
+```
+Routes:
+routes/
+├── alfred.js                  # AI assistant
+├── voice.js                   # Voice interface
+├── generate.js                # Content generation (podcasts, etc.)
+├── narration.js               # Audio narration
+└── photo.js                   # Photo analysis
+
+Helpers:
+helpers/
+├── alfred.js                  # AI/RAG core
+├── adaptiveChunking.js        # Text chunking for AI
+├── streamingCoordinator.js    # Streaming responses
+├── podcast-generator.js       # Podcast creation
+├── nutritional-helper.js      # AI nutritional analysis
+└── nutritional-helper-openai.js
+```
+
+#### **Web Scraping & Acquisition**
+```
+Routes:
+routes/
+├── scrape.js                  # Web scraping
+
+Helpers:
+helpers/
+├── playdl.js                  # YouTube/media download
+└── (scraping utilities)
+```
+
+#### **Specialized Content Processing**
+```
+Routes:
+routes/
+├── recipes.js                 # Recipe processing + AI images
+├── workout.js                 # Workout processing
+└── jfk.js                     # Special content
+```
+
+#### **Real-time & WebSocket**
+```
+socket/
+└── (socket.io files)
+
+socket.js                      # WebSocket server
+```
+
+#### **Monitoring**
+```
+helpers/
+├── memoryTracker.js           # Memory monitoring
+├── processingState.js         # State tracking
+└── notification.js            # Notifications
+```
+
+#### **Client Applications**
+```
+public/                        # Static web interface
+mac-client/                    # macOS voice client
+ios-client/                    # iOS app
+frontend/                      # Next.js frontend (if exists)
+```
+
+#### **Configuration**
+```
+config/
+└── recordTypesForRAG.js       # AI-specific config
+```
+
+---
+
+### **API Surface (alexandria-service)**
+
+All data operations go through `oip-daemon-service`. Alexandria provides these enhanced endpoints:
+
+```
+═══════════════════════════════════════════════════════════════════
+THE LIBRARIAN - AI Assistant
+═══════════════════════════════════════════════════════════════════
+POST   /api/alfred/chat               # AI conversation
+POST   /api/alfred/rag                # RAG query (calls daemon for records)
+GET    /api/alfred/history            # Conversation history
+POST   /api/alfred/context            # Set conversation context
+
+═══════════════════════════════════════════════════════════════════
+VOICE INTERFACE
+═══════════════════════════════════════════════════════════════════
+POST   /api/voice/transcribe          # Speech-to-text
+POST   /api/voice/synthesize          # Text-to-speech
+POST   /api/voice/process             # Full voice pipeline (STT→AI→TTS)
+
+═══════════════════════════════════════════════════════════════════
+CONTENT CREATION
+═══════════════════════════════════════════════════════════════════
+POST   /api/generate/podcast          # Generate podcast from records
+POST   /api/generate/content          # AI content generation
+POST   /api/recipes/generate-image    # AI recipe image (DALL-E)
+GET    /api/recipes/images/:file      # Serve generated images
+POST   /api/narration/create          # Create audio narration
+
+═══════════════════════════════════════════════════════════════════
+ACQUISITION & PROCESSING
+═══════════════════════════════════════════════════════════════════
+POST   /api/scrape/url                # Scrape web content
+POST   /api/photo/upload              # Upload photo for analysis
+POST   /api/photo/analyze             # AI photo analysis
+POST   /api/photo/chat                # Photo + chat integration
+
+Specialized Publishing (with AI processing):
+POST   /api/publish/newRecipe         # Recipe with ingredient lookup
+POST   /api/publish/newWorkout        # Workout with exercise lookup
+POST   /api/publish/lookupNutritionalInfo  # Nutritional lookup preview
+
+═══════════════════════════════════════════════════════════════════
+REAL-TIME
+═══════════════════════════════════════════════════════════════════
+WS     /socket.io                     # WebSocket connection
+GET    /api/health/websocket          # WebSocket status
+
+═══════════════════════════════════════════════════════════════════
+HEALTH
+═══════════════════════════════════════════════════════════════════
+GET    /health                        # Basic health check
+GET    /api/health/ai                 # AI service status (ollama, etc.)
+GET    /api/health/voice              # Voice services status (TTS/STT)
+```
+
+---
+
+### **Key Dependencies (alexandria-service)**
+
+```json
+{
+  "dependencies": {
+    // HTTP client (for calling oip-daemon-service)
+    "axios": "^1.7.9",
+    "express": "^4.19.2",
+    
+    // AI/LLM
+    "gpt-tokenizer": "^2.1.2",
+    
+    // Media Processing (for content creation)
+    "fluent-ffmpeg": "^2.1.3",
+    "sharp": "^0.33.5",
+    "canvas": "^3.1.0",
+    
+    // Web Scraping
+    "@mendable/firecrawl-js": "^1.15.7",
+    "@postlight/parser": "^2.2.3",
+    "cheerio": "^1.0.0",
+    "puppeteer": "^23.3.0",
+    
+    // Real-time
+    "socket.io": "^4.8.1",
+    "ws": "^8.18.1",
+    
+    // Auth (for validating tokens from daemon)
+    "jsonwebtoken": "^9.0.2",
+    
+    // Utilities
+    "multer": "^2.0.2",
+    "uuid": "^9.0.1",
+    "dotenv": "^16.4.5",
+    "cors": "^2.8.5"
+  }
+}
+```
+
+**NOT needed in alexandria-service:**
+- `@elastic/elasticsearch` (all ES queries go through daemon)
+- `arweave` (publishing goes through daemon)
+- `gun` (GUN operations go through daemon)
+- `webtorrent` (media seeding is in daemon)
+- `bip39`, `bip32` (wallet operations in daemon)
+
+---
+
+## 🔄 **Integration: How Alexandria Calls the Daemon**
+
+### **OIP Client Helper**
+
+Alexandria uses a simple HTTP client to call `oip-daemon-service`:
+
+```javascript
+// helpers/oipClient.js in alexandria-service
+
+const axios = require('axios');
+
+const OIP_DAEMON_URL = process.env.OIP_DAEMON_URL || 'http://oip-daemon-service:3005';
+
+class OIPClient {
+  constructor(userToken = null) {
+    this.baseURL = OIP_DAEMON_URL;
+    this.token = userToken;
+  }
+
+  async request(method, endpoint, data = null, params = null) {
+    const config = {
+      method,
+      url: `${this.baseURL}${endpoint}`,
+      headers: {}
+    };
+    
+    if (this.token) {
+      config.headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    
+    if (data) config.data = data;
+    if (params) config.params = params;
+    
+    const response = await axios(config);
+    return response.data;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // CARD CATALOG - Record Operations
+  // ═══════════════════════════════════════════════════════════
+  
+  async getRecords(params) {
+    return this.request('GET', '/api/records', null, params);
+  }
+
+  async publishRecord(recordData, options = {}) {
+    const queryParams = new URLSearchParams();
+    if (options.recordType) queryParams.append('recordType', options.recordType);
+    if (options.storage) queryParams.append('storage', options.storage);
+    if (options.localId) queryParams.append('localId', options.localId);
+    
+    const endpoint = `/api/records/newRecord?${queryParams.toString()}`;
+    return this.request('POST', endpoint, recordData);
+  }
+
+  async getTemplates() {
+    return this.request('GET', '/api/templates');
+  }
+
+  async getTemplate(name) {
+    return this.request('GET', `/api/templates/${name}`);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // SHELVES - Media Operations
+  // ═══════════════════════════════════════════════════════════
+  
+  async uploadMedia(formData) {
+    return axios.post(`${this.baseURL}/api/media/upload`, formData, {
+      headers: {
+        ...formData.getHeaders(),
+        'Authorization': `Bearer ${this.token}`
+      }
+    }).then(res => res.data);
+  }
+
+  async createMediaRecord(mediaData) {
+    return this.request('POST', '/api/media/createRecord', mediaData);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // ACCESS CONTROL - Organizations
+  // ═══════════════════════════════════════════════════════════
+  
+  async getOrganizations() {
+    return this.request('GET', '/api/organizations');
+  }
+
+  async getOrganization(id) {
+    return this.request('GET', `/api/organizations/${id}`);
+  }
+}
+
+module.exports = OIPClient;
+```
+
+### **Example: Alfred RAG Query**
+
+```javascript
+// In alexandria-service's alfred.js route
+
+const OIPClient = require('../helpers/oipClient');
+
+async function handleRAGQuery(req, res) {
+  const { query, recordTypes, limit } = req.body;
+  const userToken = req.headers.authorization?.split(' ')[1];
+  
+  // Create client with user's token for private record access
+  const oip = new OIPClient(userToken);
+  
+  // Get relevant records from daemon
+  const records = await oip.getRecords({
+    search: query,
+    recordType: recordTypes?.join(','),
+    limit: limit || 10,
+    resolveDepth: 2
+  });
+  
+  // Use records for RAG context
+  const context = records.records.map(r => ({
+    did: r.oip.did,
+    name: r.data.basic?.name,
+    content: extractContent(r)
+  }));
+  
+  // Generate AI response with context
+  const aiResponse = await generateWithContext(query, context);
+  
+  res.json({
+    response: aiResponse,
+    sources: context.map(c => c.did)
+  });
+}
+```
+
+---
+
+## 🐳 **Docker Services Configuration**
+
+### **docker-compose.yml Structure**
+
+```yaml
+services:
+  # ════════════════════════════════════════════════════════════════
+  # INFRASTRUCTURE (All profiles)
+  # ════════════════════════════════════════════════════════════════
+  
+  elasticsearch:
+    image: elasticsearch:8.17.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+    volumes:
+      - ${ELASTICSEARCH_DATA_PATH:-./elasticsearch_data}:/usr/share/elasticsearch/data
+    ports:
+      - "${ES_PORT:-9200}:9200"
+    networks:
+      - oip-network
+    profiles:
+      - oip-only
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - chatterbox
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+    
+  kibana:
+    image: kibana:8.17.0
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "${KIBANA_PORT:-5601}:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - oip-network
+    profiles:
+      - oip-only
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - chatterbox
+
+  # ════════════════════════════════════════════════════════════════
+  # OIP DAEMON SERVICE (Library Infrastructure)
+  # ════════════════════════════════════════════════════════════════
+  
+  oip-daemon-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.oip-daemon
+    ports:
+      - "${OIP_DAEMON_PORT:-3005}:3005"
+    environment:
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+      - GUN_PEERS=http://gun-relay:8765/gun
+      - IPFS_API_URL=http://ipfs:5001
+      - JWT_SECRET=${JWT_SECRET}
+      - ARWEAVE_KEY_FILE=${ARWEAVE_KEY_FILE}
+      - TURBO_URL=${TURBO_URL:-https://turbo.ardrive.io}
+    depends_on:
+      - elasticsearch
+      - gun-relay
+      - ipfs
+    volumes:
+      - ./data:/usr/src/app/data
+      - ./data/media:/usr/src/app/data/media
+      - ./wallets:/usr/src/app/wallets
+    networks:
+      - oip-network
+    profiles:
+      - oip-only
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - chatterbox
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+
+  gun-relay:
+    build:
+      context: .
+      dockerfile: Dockerfile.gun-relay
+    ports:
+      - "${GUN_RELAY_PORT:-8765}:8765"
+    environment:
+      - GUN_PEERS=${GUN_EXTERNAL_PEERS:-}
+    volumes:
+      - gun-data:/data
+    networks:
+      - oip-network
+    profiles:
+      - oip-only
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - chatterbox
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+
+  # ════════════════════════════════════════════════════════════════
+  # ALEXANDRIA SERVICE (The Librarian)
+  # ════════════════════════════════════════════════════════════════
+  
+  alexandria-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.alexandria
+    ports:
+      - "${ALEXANDRIA_PORT:-3006}:3006"
+    environment:
+      - OIP_DAEMON_URL=http://oip-daemon-service:3005
+      - OLLAMA_HOST=http://ollama:11434
+      - TTS_SERVICE_URL=http://tts-service:5500
+      - STT_SERVICE_URL=http://stt-service:8013
+      - JWT_SECRET=${JWT_SECRET}  # Same secret for token validation
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - XAI_API_KEY=${XAI_API_KEY:-}
+    depends_on:
+      - oip-daemon-service
+    volumes:
+      - ./data:/usr/src/app/data
+    networks:
+      - oip-network
+    profiles:
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+
+  # ════════════════════════════════════════════════════════════════
+  # AI SERVICES (Alexandria's Tools)
+  # ════════════════════════════════════════════════════════════════
+  
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - oip-network
+    profiles:
+      - alexandria
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-macMseries
+      - chatterbox
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+
+  ollama-gpu:
+    image: ollama/ollama:latest
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - oip-network
+    profiles:
+      - alexandria-gpu
+      - alexandria-decentralized-gpu
+
+  tts-service:
+    build:
+      context: ./text-to-speech
+    ports:
+      - "${TTS_PORT:-5500}:5500"
+    networks:
+      - oip-network
+    profiles:
+      - alexandria
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-macMseries
+      - chatterbox
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+
+  tts-service-gpu:
+    build:
+      context: ./text-to-speech
+      dockerfile: Dockerfile.gpu
+    ports:
+      - "${TTS_PORT:-5500}:5500"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - oip-network
+    profiles:
+      - alexandria-gpu
+      - alexandria-decentralized-gpu
+
+  stt-service:
+    build:
+      context: ./speech-to-text
+    ports:
+      - "${STT_PORT:-8013}:8013"
+    networks:
+      - oip-network
+    profiles:
+      - alexandria
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-macMseries
+      - chatterbox
+
+  stt-service-gpu:
+    build:
+      context: ./speech-to-text
+      dockerfile: Dockerfile.gpu
+    ports:
+      - "${STT_PORT:-8013}:8013"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - oip-network
+    profiles:
+      - alexandria-gpu
+      - alexandria-decentralized-gpu
+
+  speech-synthesizer:
+    build:
+      context: ./speech-synthesizer
+    ports:
+      - "${SPEECH_SYNTHESIZER_PORT:-8082}:8082"
+    networks:
+      - oip-network
+    profiles:
+      - alexandria
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-macMseries
+      - chatterbox
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+
+  text-generator:
+    build:
+      context: ./text-generator
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    ports:
+      - "${TEXT_GENERATOR_PORT:-8081}:8081"
+    depends_on:
+      - ollama
+    networks:
+      - oip-network
+    profiles:
+      - alexandria
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-macMseries
+      - chatterbox
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+
+  # ════════════════════════════════════════════════════════════════
+  # DISTRIBUTION NETWORK SERVICES (Part of oip-daemon infrastructure)
+  # ════════════════════════════════════════════════════════════════
+  
+  ipfs:
+    image: ipfs/kubo:latest
+    ports:
+      - "${IPFS_API_PORT:-5001}:5001"
+      - "${IPFS_GATEWAY_PORT:-8080}:8080"
+    volumes:
+      - ipfs-data:/data/ipfs
+    networks:
+      - oip-network
+    profiles:
+      - oip-only
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - chatterbox
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+
+  # ════════════════════════════════════════════════════════════════
+  # DECENTRALIZED INFRASTRUCTURE (Local Arweave Gateway)
+  # ════════════════════════════════════════════════════════════════
+  
+  ario-gateway:
+    image: ghcr.io/ar-io/ar-io-core:latest
+    ports:
+      - "${ARIO_GATEWAY_PORT:-4000}:4000"
+    volumes:
+      - ${ARIO_GATEWAY_DATA_PATH:-./ario_gateway_data}:/app/data
+    environment:
+      - PORT=4000
+      - GRAPHQL_ENABLED=true
+      - START_HEIGHT=${START_HEIGHT}
+    networks:
+      - oip-network
+    profiles:
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT-decentralized
+
+  # ════════════════════════════════════════════════════════════════
+  # NETWORK ACCESS (ngrok tunnel)
+  # ════════════════════════════════════════════════════════════════
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: http oip-daemon-service:3005 --domain=${NGROK_DOMAIN}
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
+    depends_on:
+      - oip-daemon-service
+    ports:
+      - "${NGROK_DASHBOARD_PORT:-4040}:4040"
+    networks:
+      - oip-network
+    profiles:
+      - oip-only
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - chatterbox
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+
+volumes:
+  gun-data:
+  ollama-data:
+  ipfs-data:
+
+networks:
+  oip-network:
+    name: ${COMPOSE_PROJECT_NAME:-oip-arweave-indexer}_oip-network
+    driver: bridge
+```
+
+---
+
+## 📋 **Profile Summary**
+
+### **New Profile Structure**
+
+| Profile | Base | Services Included | Use Case |
+|---------|------|-------------------|----------|
+| **`oip-only`** | (base) | elasticsearch, kibana, oip-daemon-service, gun-relay, ipfs, ngrok | Pure OIP daemon - indexing, publishing, media distribution only |
+| **`alexandria`** | standard | oip-only + alexandria-service, ollama (CPU), tts, stt, speech-synthesizer, text-generator | Full stack with AI/voice (CPU) |
+| **`alexandria-gpu`** | standard-gpu | oip-only + alexandria-service, ollama-gpu, tts-gpu, stt-gpu | Full stack with GPU acceleration |
+| **`alexandria-macMseries`** | standard-macMseries | oip-only + alexandria-service, ollama (Metal), tts, stt | Full stack optimized for Apple Silicon |
+| **`alexandria-decentralized`** | max-decentralized | alexandria + **ario-gateway** | Full stack + local Arweave gateway (CPU) |
+| **`alexandria-decentralized-gpu`** | max-decentralized-gpu | alexandria-gpu + **ario-gateway** | Full stack + local Arweave gateway (GPU) |
+| **`alexandria-decentralized-macMseries`** | (new) | alexandria-macMseries + **ario-gateway** | Full stack + local Arweave gateway (Apple Silicon) |
+
+### **Retained Legacy Profiles**
+
+| Profile | Status | Purpose |
+|---------|--------|---------|
+| **`chatterbox`** | ✅ KEEP | Standard with Chatterbox TTS focus (CPU) - specific voice quality focus |
+| **`alexandria-noSTT`** | ✅ KEEP (was `backend-only`) | Alexandria without STT - for Mac/iOS clients that handle STT/VAD locally |
+| **`alexandria-noSTT-decentralized`** | ✅ NEW | Alexandria-noSTT + local AR.IO gateway |
+
+### **Profiles Marked for Removal**
+
+| Profile | Status | Reason |
+|---------|--------|--------|
+| `minimal-with-scrape` | 🗑️ REMOVE | No need for lightweight deployment with scraping |
+| `standard-monolithic` | 🗑️ REMOVE | Legacy single-container approach, distributed preferred |
+| `gpu` | 🗑️ REMOVE | Intermediate GPU profile, covered by alexandria-gpu |
+| `oip-gpu-only` | 🗑️ REMOVE | Edge case, minimal GPU profile |
+| `chatterbox-gpu` | 🗑️ REMOVE | Doesn't work properly |
+
+### **Profile Service Matrix**
+
+```
+                          oip-  alexan-  alexan-  alexan-  alexan-  alexan-  alexan-  chatter- alexan-  alexan-
+Service                   only  dria     dria-gpu dria-mac decentr  decentr  decentr  box      dria-    dria-noSTT
+                                                  Mseries           -gpu     -macM             noSTT    -decentr
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+elasticsearch              ✓      ✓        ✓        ✓        ✓        ✓        ✓        ✓        ✓        ✓
+kibana                     ✓      ✓        ✓        ✓        ✓        ✓        ✓        ✓        ✓        ✓
+oip-daemon-service         ✓      ✓        ✓        ✓        ✓        ✓        ✓        ✓        ✓        ✓
+gun-relay                  ✓      ✓        ✓        ✓        ✓        ✓        ✓        ✓        ✓        ✓
+ipfs                       ✓      ✓        ✓        ✓        ✓        ✓        ✓        ✓        ✓        ✓
+ngrok                      ✓      ✓        ✓        ✓        ✓        ✓        ✓        ✓        ✓        ✓
+alexandria-service                ✓        ✓        ✓        ✓        ✓        ✓                 ✓        ✓
+ollama (CPU)                      ✓                 ✓        ✓                 ✓        ✓        ✓        ✓
+ollama-gpu                                 ✓                          ✓                          
+tts-service                       ✓                 ✓        ✓                 ✓        ✓        ✓        ✓
+tts-service-gpu                            ✓                          ✓                          
+stt-service                       ✓                 ✓        ✓                 ✓        ✓        
+stt-service-gpu                            ✓                          ✓                          
+speech-synthesizer                ✓                 ✓        ✓                 ✓        ✓        ✓        ✓
+text-generator                    ✓                 ✓        ✓                 ✓        ✓        ✓        ✓
+ario-gateway                                                 ✓        ✓        ✓                          ✓
+```
+
+**Key difference for `alexandria-noSTT` profiles:**
+- ❌ No `stt-service` - Speech-to-text runs on the native Mac/iOS client
+- ✅ Has `alexandria-service` - Full AI/RAG capabilities
+- ✅ Has `tts-service` - Server generates audio output for client playback
+
+### **alexandria-noSTT Profile Details**
+
+The `alexandria-noSTT` profile (formerly `backend-only`) is **alexandria without speech-to-text**:
+
+**Server-side (Docker backend):**
+- oip-daemon-service (full OIP functionality)
+- alexandria-service (AI/RAG/content generation)
+- Elasticsearch (records/search)
+- Ollama (LLM for RAG queries)
+- TTS service (text-to-speech output)
+- All other alexandria services EXCEPT STT
+
+**Client-side (Mac/iOS native):**
+- STT (Speech-to-Text via Apple APIs)
+- VAD (Voice Activity Detection)
+- Smart Turn detection
+
+**Use Case:** Mac/iOS clients with capable hardware that want to:
+- Handle audio INPUT locally (better latency, privacy, Apple's optimized APIs)
+- Use server for RAG/AI processing and content generation
+- Receive TTS audio OUTPUT from server for playback
+
+**Variants:**
+- `alexandria-noSTT` - Standard (CPU-based AI)
+- `alexandria-noSTT-decentralized` - Adds local AR.IO gateway
+
+---
+
+## 🔧 **BitTorrent Service Note**
+
+**Current State:** BitTorrent functionality is embedded in the OIP daemon via the `webtorrent` npm package:
+- `services/mediaSeeder.js` - WebTorrent client for persistent seeding
+- `helpers/media-manager.js` - Creates torrents during media processing
+
+**Future Enhancement:** Consider extracting to a separate `bittorrent-service` Docker container with HTTP API for better isolation and scalability. This would require:
+1. New `bittorrent-service/` directory with dedicated WebTorrent server
+2. HTTP API for seed/unseed/status operations
+3. Addition to docker-compose.yml profiles
+
+For now, WebTorrent runs inside the OIP daemon container, which works fine for most deployments.
+
+---
+
+## 📦 **Migration Strategy**
+
+### **Phase 1: Create Dockerfiles (Week 1)**
+
+1. **Create `Dockerfile.oip-daemon`**
+   - Node.js image with native deps for GUN, WebTorrent
+   - Install only daemon dependencies
+   - Entry point: `index-daemon.js`
+
+2. **Create `Dockerfile.alexandria`**
+   - Node.js image with heavy deps (puppeteer, canvas, sharp)
+   - No GUN, WebTorrent (calls daemon instead)
+   - Entry point: `index-alexandria.js`
+
+3. **Existing `Dockerfile.gun-relay`**
+   - Already exists, no changes needed
+
+### **Phase 2: Split Entry Points (Week 1-2)**
+
+1. **Create `index-daemon.js`**
+   - Load core routes + GUN + media + organizations
+   - Start GUN sync service
+   - Start media seeder
+   - Listen on port 3005
+
+2. **Create `index-alexandria.js`**
+   - Load AI/voice/scraping routes
+   - Configure OIP client connection
+   - Start WebSocket server
+   - Listen on port 3006
+
+3. **Create `helpers/oipClient.js`**
+   - HTTP client for daemon communication
+   - All CRUD operations go through this
+
+### **Phase 3: Refactor Routes (Week 2)**
+
+1. **Split records.js**
+   - Core logic stays in daemon
+   - Alexandria gets `/api/publish/newRecipe` and `/api/publish/newWorkout` 
+     (with AI ingredient/exercise lookup)
+
+2. **Split health.js**
+   - Daemon: ES, GUN, media seeder health
+   - Alexandria: AI, voice services health
+
+3. **Move Alfred/Voice routes**
+   - Ensure they use OIPClient for all data access
+
+### **Phase 4: Update Docker Compose Profiles (Week 2-3)**
+
+1. Add new profile structure
+2. Update Makefile commands
+3. Test each profile independently
+
+### **Phase 5: Testing & Documentation (Week 3)**
+
+1. Test daemon independently (minimal profile)
+2. Test alexandria with daemon
+3. Test full stack (alexandria-gpu)
+4. Update API documentation
+5. Create migration guide
+
+---
+
+## 🎯 **Benefits of This Architecture**
+
+### **For oip-daemon-service:**
+✅ **Complete Library**: All index + distribution + access control  
+✅ **Self-Contained**: Can run alone for pure OIP use cases  
+✅ **Stable API**: Core operations rarely need changes  
+✅ **Network-Ready**: GUN sync, BitTorrent seeding built-in  
+
+### **For alexandria-service:**
+✅ **Focused**: Only AI, voice, and content processing  
+✅ **Lightweight**: No blockchain/P2P complexity  
+✅ **Flexible**: Easy to swap AI providers  
+✅ **User-Facing**: All interactive features  
+
+### **For Operations:**
+✅ **Single Deployment**: One `make alexandria` command  
+✅ **Profile Flexibility**: Run minimal for testing, full for production  
+✅ **Clear Boundaries**: Know which service handles what  
+✅ **Independent Scaling**: Scale AI services separately  
+
+---
+
+## 🚀 **Directory Structure After Split**
+
+```
+oip-arweave-indexer/
+├── config/                    # Shared configuration
+├── helpers/
+│   ├── core/                  # Daemon helpers
+│   │   ├── arweave.js
+│   │   ├── elasticsearch.js
+│   │   ├── templateHelper.js
+│   │   ├── gun.js
+│   │   ├── gunSyncService.js
+│   │   ├── media-manager.js
+│   │   ├── organizationEncryption.js
+│   │   └── ...
+│   └── alexandria/            # Alexandria helpers
+│       ├── alfred.js
+│       ├── oipClient.js       # HTTP client for daemon
+│       ├── podcast-generator.js
+│       ├── nutritional-helper.js
+│       └── ...
+├── routes/
+│   ├── daemon/                # Daemon routes
+│   │   ├── records.js
+│   │   ├── templates.js
+│   │   ├── media.js
+│   │   ├── organizations.js
+│   │   └── ...
+│   └── alexandria/            # Alexandria routes
+│       ├── alfred.js
+│       ├── voice.js
+│       ├── generate.js
+│       ├── scrape.js
+│       └── ...
+├── services/                  # Daemon background services
+│   └── mediaSeeder.js
+├── middleware/                # Shared middleware
+├── docs/
+├── public/                    # Static web interface
+├── mac-client/
+├── text-to-speech/
+├── speech-to-text/
+│
+├── index-daemon.js            # Daemon entry point
+├── index-alexandria.js        # Alexandria entry point
+├── gun-relay-server.js
+│
+├── Dockerfile.oip-daemon
+├── Dockerfile.alexandria
+├── Dockerfile.gun-relay
+├── docker-compose.yml
+├── Makefile
+├── package.json
+└── README.md
+```
+
+---
+
+## 📋 **Makefile Commands**
+
+```makefile
+# ════════════════════════════════════════════════════════════════
+# PRIMARY PROFILES
+# ════════════════════════════════════════════════════════════════
+
+oip-only:                   ## Deploy: Core OIP daemon only (indexing, publishing, media)
+	@make up PROFILE=oip-only
+
+alexandria:                 ## Deploy: Full stack with AI, voice (CPU)
+	@make up PROFILE=alexandria
+	@make install-models
+	@make install-chatterbox
+
+alexandria-gpu:             ## Deploy: Full stack with GPU acceleration
+	@make up PROFILE=alexandria-gpu
+	@make install-models
+	@make install-chatterbox
+
+alexandria-macMseries:      ## Deploy: Full stack optimized for Apple Silicon
+	@make up PROFILE=alexandria-macMseries
+	@make install-models
+	@make install-chatterbox
+
+# ════════════════════════════════════════════════════════════════
+# DECENTRALIZED PROFILES (includes local AR.IO gateway)
+# ════════════════════════════════════════════════════════════════
+
+alexandria-decentralized:   ## Deploy: Full stack + local Arweave gateway (CPU)
+	@make up PROFILE=alexandria-decentralized
+	@make install-models
+	@make install-chatterbox
+
+alexandria-decentralized-gpu: ## Deploy: Full stack + local Arweave gateway (GPU)
+	@make up PROFILE=alexandria-decentralized-gpu
+	@make install-models
+	@make install-chatterbox
+
+alexandria-decentralized-macMseries: ## Deploy: Full stack + local Arweave gateway (Apple Silicon)
+	@make up PROFILE=alexandria-decentralized-macMseries
+	@make install-models
+	@make install-chatterbox
+
+# ════════════════════════════════════════════════════════════════
+# SPECIALIZED PROFILES
+# ════════════════════════════════════════════════════════════════
+
+chatterbox:                 ## Deploy: Standard with Chatterbox TTS focus (CPU)
+	@make up PROFILE=chatterbox
+	@make install-chatterbox
+
+alexandria-noSTT:           ## Deploy: Alexandria without STT (for Mac/iOS clients with local STT)
+	@make up PROFILE=alexandria-noSTT
+	@make install-models
+	@make install-chatterbox
+
+alexandria-noSTT-decentralized: ## Deploy: Alexandria-noSTT + local Arweave gateway
+	@make up PROFILE=alexandria-noSTT-decentralized
+	@make install-models
+	@make install-chatterbox
+
+# ════════════════════════════════════════════════════════════════
+# SERVICE-SPECIFIC OPERATIONS
+# ════════════════════════════════════════════════════════════════
+
+logs-daemon:               ## Show oip-daemon-service logs
+	docker-compose logs -f oip-daemon-service
+
+logs-alexandria:           ## Show alexandria-service logs
+	docker-compose logs -f alexandria-service
+
+restart-daemon:            ## Restart oip-daemon-service
+	docker-compose restart oip-daemon-service
+
+restart-alexandria:        ## Restart alexandria-service
+	docker-compose restart alexandria-service
+
+shell-daemon:              ## Shell into oip-daemon-service
+	docker-compose exec oip-daemon-service /bin/bash
+
+shell-alexandria:          ## Shell into alexandria-service
+	docker-compose exec alexandria-service /bin/bash
+
+# ════════════════════════════════════════════════════════════════
+# TESTING
+# ════════════════════════════════════════════════════════════════
+
+test-daemon:               ## Test oip-daemon-service endpoints
+	@echo "Testing daemon health..."
+	curl -s http://localhost:3005/health | jq .
+	@echo "\nTesting records endpoint..."
+	curl -s "http://localhost:3005/api/records?limit=1" | jq '.total'
+	@echo "\nTesting GUN sync..."
+	curl -s http://localhost:3005/api/health/gun-sync | jq '.status'
+	@echo "\nTesting IPFS..."
+	curl -s http://localhost:5001/api/v0/id | jq '.ID'
+
+test-alexandria:           ## Test alexandria-service endpoints
+	@echo "Testing alexandria health..."
+	curl -s http://localhost:3006/health | jq .
+	@echo "\nTesting AI status..."
+	curl -s http://localhost:3006/api/health/ai | jq '.status'
+
+test-integration:          ## Test daemon-alexandria integration
+	@echo "Testing alexandria -> daemon communication..."
+	curl -s -X POST http://localhost:3006/api/alfred/rag \
+	  -H "Content-Type: application/json" \
+	  -d '{"query": "test query", "limit": 1}' | jq '.sources'
+
+# ════════════════════════════════════════════════════════════════
+# BACKWARDS COMPATIBILITY (maps to new profiles)
+# These aliases allow existing deployments to continue working
+# ════════════════════════════════════════════════════════════════
+
+minimal: oip-only           ## Alias: minimal -> oip-only
+standard: alexandria        ## Alias: standard -> alexandria
+standard-gpu: alexandria-gpu ## Alias: standard-gpu -> alexandria-gpu
+standard-macMseries: alexandria-macMseries ## Alias: standard-macMseries -> alexandria-macMseries
+max-decentralized: alexandria-decentralized ## Alias: max-decentralized -> alexandria-decentralized
+max-decentralized-gpu: alexandria-decentralized-gpu ## Alias
+```
+
+---
+
+## ⚠️ **Migration Notes for Existing Deployments**
+
+### **Backwards Compatibility**
+
+The `standard` and `standard-gpu` profiles are aliased to `alexandria` and `alexandria-gpu`. Existing deployments continue to work with the same commands.
+
+### **Environment Variables**
+
+New variables to add to `.env`:
+```bash
+# Service ports
+OIP_DAEMON_PORT=3005
+ALEXANDRIA_PORT=3006
+
+# Internal service URL (Docker network)
+OIP_DAEMON_URL=http://oip-daemon-service:3005
+```
+
+### **Data Migration**
+
+No data migration required - both services share the same Elasticsearch instance and data volumes.
+
+### **External API Access**
+
+- **Port 3005** (`oip-daemon-service`): Core OIP operations, media streaming
+- **Port 3006** (`alexandria-service`): AI chat, voice, content generation
+
+For single-endpoint access, use ngrok pointed at port 3005 (daemon), and have Alexandria's AI features accessed directly or proxied through your frontend.
