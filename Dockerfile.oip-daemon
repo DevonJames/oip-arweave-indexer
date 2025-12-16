@@ -1,0 +1,153 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# OIP DAEMON SERVICE DOCKERFILE
+# ═══════════════════════════════════════════════════════════════════════════════
+# Purpose: Core OIP infrastructure - indexing, storage, media distribution
+# Analogy: The Library Infrastructure (card catalog, shelves, access control)
+#
+# INCLUDED:
+#   - Arweave blockchain integration
+#   - GUN network (private records)
+#   - Elasticsearch indexing
+#   - BitTorrent/WebTorrent seeding
+#   - IPFS integration
+#   - HD wallet authentication
+#   - Organization management
+#   - Media upload/streaming
+#
+# EXCLUDED (these are in alexandria-service):
+#   - AI/LLM (Ollama, OpenAI)
+#   - Voice (STT/TTS)
+#   - Heavy image processing (canvas, puppeteer)
+#   - Web scraping
+#   - Podcast generation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+FROM node:18-alpine3.20
+
+# Production mode for optimized builds
+ENV NODE_ENV=production
+
+WORKDIR /usr/src/app
+
+# ─────────────────────────────────────────────────────────────────────────────
+# System Dependencies (minimal for daemon)
+# ─────────────────────────────────────────────────────────────────────────────
+# Note: We skip chromium, puppeteer deps, canvas - those are for Alexandria
+RUN apk update && apk add --no-cache \
+    bash \
+    make \
+    g++ \
+    python3 \
+    python3-dev \
+    curl \
+    cmake \
+    openssl-dev \
+    openssl-libs-static \
+    libssl3 \
+    libcrypto3 \
+    libc6-compat \
+    linux-headers \
+    git \
+    pkgconfig \
+    ffmpeg
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sharp dependencies (for thumbnail generation during media upload)
+# ─────────────────────────────────────────────────────────────────────────────
+RUN apk add --no-cache \
+    vips-dev \
+    fftw-dev
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OpenSSL Configuration (required for crypto operations)
+# ─────────────────────────────────────────────────────────────────────────────
+ENV OPENSSL_ROOT_DIR=/usr
+ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
+ENV OPENSSL_CRYPTO_LIBRARY=/usr/lib/libcrypto.so.3
+ENV OPENSSL_SSL_LIBRARY=/usr/lib/libssl.so.3
+ENV PKG_CONFIG_PATH=/usr/lib/pkgconfig
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Node.js Dependencies
+# ─────────────────────────────────────────────────────────────────────────────
+COPY package-daemon.json ./package.json
+COPY package-lock.json ./package-lock.json
+
+# Configure npm for native module compilation
+RUN echo "python=/usr/bin/python3" > .npmrc
+
+# Install dependencies
+# MEMORY LEAK FIX: Use --omit=optional to skip canvas (not needed for daemon)
+RUN npm ci --omit=optional --verbose
+
+# Rebuild native modules
+RUN npm rebuild bcrypt sharp 2>/dev/null || true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Application Code (daemon-specific)
+# ─────────────────────────────────────────────────────────────────────────────
+# Copy configuration
+COPY config ./config
+
+# Copy core helpers (daemon only)
+COPY helpers/core ./helpers/core
+COPY helpers/utils.js ./helpers/utils.js
+COPY helpers/apiConfig.js ./helpers/apiConfig.js
+
+# Copy daemon routes
+COPY routes/daemon ./routes/daemon
+
+# Copy services (daemon only)
+COPY services/mediaSeeder.js ./services/mediaSeeder.js
+
+# Copy middleware (shared)
+COPY middleware ./middleware
+
+# Copy socket files (daemon handles WebSocket basics)
+COPY socket ./socket
+COPY socket.js ./socket.js
+
+# Copy entry point and utilities
+COPY index-daemon.js ./index.js
+COPY gun-relay-server.js ./gun-relay-server.js
+COPY wait-for-it.sh ./wait-for-it.sh
+RUN sed -i 's/\r$//' wait-for-it.sh && chmod +x wait-for-it.sh
+
+# Copy startup scripts
+COPY scripts/docker-entrypoint-daemon.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Directory Structure
+# ─────────────────────────────────────────────────────────────────────────────
+RUN mkdir -p \
+    ./data/media \
+    ./data/media/web \
+    ./data/media/temp \
+    ./wallets
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Memory Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# MEMORY LEAK FIX: Expose GC for manual garbage collection
+# Default heap size: 4GB (configurable via NODE_OPTIONS)
+ENV NODE_OPTIONS="--expose-gc --max-old-space-size=4096"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Expose Ports
+# ─────────────────────────────────────────────────────────────────────────────
+# 3005 - Main API
+EXPOSE 3005
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Health Check
+# ─────────────────────────────────────────────────────────────────────────────
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:3005/health || exit 1
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Startup
+# ─────────────────────────────────────────────────────────────────────────────
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["node", "--expose-gc", "index.js", "--keepDBUpToDate", "15", "600"]
+

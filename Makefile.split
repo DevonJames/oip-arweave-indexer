@@ -1,0 +1,315 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# OIP MICROSERVICES SPLIT - New Profile Targets
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This file contains the new profile targets for the microservices split.
+# To use: include this in the main Makefile or run: make -f Makefile.split [target]
+#
+# Profile Migration Map:
+#   minimal           → oip-only
+#   standard          → alexandria
+#   standard-gpu      → alexandria-gpu
+#   standard-macMseries → alexandria-macMseries
+#   max-decentralized → alexandria-decentralized
+#   max-decentralized-gpu → alexandria-decentralized-gpu
+#   backend-only      → alexandria-noSTT
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+.PHONY: oip-only alexandria alexandria-gpu alexandria-macMseries \
+        alexandria-decentralized alexandria-decentralized-gpu \
+        alexandria-decentralized-macMseries alexandria-noSTT \
+        alexandria-noSTT-decentralized \
+        logs-daemon logs-alexandria restart-daemon restart-alexandria \
+        shell-daemon shell-alexandria test-daemon test-alexandria test-integration
+
+# Colors
+GREEN := \033[0;32m
+YELLOW := \033[1;33m
+BLUE := \033[0;34m
+RED := \033[0;31m
+NC := \033[0m
+
+# Use the split docker-compose file
+COMPOSE_FILE ?= docker-compose-split.yml
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRIMARY PROFILES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+oip-only: ## Deploy: Core OIP daemon only (indexing, publishing, media) - no AI
+	@echo "$(BLUE)📚 Deploying OIP Daemon Service (Library Infrastructure)...$(NC)"
+	@echo "$(YELLOW)This deployment includes:$(NC)"
+	@echo "  • Elasticsearch + Kibana (search/indexing)"
+	@echo "  • OIP Daemon (Arweave, GUN, media)"
+	@echo "  • GUN Relay (private records)"
+	@echo "  • IPFS (distributed storage)"
+	@echo "  • Ngrok (public access)"
+	@echo ""
+	docker-compose -f $(COMPOSE_FILE) --profile oip-only up -d
+	@echo ""
+	@echo "$(GREEN)✅ OIP Daemon deployed on port 3005$(NC)"
+	@echo "$(YELLOW)Note: AI/voice endpoints will return 503 (not available)$(NC)"
+
+alexandria: ## Deploy: Full stack with AI, voice (CPU) - oip-daemon + alexandria-service
+	@echo "$(BLUE)📖 Deploying Alexandria Stack (Library + Librarian)...$(NC)"
+	@echo "$(YELLOW)This deployment includes:$(NC)"
+	@echo "  • OIP Daemon (port 3005)"
+	@echo "  • Alexandria Service (port 3006)"
+	@echo "  • Ollama (LLM)"
+	@echo "  • TTS/STT services"
+	@echo ""
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria up -d
+	@echo "$(YELLOW)🤖 Installing LLM models...$(NC)"
+	@make install-models-split
+	@make install-chatterbox-split
+	@echo ""
+	@echo "$(GREEN)✅ Alexandria Stack deployed$(NC)"
+	@echo "  • Daemon: http://localhost:3005"
+	@echo "  • Alexandria: http://localhost:3006"
+
+alexandria-gpu: ## Deploy: Full stack with GPU acceleration
+	@echo "$(BLUE)🎮 Deploying Alexandria Stack with GPU...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-gpu up -d
+	@make install-models-split
+	@make install-chatterbox-split
+	@echo ""
+	@echo "$(GREEN)✅ Alexandria GPU Stack deployed$(NC)"
+
+alexandria-macMseries: ## Deploy: Full stack optimized for Apple Silicon
+	@echo "$(BLUE)🍎 Deploying Alexandria Stack for Apple Silicon...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-macMseries up -d
+	@make install-models-split
+	@make install-chatterbox-split
+	@echo ""
+	@echo "$(GREEN)✅ Alexandria Mac M-Series Stack deployed$(NC)"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DECENTRALIZED PROFILES (with local AR.IO gateway)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+alexandria-decentralized: ## Deploy: Full stack + local Arweave gateway (CPU)
+	@echo "$(BLUE)🌐 Deploying Alexandria Decentralized Stack...$(NC)"
+	@echo "$(YELLOW)Includes local AR.IO gateway for Arweave access$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-decentralized up -d
+	@make install-models-split
+	@make install-chatterbox-split
+	@echo ""
+	@echo "$(GREEN)✅ Alexandria Decentralized Stack deployed$(NC)"
+	@echo "  • AR.IO Gateway: http://localhost:4000"
+
+alexandria-decentralized-gpu: ## Deploy: Full stack + local Arweave gateway (GPU)
+	@echo "$(BLUE)🌐🎮 Deploying Alexandria Decentralized Stack with GPU...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-decentralized-gpu up -d
+	@make install-models-split
+	@make install-chatterbox-split
+	@echo ""
+	@echo "$(GREEN)✅ Alexandria Decentralized GPU Stack deployed$(NC)"
+
+alexandria-decentralized-macMseries: ## Deploy: Full stack + local Arweave gateway (Apple Silicon)
+	@echo "$(BLUE)🌐🍎 Deploying Alexandria Decentralized Stack for Apple Silicon...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-decentralized-macMseries up -d
+	@make install-models-split
+	@make install-chatterbox-split
+	@echo ""
+	@echo "$(GREEN)✅ Alexandria Decentralized Mac M-Series Stack deployed$(NC)"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SPECIALIZED PROFILES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+alexandria-noSTT: ## Deploy: Alexandria without STT (for Mac/iOS clients with local STT)
+	@echo "$(BLUE)📱 Deploying Alexandria without STT...$(NC)"
+	@echo "$(YELLOW)STT handled by native Mac/iOS client$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-noSTT up -d
+	@make install-models-split
+	@make install-chatterbox-split
+	@echo ""
+	@echo "$(GREEN)✅ Alexandria NoSTT Stack deployed$(NC)"
+
+alexandria-noSTT-decentralized: ## Deploy: Alexandria-noSTT + local Arweave gateway
+	@echo "$(BLUE)📱🌐 Deploying Alexandria NoSTT Decentralized...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-noSTT-decentralized up -d
+	@make install-models-split
+	@make install-chatterbox-split
+	@echo ""
+	@echo "$(GREEN)✅ Alexandria NoSTT Decentralized Stack deployed$(NC)"
+
+chatterbox-split: ## Deploy: Standard with Chatterbox TTS focus (CPU)
+	@echo "$(BLUE)🎭 Deploying Chatterbox Stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile chatterbox up -d
+	@make install-chatterbox-split
+	@echo ""
+	@echo "$(GREEN)✅ Chatterbox Stack deployed$(NC)"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SERVICE-SPECIFIC OPERATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+logs-daemon: ## Show oip-daemon-service logs
+	docker-compose -f $(COMPOSE_FILE) logs -f oip-daemon-service
+
+logs-alexandria: ## Show alexandria-service logs
+	docker-compose -f $(COMPOSE_FILE) logs -f alexandria-service
+
+logs-both: ## Show both daemon and alexandria logs
+	docker-compose -f $(COMPOSE_FILE) logs -f oip-daemon-service alexandria-service
+
+restart-daemon: ## Restart oip-daemon-service
+	@echo "$(BLUE)🔄 Restarting OIP Daemon...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) restart oip-daemon-service
+	@echo "$(GREEN)✅ Daemon restarted$(NC)"
+
+restart-alexandria: ## Restart alexandria-service
+	@echo "$(BLUE)🔄 Restarting Alexandria...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) restart alexandria-service
+	@echo "$(GREEN)✅ Alexandria restarted$(NC)"
+
+shell-daemon: ## Shell into oip-daemon-service
+	docker-compose -f $(COMPOSE_FILE) exec oip-daemon-service /bin/sh
+
+shell-alexandria: ## Shell into alexandria-service
+	docker-compose -f $(COMPOSE_FILE) exec alexandria-service /bin/sh
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TESTING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+test-daemon: ## Test oip-daemon-service endpoints
+	@echo "$(BLUE)🧪 Testing Daemon Service...$(NC)"
+	@echo ""
+	@echo "Testing basic health..."
+	@curl -s http://localhost:3005/health | jq . || echo "$(RED)Failed$(NC)"
+	@echo ""
+	@echo "Testing records endpoint..."
+	@curl -s "http://localhost:3005/api/records?limit=1" | jq '.total' || echo "$(RED)Failed$(NC)"
+	@echo ""
+	@echo "Testing GUN sync..."
+	@curl -s http://localhost:3005/api/health/gun-sync | jq '.status' || echo "$(RED)Failed$(NC)"
+	@echo ""
+	@echo "Testing Elasticsearch..."
+	@curl -s http://localhost:3005/api/health/elasticsearch | jq '.status' || echo "$(RED)Failed$(NC)"
+	@echo ""
+	@echo "$(GREEN)✅ Daemon tests complete$(NC)"
+
+test-alexandria: ## Test alexandria-service endpoints
+	@echo "$(BLUE)🧪 Testing Alexandria Service...$(NC)"
+	@echo ""
+	@echo "Testing basic health..."
+	@curl -s http://localhost:3006/health | jq . || echo "$(RED)Failed$(NC)"
+	@echo ""
+	@echo "Testing AI status..."
+	@curl -s http://localhost:3006/api/health/ai | jq '.status' || echo "$(RED)Failed$(NC)"
+	@echo ""
+	@echo "Testing voice services..."
+	@curl -s http://localhost:3006/api/health/voice | jq '.status' || echo "$(RED)Failed$(NC)"
+	@echo ""
+	@echo "Testing daemon connectivity..."
+	@curl -s http://localhost:3006/api/health/daemon | jq '.status' || echo "$(RED)Failed$(NC)"
+	@echo ""
+	@echo "$(GREEN)✅ Alexandria tests complete$(NC)"
+
+test-integration: ## Test daemon-alexandria integration
+	@echo "$(BLUE)🧪 Testing Service Integration...$(NC)"
+	@echo ""
+	@echo "Testing Alexandria → Daemon proxying..."
+	@echo "  Fetching records via Alexandria..."
+	@curl -s "http://localhost:3006/api/records?limit=1" | jq '.total' || echo "$(RED)Proxy failed$(NC)"
+	@echo ""
+	@echo "Testing full health check..."
+	@curl -s http://localhost:3006/api/health/full | jq . || echo "$(RED)Failed$(NC)"
+	@echo ""
+	@echo "$(GREEN)✅ Integration tests complete$(NC)"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODEL INSTALLATION (for split profiles)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+install-models-split: ## Install LLM models for split deployment
+	@echo "$(BLUE)🤖 Installing LLM models...$(NC)"
+	@docker-compose -f $(COMPOSE_FILE) exec ollama ollama pull llama3.2:3b 2>/dev/null || \
+		docker-compose -f $(COMPOSE_FILE) exec ollama-gpu ollama pull llama3.2:3b 2>/dev/null || \
+		echo "$(YELLOW)Ollama not available, skipping model install$(NC)"
+
+install-chatterbox-split: ## Install Chatterbox TTS model for split deployment
+	@echo "$(BLUE)🎭 Installing Chatterbox TTS model...$(NC)"
+	@echo "$(YELLOW)Note: Chatterbox will download on first TTS request$(NC)"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BACKWARDS COMPATIBILITY ALIASES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+minimal-split: oip-only ## Alias: minimal → oip-only
+standard-split: alexandria ## Alias: standard → alexandria
+standard-gpu-split: alexandria-gpu ## Alias: standard-gpu → alexandria-gpu
+standard-macMseries-split: alexandria-macMseries ## Alias: standard-macMseries → alexandria-macMseries
+max-decentralized-split: alexandria-decentralized ## Alias: max-decentralized → alexandria-decentralized
+max-decentralized-gpu-split: alexandria-decentralized-gpu ## Alias
+backend-only-split: alexandria-noSTT ## Alias: backend-only → alexandria-noSTT
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CLEANUP
+# ═══════════════════════════════════════════════════════════════════════════════
+
+down-split: ## Stop all split services
+	@echo "$(BLUE)🛑 Stopping all split services...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) down
+	@echo "$(GREEN)✅ All services stopped$(NC)"
+
+clean-split: ## Remove all split containers and volumes
+	@echo "$(RED)⚠️  This will remove all containers and volumes for split deployment$(NC)"
+	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	docker-compose -f $(COMPOSE_FILE) down -v --remove-orphans
+	@echo "$(GREEN)✅ Cleanup complete$(NC)"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HELP
+# ═══════════════════════════════════════════════════════════════════════════════
+
+help-split: ## Show help for split deployment
+	@echo "$(BLUE)═══════════════════════════════════════════════════════════════$(NC)"
+	@echo "$(BLUE)  OIP MICROSERVICES DEPLOYMENT$(NC)"
+	@echo "$(BLUE)═══════════════════════════════════════════════════════════════$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Architecture:$(NC)"
+	@echo "  oip-daemon-service (port 3005) - Library Infrastructure"
+	@echo "    • Arweave blockchain indexing"
+	@echo "    • GUN network (private records)"
+	@echo "    • Elasticsearch search"
+	@echo "    • BitTorrent/IPFS media"
+	@echo ""
+	@echo "  alexandria-service (port 3006) - The Librarian"
+	@echo "    • Alfred AI/RAG"
+	@echo "    • Voice interface (STT/TTS)"
+	@echo "    • Content generation"
+	@echo ""
+	@echo "$(YELLOW)Primary Profiles:$(NC)"
+	@echo "  $(GREEN)oip-only$(NC)              - Daemon only (no AI)"
+	@echo "  $(GREEN)alexandria$(NC)            - Full stack (CPU)"
+	@echo "  $(GREEN)alexandria-gpu$(NC)        - Full stack (GPU)"
+	@echo "  $(GREEN)alexandria-macMseries$(NC) - Full stack (Apple Silicon)"
+	@echo ""
+	@echo "$(YELLOW)Decentralized Profiles:$(NC)"
+	@echo "  $(GREEN)alexandria-decentralized$(NC)            - + AR.IO gateway (CPU)"
+	@echo "  $(GREEN)alexandria-decentralized-gpu$(NC)        - + AR.IO gateway (GPU)"
+	@echo "  $(GREEN)alexandria-decentralized-macMseries$(NC) - + AR.IO gateway (Apple Silicon)"
+	@echo ""
+	@echo "$(YELLOW)Specialized Profiles:$(NC)"
+	@echo "  $(GREEN)alexandria-noSTT$(NC)              - No STT (for Mac/iOS clients)"
+	@echo "  $(GREEN)alexandria-noSTT-decentralized$(NC) - NoSTT + AR.IO gateway"
+	@echo ""
+	@echo "$(YELLOW)Service Commands:$(NC)"
+	@echo "  $(GREEN)logs-daemon$(NC)       - View daemon logs"
+	@echo "  $(GREEN)logs-alexandria$(NC)   - View alexandria logs"
+	@echo "  $(GREEN)restart-daemon$(NC)    - Restart daemon"
+	@echo "  $(GREEN)restart-alexandria$(NC) - Restart alexandria"
+	@echo ""
+	@echo "$(YELLOW)Testing:$(NC)"
+	@echo "  $(GREEN)test-daemon$(NC)       - Test daemon endpoints"
+	@echo "  $(GREEN)test-alexandria$(NC)   - Test alexandria endpoints"
+	@echo "  $(GREEN)test-integration$(NC)  - Test service integration"
+	@echo ""
+	@echo "$(YELLOW)Usage:$(NC)"
+	@echo "  make -f Makefile.split alexandria"
+	@echo "  make -f Makefile.split test-integration"
+

@@ -1,0 +1,57 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════════════════════════
+# OIP DAEMON SERVICE - Docker Entrypoint
+# ═══════════════════════════════════════════════════════════════════════════════
+
+set -e
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "  OIP DAEMON SERVICE - Starting"
+echo "═══════════════════════════════════════════════════════════════"
+echo ""
+
+# Wait for Elasticsearch to be ready
+if [ -n "$ELASTICSEARCH_HOST" ]; then
+    echo "⏳ Waiting for Elasticsearch at ${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT:-9200}..."
+    ./wait-for-it.sh "${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT:-9200}" -t 120 -- echo "✅ Elasticsearch is ready"
+fi
+
+# Wait for GUN relay to be ready
+if [ -n "$GUN_PEERS" ]; then
+    GUN_HOST=$(echo $GUN_PEERS | sed 's|http://||' | sed 's|/gun||' | cut -d: -f1)
+    GUN_PORT=$(echo $GUN_PEERS | sed 's|http://||' | sed 's|/gun||' | cut -d: -f2)
+    if [ -n "$GUN_HOST" ] && [ -n "$GUN_PORT" ]; then
+        echo "⏳ Waiting for GUN relay at ${GUN_HOST}:${GUN_PORT}..."
+        ./wait-for-it.sh "${GUN_HOST}:${GUN_PORT}" -t 60 -- echo "✅ GUN relay is ready"
+    fi
+fi
+
+# Ensure data directories exist with correct permissions
+echo "📁 Ensuring data directories..."
+mkdir -p ./data/media/web ./data/media/temp ./wallets
+
+# Set up node_modules if they were moved during build
+if [ -d "../node_modules" ] && [ ! -d "./node_modules" ]; then
+    echo "🔗 Linking node_modules..."
+    ln -s ../node_modules ./node_modules
+fi
+
+# Environment info
+echo ""
+echo "📋 Environment:"
+echo "   PORT: ${PORT:-3005}"
+echo "   NODE_ENV: ${NODE_ENV:-development}"
+echo "   ELASTICSEARCH: ${ELASTICSEARCH_HOST:-localhost}:${ELASTICSEARCH_PORT:-9200}"
+echo "   GUN_PEERS: ${GUN_PEERS:-not set}"
+echo "   GUN_SYNC: ${GUN_SYNC_ENABLED:-true}"
+echo ""
+
+# Memory settings
+export NODE_OPTIONS="${NODE_OPTIONS:---expose-gc --max-old-space-size=4096}"
+echo "💾 Memory: NODE_OPTIONS=$NODE_OPTIONS"
+echo ""
+
+# Start the daemon
+echo "🚀 Starting OIP Daemon Service..."
+exec "$@"
+

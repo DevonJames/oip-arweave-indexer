@@ -1,0 +1,205 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# ALEXANDRIA SERVICE DOCKERFILE
+# ═══════════════════════════════════════════════════════════════════════════════
+# Purpose: Intelligent interface layer - AI, voice, content creation
+# Analogy: The Librarian (helps you find things, creates content, talks to you)
+#
+# INCLUDED:
+#   - Alfred AI/RAG
+#   - Voice interface (STT/TTS integration)
+#   - Content generation (podcasts, images)
+#   - Web scraping (Puppeteer, Cheerio)
+#   - Photo analysis
+#   - Heavy image processing (Canvas, Sharp)
+#   - Recipe/Workout AI processing
+#
+# EXCLUDED (these are in oip-daemon-service):
+#   - Arweave blockchain
+#   - GUN network
+#   - Elasticsearch (calls daemon via HTTP)
+#   - BitTorrent/WebTorrent
+#   - IPFS direct access
+#   - HD wallet management
+#
+# Alexandria calls oip-daemon-service for all data operations via oipClient.js
+# ═══════════════════════════════════════════════════════════════════════════════
+
+FROM node:18-alpine3.20
+
+# Production mode for optimized builds
+ENV NODE_ENV=production
+
+WORKDIR /usr/src/app
+
+# ─────────────────────────────────────────────────────────────────────────────
+# System Dependencies (full stack for AI/scraping)
+# ─────────────────────────────────────────────────────────────────────────────
+RUN apk update && apk add --no-cache \
+    bash \
+    make \
+    g++ \
+    python3 \
+    python3-dev \
+    py3-pip \
+    curl \
+    cmake \
+    ffmpeg \
+    poppler-utils \
+    openssl-dev \
+    openssl-libs-static \
+    libssl3 \
+    libcrypto3 \
+    libc6-compat \
+    linux-headers \
+    git \
+    pkgconfig \
+    espeak
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chromium/Puppeteer Dependencies (for web scraping)
+# ─────────────────────────────────────────────────────────────────────────────
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    font-noto \
+    xvfb \
+    dbus
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Canvas Dependencies (for image generation)
+# ─────────────────────────────────────────────────────────────────────────────
+RUN apk add --no-cache \
+    build-base \
+    cairo-dev \
+    pango-dev \
+    jpeg-dev \
+    giflib-dev \
+    librsvg-dev \
+    pixman-dev \
+    fontconfig-dev
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sharp Dependencies (for image processing)
+# ─────────────────────────────────────────────────────────────────────────────
+RUN apk add --no-cache \
+    vips-dev \
+    fftw-dev
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Puppeteer Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMIUM_FLAGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OpenSSL Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+ENV OPENSSL_ROOT_DIR=/usr
+ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
+ENV OPENSSL_CRYPTO_LIBRARY=/usr/lib/libcrypto.so.3
+ENV OPENSSL_SSL_LIBRARY=/usr/lib/libssl.so.3
+ENV PKG_CONFIG_PATH=/usr/lib/pkgconfig
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Node.js Dependencies
+# ─────────────────────────────────────────────────────────────────────────────
+COPY package-alexandria.json ./package.json
+COPY package-lock.json ./package-lock.json
+
+# Configure npm for native module compilation
+RUN echo "python=/usr/bin/python3" > .npmrc && \
+    echo "node_gyp=/usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js" >> .npmrc
+
+# Install dependencies with native module support
+RUN npm ci --verbose --build-from-source
+
+# Rebuild native modules
+RUN npm rebuild canvas bcrypt sharp
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Application Code (alexandria-specific)
+# ─────────────────────────────────────────────────────────────────────────────
+# Copy configuration
+COPY config ./config
+
+# Copy alexandria helpers
+COPY helpers/alexandria ./helpers/alexandria
+COPY helpers/utils.js ./helpers/utils.js
+COPY helpers/apiConfig.js ./helpers/apiConfig.js
+
+# Copy oipClient (for communicating with daemon)
+COPY helpers/oipClient.js ./helpers/oipClient.js
+
+# Copy alexandria routes
+COPY routes/alexandria ./routes/alexandria
+
+# Copy services (alexandria only)
+COPY services/chunkingService.js ./services/chunkingService.js
+COPY services/notesRecordsService.js ./services/notesRecordsService.js
+COPY services/sttService.js ./services/sttService.js
+COPY services/summarizationService.js ./services/summarizationService.js
+
+# Copy middleware (shared)
+COPY middleware ./middleware
+
+# Copy socket files (for WebSocket features)
+COPY socket ./socket
+COPY socket.js ./socket.js
+
+# Copy entry point
+COPY index-alexandria.js ./index.js
+COPY wait-for-it.sh ./wait-for-it.sh
+RUN sed -i 's/\r$//' wait-for-it.sh && chmod +x wait-for-it.sh
+
+# Copy startup scripts
+COPY scripts/docker-entrypoint-alexandria.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Copy static assets needed for Alexandria features
+COPY media ./media
+COPY voices ./voices
+COPY soundfx ./soundfx
+COPY podcastHosts ./podcastHosts
+COPY podcastShows ./podcastShows
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Directory Structure
+# ─────────────────────────────────────────────────────────────────────────────
+RUN mkdir -p \
+    ./media/temp_audio \
+    ./media/generated \
+    ./data/podcasts \
+    ./data/images
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Memory Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# MEMORY LEAK FIX: Expose GC for manual garbage collection
+# Higher heap size for AI operations: 8GB (configurable via NODE_OPTIONS)
+ENV NODE_OPTIONS="--expose-gc --max-old-space-size=8192"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Expose Ports
+# ─────────────────────────────────────────────────────────────────────────────
+# 3006 - Alexandria API
+EXPOSE 3006
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Health Check
+# ─────────────────────────────────────────────────────────────────────────────
+HEALTHCHECK --interval=60s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3006/health || exit 1
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Startup
+# ─────────────────────────────────────────────────────────────────────────────
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["node", "--expose-gc", "index.js"]
+

@@ -1,0 +1,505 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# OIP MICROSERVICES ARCHITECTURE
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This docker-compose splits the monolithic OIP application into two services:
+#
+#   oip-daemon-service (port 3005):
+#     The Library Infrastructure - card catalog, shelves, access control
+#     - Arweave blockchain indexing
+#     - GUN network (private records)
+#     - Elasticsearch search
+#     - BitTorrent/WebTorrent media
+#     - IPFS integration
+#     - HD wallet authentication
+#     - Organization management
+#
+#   alexandria-service (port 3006):
+#     The Librarian - AI, voice, content creation
+#     - Alfred AI/RAG
+#     - Voice interface (STT/TTS)
+#     - Content generation
+#     - Web scraping
+#     - Photo analysis
+#
+# PROFILES:
+#   - oip-only:       Just the daemon (indexing, publishing, media)
+#   - alexandria:     Full stack with AI/voice (CPU)
+#   - alexandria-gpu: Full stack with GPU acceleration
+#   - alexandria-macMseries: Full stack for Apple Silicon
+#   - alexandria-decentralized: Full stack + local Arweave gateway (CPU)
+#   - alexandria-decentralized-gpu: Full stack + gateway (GPU)
+#   - alexandria-decentralized-macMseries: Full stack + gateway (Apple Silicon)
+#   - alexandria-noSTT: Alexandria without STT (for Mac/iOS clients)
+#   - alexandria-noSTT-decentralized: noSTT + gateway
+#   - chatterbox: Voice quality focus
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+services:
+  # ════════════════════════════════════════════════════════════════════════════
+  # INFRASTRUCTURE - Shared by all profiles
+  # ════════════════════════════════════════════════════════════════════════════
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      - xpack.security.enabled=false
+      - logger.level=WARN
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - ${ELASTICSEARCH_DATA_PATH:-./elasticsearch_data}:/usr/share/elasticsearch/data
+    ports:
+      - "${ES_PORT:-9200}:9200"
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - oip-only
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+      - chatterbox
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.17.0
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "${KIBANA_PORT:-5601}:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - oip-only
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - chatterbox
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # OIP DAEMON SERVICE - Library Infrastructure
+  # ════════════════════════════════════════════════════════════════════════════
+
+  oip-daemon-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.oip-daemon
+    env_file:
+      - .env
+    ports:
+      - "${OIP_DAEMON_PORT:-3005}:3005"
+    environment:
+      - NODE_ENV=production
+      - PORT=3005
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+      - GUN_PEERS=http://gun-relay:8765/gun
+      - GUN_SYNC_ENABLED=${GUN_SYNC_ENABLED:-true}
+      - IPFS_API_URL=http://ipfs:5001
+      - JWT_SECRET=${JWT_SECRET}
+      - ARWEAVE_KEY_FILE=${ARWEAVE_KEY_FILE}
+      - TURBO_URL=${TURBO_URL:-https://turbo.ardrive.io}
+      - USE_LOCAL_ARIO_GATEWAY=${USE_LOCAL_ARIO_GATEWAY:-false}
+      - LOCAL_ARIO_GATEWAY_ADDRESS=${LOCAL_ARIO_GATEWAY_ADDRESS:-ario-gateway:4000}
+    depends_on:
+      - elasticsearch
+      - gun-relay
+    volumes:
+      - ./data:/usr/src/app/data
+      - ./wallets:/usr/src/app/wallets
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - oip-only
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+      - chatterbox
+
+  # GUN Relay - Private record storage
+  gun-relay:
+    image: node:18-alpine
+    working_dir: /app
+    command: sh -c "npm init -y >/dev/null 2>&1 && npm i gun && node gun-relay-server.js"
+    ports:
+      - "${GUN_RELAY_PORT:-8765}:8765"
+    volumes:
+      - gundata:/app/data
+      - ./gun-relay-server.js:/app/gun-relay-server.js:ro
+    environment:
+      - GUN_PEERS=${GUN_EXTERNAL_PEERS:-}
+      - GUN_ENV=production
+      - GUN_SYNC_ENABLED=true
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - oip-only
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+      - chatterbox
+
+  # IPFS - Distributed file storage
+  ipfs:
+    image: ipfs/kubo:latest
+    environment:
+      - IPFS_PROFILE=server
+    ports:
+      - "${IPFS_API_PORT:-5001}:5001"
+      - "${IPFS_GATEWAY_PORT:-8080}:8080"
+    volumes:
+      - ipfsdata:/data/ipfs
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - oip-only
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+      - chatterbox
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # ALEXANDRIA SERVICE - The Librarian
+  # ════════════════════════════════════════════════════════════════════════════
+
+  alexandria-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.alexandria
+    env_file:
+      - .env
+    ports:
+      - "${ALEXANDRIA_PORT:-3006}:3006"
+    environment:
+      - NODE_ENV=production
+      - PORT=3006
+      - OIP_DAEMON_URL=http://oip-daemon-service:3005
+      - OLLAMA_HOST=http://ollama:11434
+      - TTS_SERVICE_URL=http://tts-service:5500
+      - STT_SERVICE_URL=http://stt-service:8013
+      - JWT_SECRET=${JWT_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - XAI_API_KEY=${XAI_API_KEY:-}
+    depends_on:
+      - oip-daemon-service
+    volumes:
+      - ./data:/usr/src/app/data
+      - ./media:/usr/src/app/media
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # AI SERVICES - Ollama (CPU variants)
+  # ════════════════════════════════════════════════════════════════════════════
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - oip-network
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    profiles:
+      - alexandria
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+      - chatterbox
+
+  # Ollama with GPU support
+  ollama-gpu:
+    image: ollama/ollama:latest
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - oip-network
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    profiles:
+      - alexandria-gpu
+      - alexandria-decentralized-gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # VOICE SERVICES - TTS (Text-to-Speech)
+  # ════════════════════════════════════════════════════════════════════════════
+
+  tts-service:
+    build:
+      context: ./text-to-speech
+    ports:
+      - "${TTS_PORT:-5500}:5500"
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - alexandria
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+      - chatterbox
+
+  tts-service-gpu:
+    build:
+      context: ./text-to-speech
+      dockerfile: Dockerfile.gpu
+    ports:
+      - "${TTS_PORT:-5500}:5500"
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - TTS_GPU_ENABLED=true
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - alexandria-gpu
+      - alexandria-decentralized-gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # VOICE SERVICES - STT (Speech-to-Text)
+  # ════════════════════════════════════════════════════════════════════════════
+
+  stt-service:
+    build: ./speech-to-text
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-base}
+      - WHISPER_DEVICE=cpu
+      - WHISPER_COMPUTE_TYPE=int8
+    ports:
+      - "${STT_PORT:-8013}:8013"
+    volumes:
+      - whisper-models:/app/models
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - alexandria
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-macMseries
+      - chatterbox
+
+  stt-service-gpu:
+    build:
+      context: ./speech-to-text
+      dockerfile: Dockerfile.gpu
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-base}
+      - WHISPER_DEVICE=cuda
+      - WHISPER_COMPUTE_TYPE=float16
+      - CUDA_VISIBLE_DEVICES=0
+    ports:
+      - "${STT_PORT:-8013}:8013"
+    volumes:
+      - whisper-models:/app/models
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - alexandria-gpu
+      - alexandria-decentralized-gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # CONTENT GENERATION SERVICES
+  # ════════════════════════════════════════════════════════════════════════════
+
+  speech-synthesizer:
+    build:
+      context: ./speech-synthesizer
+    ports:
+      - "${SPEECH_SYNTHESIZER_PORT:-8082}:8082"
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - alexandria
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+      - chatterbox
+
+  text-generator:
+    build: ./text-generator
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN:-}
+    ports:
+      - "${TEXT_GENERATOR_PORT:-8081}:8081"
+    depends_on:
+      - ollama
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - alexandria
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+      - chatterbox
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # DECENTRALIZED INFRASTRUCTURE - Local Arweave Gateway
+  # ════════════════════════════════════════════════════════════════════════════
+
+  ario-gateway:
+    image: ghcr.io/ar-io/ar-io-core:latest
+    env_file:
+      - .env
+    ports:
+      - "${ARIO_GATEWAY_PORT:-4000}:4000"
+    volumes:
+      - ${ARIO_GATEWAY_DATA_PATH:-./ario_gateway_data}:/app/data
+    environment:
+      - PORT=4000
+      - GRAPHQL_ENABLED=true
+      - START_HEIGHT=${START_HEIGHT}
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT-decentralized
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/ar-io/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # NETWORK ACCESS - Ngrok
+  # ════════════════════════════════════════════════════════════════════════════
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: http --domain=${NGROK_DOMAIN} oip-daemon-service:3005
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
+    depends_on:
+      - oip-daemon-service
+    ports:
+      - "${NGROK_DASHBOARD_PORT:-4040}:4040"
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - oip-only
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+      - chatterbox
+
+# ════════════════════════════════════════════════════════════════════════════
+# VOLUMES
+# ════════════════════════════════════════════════════════════════════════════
+
+volumes:
+  gundata:
+    name: ${COMPOSE_PROJECT_NAME:-oip}_gundata
+  ipfsdata:
+    name: ${COMPOSE_PROJECT_NAME:-oip}_ipfsdata
+  ollama-data:
+    name: ${COMPOSE_PROJECT_NAME:-oip}_ollama-data
+  whisper-models:
+    name: ${COMPOSE_PROJECT_NAME:-oip}_whisper-models
+
+# ════════════════════════════════════════════════════════════════════════════
+# NETWORKS
+# ════════════════════════════════════════════════════════════════════════════
+
+networks:
+  oip-network:
+    name: ${COMPOSE_PROJECT_NAME:-oip}_oip-network
+    driver: bridge
+
