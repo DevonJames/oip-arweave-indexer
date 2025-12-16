@@ -1050,35 +1050,61 @@ networks:
 
 ## 📋 **Profile Summary**
 
+### **Profile Migration Map: Old → New**
+
+This section explains exactly what happens to each existing profile.
+
+#### **Profiles Being Renamed/Evolved**
+
+| Old Profile | New Profile | Changes |
+|-------------|-------------|---------|
+| `minimal` | **`oip-only`** | + IPFS added, + ngrok added. Now includes full media distribution infrastructure. |
+| `standard` | **`alexandria`** | Splits into oip-daemon-service + alexandria-service. Same functionality, microservices architecture. |
+| `standard-gpu` | **`alexandria-gpu`** | Same as above with GPU acceleration. |
+| `standard-macMseries` | **`alexandria-macMseries`** | Same as above optimized for Apple Silicon. |
+| `max-decentralized` | **`alexandria-decentralized`** | Splits into microservices + keeps AR.IO gateway. |
+| `max-decentralized-gpu` | **`alexandria-decentralized-gpu`** | Same as above with GPU. |
+| `backend-only` | **`alexandria-noSTT`** | Renamed for clarity. Alexandria stack without STT service. |
+
+#### **New Profiles Being Added**
+
+| New Profile | Purpose |
+|-------------|---------|
+| **`alexandria-decentralized-macMseries`** | Full stack + AR.IO gateway optimized for Apple Silicon (didn't exist before) |
+| **`alexandria-noSTT-decentralized`** | Alexandria-noSTT + AR.IO gateway (didn't exist before) |
+
+#### **Profiles Being Removed**
+
+| Old Profile | Reason for Removal | Migration Path |
+|-------------|-------------------|----------------|
+| `minimal-with-scrape` | No use case for lightweight + scraping | Use `oip-only` (no scraping) or `alexandria` (full stack with scraping) |
+| `standard-monolithic` | Legacy single-container approach | Use `alexandria` (distributed microservices) |
+| `gpu` | Intermediate GPU profile, redundant | Use `alexandria-gpu` |
+| `oip-gpu-only` | Edge case, minimal GPU | Use `oip-only` (CPU) or `alexandria-gpu` (full GPU) |
+| `chatterbox-gpu` | Doesn't work properly | Use `alexandria-gpu` with Chatterbox installed |
+
+#### **Profiles Being Kept As-Is**
+
+| Profile | Reason |
+|---------|--------|
+| `chatterbox` | Specific voice quality focus, still useful |
+
+---
+
 ### **New Profile Structure**
 
-| Profile | Base | Services Included | Use Case |
-|---------|------|-------------------|----------|
-| **`oip-only`** | (base) | elasticsearch, kibana, oip-daemon-service, gun-relay, ipfs, ngrok | Pure OIP daemon - indexing, publishing, media distribution only |
+| Profile | Based On | Services Included | Use Case |
+|---------|----------|-------------------|----------|
+| **`oip-only`** | minimal | elasticsearch, kibana, oip-daemon-service, gun-relay, ipfs, ngrok | Pure OIP daemon - indexing, publishing, media distribution only |
 | **`alexandria`** | standard | oip-only + alexandria-service, ollama (CPU), tts, stt, speech-synthesizer, text-generator | Full stack with AI/voice (CPU) |
 | **`alexandria-gpu`** | standard-gpu | oip-only + alexandria-service, ollama-gpu, tts-gpu, stt-gpu | Full stack with GPU acceleration |
 | **`alexandria-macMseries`** | standard-macMseries | oip-only + alexandria-service, ollama (Metal), tts, stt | Full stack optimized for Apple Silicon |
 | **`alexandria-decentralized`** | max-decentralized | alexandria + **ario-gateway** | Full stack + local Arweave gateway (CPU) |
 | **`alexandria-decentralized-gpu`** | max-decentralized-gpu | alexandria-gpu + **ario-gateway** | Full stack + local Arweave gateway (GPU) |
 | **`alexandria-decentralized-macMseries`** | (new) | alexandria-macMseries + **ario-gateway** | Full stack + local Arweave gateway (Apple Silicon) |
-
-### **Retained Legacy Profiles**
-
-| Profile | Status | Purpose |
-|---------|--------|---------|
-| **`chatterbox`** | ✅ KEEP | Standard with Chatterbox TTS focus (CPU) - specific voice quality focus |
-| **`alexandria-noSTT`** | ✅ KEEP (was `backend-only`) | Alexandria without STT - for Mac/iOS clients that handle STT/VAD locally |
-| **`alexandria-noSTT-decentralized`** | ✅ NEW | Alexandria-noSTT + local AR.IO gateway |
-
-### **Profiles Marked for Removal**
-
-| Profile | Status | Reason |
-|---------|--------|--------|
-| `minimal-with-scrape` | 🗑️ REMOVE | No need for lightweight deployment with scraping |
-| `standard-monolithic` | 🗑️ REMOVE | Legacy single-container approach, distributed preferred |
-| `gpu` | 🗑️ REMOVE | Intermediate GPU profile, covered by alexandria-gpu |
-| `oip-gpu-only` | 🗑️ REMOVE | Edge case, minimal GPU profile |
-| `chatterbox-gpu` | 🗑️ REMOVE | Doesn't work properly |
+| **`alexandria-noSTT`** | backend-only | alexandria minus stt-service | For Mac/iOS clients with local STT |
+| **`alexandria-noSTT-decentralized`** | (new) | alexandria-noSTT + **ario-gateway** | Alexandria-noSTT + local Arweave gateway |
+| **`chatterbox`** | (unchanged) | Standard with Chatterbox TTS focus | Specific voice quality focus |
 
 ### **Profile Service Matrix**
 
@@ -1425,9 +1451,25 @@ max-decentralized-gpu: alexandria-decentralized-gpu ## Alias
 
 ## ⚠️ **Migration Notes for Existing Deployments**
 
-### **Backwards Compatibility**
+### **Backwards Compatibility Aliases**
 
-The `standard` and `standard-gpu` profiles are aliased to `alexandria` and `alexandria-gpu`. Existing deployments continue to work with the same commands.
+Old profile names are aliased to new names so existing deployments continue working:
+
+| Old Command | Maps To | Notes |
+|-------------|---------|-------|
+| `make minimal` | `make oip-only` | ✅ Works, now includes IPFS |
+| `make standard` | `make alexandria` | ✅ Works, same functionality |
+| `make standard-gpu` | `make alexandria-gpu` | ✅ Works, same functionality |
+| `make standard-macMseries` | `make alexandria-macMseries` | ✅ Works, same functionality |
+| `make max-decentralized` | `make alexandria-decentralized` | ✅ Works, same functionality |
+| `make max-decentralized-gpu` | `make alexandria-decentralized-gpu` | ✅ Works, same functionality |
+| `make backend-only` | `make alexandria-noSTT` | ✅ Renamed for clarity |
+| `make minimal-with-scrape` | ❌ Removed | Use `oip-only` or `alexandria` |
+| `make standard-monolithic` | ❌ Removed | Use `alexandria` |
+| `make gpu` | ❌ Removed | Use `alexandria-gpu` |
+| `make oip-gpu-only` | ❌ Removed | Use `oip-only` or `alexandria-gpu` |
+| `make chatterbox-gpu` | ❌ Removed | Use `alexandria-gpu` |
+| `make chatterbox` | ✅ Unchanged | Still works as before |
 
 ### **Environment Variables**
 
@@ -1451,3 +1493,12 @@ No data migration required - both services share the same Elasticsearch instance
 - **Port 3006** (`alexandria-service`): AI chat, voice, content generation
 
 For single-endpoint access, use ngrok pointed at port 3005 (daemon), and have Alexandria's AI features accessed directly or proxied through your frontend.
+
+### **Summary: What Changed**
+
+1. **Architecture**: Monolithic OIP → `oip-daemon-service` + `alexandria-service` microservices
+2. **Profile Names**: `minimal` → `oip-only`, `standard*` → `alexandria*`, `max-decentralized*` → `alexandria-decentralized*`
+3. **oip-only Improvements**: Now includes IPFS and ngrok (was missing in `minimal`)
+4. **New Profiles**: `alexandria-decentralized-macMseries`, `alexandria-noSTT-decentralized`
+5. **Removed Profiles**: `minimal-with-scrape`, `standard-monolithic`, `gpu`, `oip-gpu-only`, `chatterbox-gpu`
+6. **Renamed**: `backend-only` → `alexandria-noSTT` (clearer name)
