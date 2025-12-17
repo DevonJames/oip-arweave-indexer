@@ -78,7 +78,9 @@ RUN echo "python=/usr/bin/python3" > .npmrc
 
 # Install dependencies
 # MEMORY LEAK FIX: Use --omit=optional to skip canvas (not needed for daemon)
-RUN npm ci --omit=optional --verbose
+# Use npm install instead of npm ci since package-daemon.json is a subset
+# of the main package.json and doesn't have its own lock file
+RUN npm install --omit=optional --verbose
 
 # Rebuild native modules
 RUN npm rebuild bcrypt sharp 2>/dev/null || true

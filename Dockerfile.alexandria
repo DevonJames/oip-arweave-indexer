@@ -118,7 +118,9 @@ RUN echo "python=/usr/bin/python3" > .npmrc && \
     echo "node_gyp=/usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js" >> .npmrc
 
 # Install dependencies with native module support
-RUN npm ci --verbose --build-from-source
+# Use npm install instead of npm ci since package-alexandria.json is a subset
+# of the main package.json and doesn't have its own lock file
+RUN npm install --verbose --build-from-source
 
 # Rebuild native modules
 RUN npm rebuild canvas bcrypt sharp
