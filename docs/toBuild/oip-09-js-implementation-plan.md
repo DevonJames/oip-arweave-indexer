@@ -1182,6 +1182,332 @@ export { OIPIdentity, canonicalJson, base64urlEncode };
 
 ## Phase 5: Indexer Integration
 
+### 5.0 Gateway Failover Architecture
+
+> **Status:** 📋 PLANNED - Required for reliable indexing
+
+#### Overview
+
+The indexer should try multiple AR.IO Network gateways before giving up on fetching a block or transaction, since individual gateways may not have all data. This provides resilience and improved data availability for both v0.8 and v0.9 record indexing.
+
+#### Gateway Priority Order
+
+1. **arweave.net** (official gateway, most reliable)
+2. **Hardcoded AR.IO Network gateways** (top 20 by performance/join date)
+3. **Local AR.IO gateway** (if running `alexandria-decentralized` profile)
+4. **Dynamically fetched gateways** (from AR.IO registry at startup)
+
+#### Code Locations Requiring Updates
+
+| File | Function | Purpose |
+|------|----------|---------|
+| `helpers/core/elasticsearch.js` | `getGraphQLEndpoints()` | Returns list of GraphQL endpoints for transaction queries |
+| `helpers/core/elasticsearch.js` | `getGatewayBaseUrls()` | Returns list of gateway URLs for data fetching |
+| `helpers/core/elasticsearch.js` | `searchArweaveForNewTransactions()` | Main indexer sync loop - queries GraphQL for new OIP transactions |
+| `helpers/core/elasticsearch.js` | `queryBlockRange()` | Queries transactions in a block range |
+| `helpers/core/arweave.js` | `getTransaction()` | Fetches individual transaction data and tags |
+| `helpers/core/arweave.js` | `getBlockHeightFromTxId()` | Gets block height for a transaction |
+| `helpers/core/arweave.js` | `getCurrentBlockHeight()` | Gets current Arweave block height |
+
+#### Gateway Registry Module
+
+**File: `helpers/core/gateway-registry.js`**
+
+```javascript
+/**
+ * AR.IO Gateway Registry
+ * 
+ * Manages the list of available Arweave gateways with failover support.
+ * Fetches live gateway list from AR.IO network on startup.
+ */
+
+const axios = require('axios');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HARDCODED TOP 20 GATEWAYS
+// Ranked by join date and performance as of December 2024
+// Source: https://gateways.ar.io/#/gateways
+// ═══════════════════════════════════════════════════════════════════════════
+
+const HARDCODED_GATEWAYS = [
+    // Primary - always first
+    { host: 'arweave.net', protocol: 'https', priority: 0 },
+    
+    // Top AR.IO Network gateways (by stake/performance)
+    { host: 'ar-io.dev', protocol: 'https', priority: 1 },
+    { host: 'arweave.developerdao.com', protocol: 'https', priority: 2 },
+    { host: 'g8way.io', protocol: 'https', priority: 3 },
+    { host: 'arweave.fllstck.dev', protocol: 'https', priority: 4 },
+    { host: 'vilenarios.com', protocol: 'https', priority: 5 },
+    { host: 'arweave.ar', protocol: 'https', priority: 6 },
+    { host: 'permagate.io', protocol: 'https', priority: 7 },
+    { host: 'arns.saikranthi.dev', protocol: 'https', priority: 8 },
+    { host: 'love4src.com', protocol: 'https', priority: 9 },
+    { host: 'gate.ardrive.io', protocol: 'https', priority: 10 },
+    { host: 'ar.anyone.tech', protocol: 'https', priority: 11 },
+    { host: 'iogate.uk', protocol: 'https', priority: 12 },
+    { host: 'arweave.net.ru', protocol: 'https', priority: 13 },
+    { host: 'gateways.0rbit.co', protocol: 'https', priority: 14 },
+    { host: 'ar-ao.xyz', protocol: 'https', priority: 15 },
+    { host: 'gateway.alex-popa.com', protocol: 'https', priority: 16 },
+    { host: 'ariospeedwagon.com', protocol: 'https', priority: 17 },
+    { host: 'ar.deno.dev', protocol: 'https', priority: 18 },
+    { host: 'permapages.app', protocol: 'https', priority: 19 }
+];
+
+// Cache for dynamically fetched gateways
+let dynamicGateways = [];
+let lastFetchTime = 0;
+const GATEWAY_CACHE_TTL = 3600000; // 1 hour
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GATEWAY REGISTRY FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Fetches the current list of online gateways from AR.IO network.
+ * Uses the ar.io smart contract / API to get registered gateways.
+ * 
+ * @returns {Promise<Array>} List of gateway objects
+ */
+async function fetchLiveGateways() {
+    try {
+        // AR.IO Gateway Registry API
+        // This endpoint returns all registered gateways with their status
+        const response = await axios.get('https://api.arns.app/v1/gateways', {
+            timeout: 10000,
+            headers: { 'Accept': 'application/json' }
+        });
+        
+        if (response.data && response.data.gateways) {
+            const gateways = Object.entries(response.data.gateways)
+                .filter(([_, gw]) => gw.status === 'joined' && gw.settings?.fqdn)
+                .map(([address, gw]) => ({
+                    host: gw.settings.fqdn,
+                    protocol: gw.settings.protocol || 'https',
+                    port: gw.settings.port || (gw.settings.protocol === 'http' ? 80 : 443),
+                    stake: gw.operatorStake || 0,
+                    address: address,
+                    joinedAt: gw.startTimestamp
+                }))
+                .sort((a, b) => b.stake - a.stake); // Sort by stake (highest first)
+            
+            console.log(`🌐 [Gateway Registry] Fetched ${gateways.length} live gateways from AR.IO`);
+            dynamicGateways = gateways;
+            lastFetchTime = Date.now();
+            return gateways;
+        }
+        
+        return [];
+    } catch (error) {
+        console.warn(`⚠️  [Gateway Registry] Failed to fetch live gateways: ${error.message}`);
+        return [];
+    }
+}
+
+/**
+ * Gets all available gateways in priority order.
+ * Combines hardcoded gateways with dynamically fetched ones.
+ * 
+ * @param {boolean} includeLocal - Whether to include local AR.IO gateway
+ * @returns {Promise<Array>} Ordered list of gateway URLs
+ */
+async function getGatewayUrls(includeLocal = false) {
+    const urls = [];
+    
+    // 1. Add arweave.net first (most reliable)
+    urls.push('https://arweave.net');
+    
+    // 2. Add hardcoded gateways (excluding arweave.net which is already added)
+    for (const gw of HARDCODED_GATEWAYS.slice(1)) {
+        const url = `${gw.protocol}://${gw.host}`;
+        if (!urls.includes(url)) {
+            urls.push(url);
+        }
+    }
+    
+    // 3. Add local gateway if enabled (for decentralized profiles)
+    if (includeLocal || process.env.USE_LOCAL_ARIO_GATEWAY === 'true') {
+        const localAddress = process.env.LOCAL_ARIO_GATEWAY_ADDRESS || 'localhost:4000';
+        try {
+            const addressWithProtocol = localAddress.startsWith('http') 
+                ? localAddress 
+                : `http://${localAddress}`;
+            const url = new URL(addressWithProtocol);
+            const localUrl = `${url.protocol}//${url.host}`;
+            // Add local gateway after arweave.net but before others
+            urls.splice(1, 0, localUrl);
+        } catch (error) {
+            console.warn(`⚠️  Invalid LOCAL_ARIO_GATEWAY_ADDRESS: ${error.message}`);
+        }
+    }
+    
+    // 4. Add dynamically fetched gateways (refresh if cache expired)
+    if (Date.now() - lastFetchTime > GATEWAY_CACHE_TTL) {
+        await fetchLiveGateways();
+    }
+    
+    for (const gw of dynamicGateways) {
+        const port = gw.port && gw.port !== 443 && gw.port !== 80 ? `:${gw.port}` : '';
+        const url = `${gw.protocol}://${gw.host}${port}`;
+        if (!urls.includes(url)) {
+            urls.push(url);
+        }
+    }
+    
+    return urls;
+}
+
+/**
+ * Gets GraphQL endpoints for all available gateways.
+ * 
+ * @returns {Promise<Array>} List of GraphQL endpoint URLs
+ */
+async function getGraphQLEndpoints() {
+    const baseUrls = await getGatewayUrls();
+    return baseUrls.map(url => `${url}/graphql`);
+}
+
+/**
+ * Initializes the gateway registry on startup.
+ * Fetches live gateways and logs status.
+ */
+async function initializeGatewayRegistry() {
+    console.log('🌐 [Gateway Registry] Initializing...');
+    console.log(`   📋 Hardcoded gateways: ${HARDCODED_GATEWAYS.length}`);
+    
+    await fetchLiveGateways();
+    
+    const totalGateways = new Set([
+        ...HARDCODED_GATEWAYS.map(g => g.host),
+        ...dynamicGateways.map(g => g.host)
+    ]).size;
+    
+    console.log(`   🔄 Dynamic gateways: ${dynamicGateways.length}`);
+    console.log(`   ✅ Total unique gateways: ${totalGateways}`);
+}
+
+module.exports = {
+    HARDCODED_GATEWAYS,
+    fetchLiveGateways,
+    getGatewayUrls,
+    getGraphQLEndpoints,
+    initializeGatewayRegistry
+};
+```
+
+#### Updating Existing Functions
+
+**Update `helpers/core/elasticsearch.js`:**
+
+Replace `getGraphQLEndpoints()` to use the new gateway registry:
+
+```javascript
+const { 
+    getGraphQLEndpoints: getRegistryEndpoints, 
+    initializeGatewayRegistry 
+} = require('./gateway-registry');
+
+// Call during startup
+initializeGatewayRegistry();
+
+// Replace existing getGraphQLEndpoints()
+async function getGraphQLEndpoints() {
+    return await getRegistryEndpoints();
+}
+```
+
+**Update `helpers/core/arweave.js`:**
+
+Replace gateway URL logic in `getTransaction()`:
+
+```javascript
+const { getGatewayUrls } = require('./gateway-registry');
+
+// In getTransaction():
+const gatewayUrls = await getGatewayUrls();
+for (const gatewayBaseUrl of gatewayUrls) {
+    try {
+        // Try this gateway...
+    } catch (error) {
+        console.warn(`⚠️  Gateway ${gatewayBaseUrl} failed: ${error.message}`);
+        // Continue to next gateway
+    }
+}
+```
+
+#### AR.IO Gateway Registry API
+
+The AR.IO network provides a registry API at:
+
+```
+GET https://api.arns.app/v1/gateways
+```
+
+Response format:
+```json
+{
+  "gateways": {
+    "wallet-address-1": {
+      "status": "joined",
+      "operatorStake": 50000,
+      "startTimestamp": 1699574400,
+      "settings": {
+        "fqdn": "gateway.example.com",
+        "protocol": "https",
+        "port": 443,
+        "properties": "..."
+      },
+      "stats": {
+        "prescribedEpochCount": 100,
+        "observedEpochCount": 98,
+        "totalEpochCount": 100,
+        "passedEpochCount": 95,
+        "failedConsecutiveEpochs": 0
+      }
+    }
+  }
+}
+```
+
+#### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `USE_LOCAL_ARIO_GATEWAY` | `false` | Enable local AR.IO gateway as priority fallback |
+| `LOCAL_ARIO_GATEWAY_ADDRESS` | `localhost:4000` | Address of local AR.IO gateway |
+| `GATEWAY_CACHE_TTL` | `3600000` (1 hour) | How long to cache dynamic gateway list |
+| `MAX_GATEWAY_RETRIES` | `3` | Retries per gateway before moving to next |
+
+#### Failover Behavior
+
+```
+Transaction Fetch: tx-abc123
+├── Try arweave.net/graphql
+│   └── Success → Return data
+│   └── Fail → Continue
+├── Try ar-io.dev/graphql (hardcoded #1)
+│   └── Success → Return data
+│   └── Fail → Continue
+├── Try arweave.developerdao.com/graphql (hardcoded #2)
+│   └── ...
+├── Try local-gateway:4000/graphql (if enabled)
+│   └── ...
+├── Try dynamic-gateway-1/graphql (from AR.IO registry)
+│   └── ...
+└── All failed → Throw error (transaction not indexed this cycle)
+```
+
+#### Gateway Health Metrics
+
+Add monitoring for:
+- Successful/failed requests per gateway
+- Average response time per gateway
+- Gateway rotation events
+- Cache refresh events
+
+---
+
 ### 5.1 Sync Process Updates
 
 **File: `helpers/core/sync-verification.js`**
@@ -1631,6 +1957,7 @@ async function handleLegacyRecord(record, blockHeight) {
 oip-arweave-indexer/
 ├── helpers/
 │   ├── core/
+│   │   ├── gateway-registry.js     # Multi-gateway failover (Phase 5.0)
 │   │   ├── oip-crypto.js           # HD key derivation (Phase 1)
 │   │   ├── oip-signing.js          # Signing service (Phase 2)
 │   │   ├── oip-verification.js     # Verification service (Phase 2)

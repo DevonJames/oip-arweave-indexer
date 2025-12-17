@@ -1292,6 +1292,14 @@ The `alexandria-noSTT` profile (formerly `backend-only`) is **alexandria without
 
 ---
 
+## 🌐 **Gateway Failover Architecture**
+
+> See: [OIP v0.9 JS Implementation Plan - Phase 5.0](./oip-09-js-implementation-plan.md#50-gateway-failover-architecture)
+
+The Gateway Failover Architecture is documented in the OIP v0.9 implementation plan, as it applies to both v0.8 and v0.9 record indexing.
+
+---
+
 ## 🔧 **BitTorrent Service Note**
 
 **Current State:** BitTorrent functionality is embedded in the OIP daemon via the `webtorrent` npm package:
