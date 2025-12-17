@@ -3,7 +3,7 @@ const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
-const publisherManager = require('./publisher-manager');
+const publisherManager = require('../publisher-manager');
 const { create } = require('ipfs-http-client');
 const axios = require('axios');
 

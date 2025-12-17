@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 const semver = require('semver');
 const { gql, GraphQLClient } = require('graphql-request');
-const { validateTemplateFields, verifySignature, getTemplateTxidByName, txidToDid, getLineNumber, resolveRecords } = require('./utils');
+const { validateTemplateFields, verifySignature, getTemplateTxidByName, txidToDid, getLineNumber, resolveRecords } = require('../utils');
 const recordTypeIndexConfig = require('../../config/recordTypesToIndex');
 const http = require('http');
 const https = require('https');
@@ -6266,7 +6266,7 @@ async function processNewTemplate(transaction) {
                 
                 // Auto-generate Elasticsearch mapping from template field types
                 try {
-                    const { updateMappingForNewTemplate } = require('./generateElasticsearchMappings');
+                    const { updateMappingForNewTemplate } = require('../generateElasticsearchMappings');
                     await updateMappingForNewTemplate(templateName, fieldsInTemplate);
                 } catch (mappingError) {
                     console.warn(`⚠️  Could not auto-generate Elasticsearch mapping for ${templateName}:`, mappingError.message);

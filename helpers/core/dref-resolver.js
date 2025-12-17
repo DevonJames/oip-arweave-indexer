@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 const { getRecords } = require('./elasticsearch');
 const { publishNewRecord } = require('./templateHelper');
 const { defaultTemplates } = require('../../config/templates.config');
-const { fetchNutritionalData } = require('./nutritional-helper');
+const { fetchNutritionalData } = require('../nutritional-helper');
 // Default template TxIds - move to config if needed
 // const defaultTemplates = {
 //   nutritionalInfo: 'SOME_TXID',

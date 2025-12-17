@@ -1,5 +1,5 @@
 const Arweave = require('arweave');
-const { getTurboArweave, getWalletFilePath } = require('./utils');
+const { getTurboArweave, getWalletFilePath } = require('../utils');
 const { createData, ArweaveSigner, JWKInterface } = require('arbundles');
 const fs = require('fs');
 const path = require('path');

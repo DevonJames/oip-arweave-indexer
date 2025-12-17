@@ -1149,7 +1149,7 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
         console.log(`Conversation history length: ${conversationHistory.length}`);
         
         // Import ALFRED for model routing
-        const alfred = require('./alfred');
+        const alfred = require('../alfred');
         
         // Check if this is a cloud model or Ollama model
         const isCloud = alfred.isCloudModel(model);
@@ -2436,7 +2436,7 @@ async function callOpenAiVision(params) {
  */
 async function streamAdaptiveTextToSpeech(text, sessionId, voiceConfig = {}, onAudioChunk, onTextChunk = null) {
     try {
-        const streamingCoordinator = require('./streamingCoordinator');
+        const streamingCoordinator = require('../streamingCoordinator');
         
         // Initialize session if not already active
         let sessionStatus = streamingCoordinator.getSessionStatus(sessionId);
@@ -2474,7 +2474,7 @@ async function streamAdaptiveTextToSpeech(text, sessionId, voiceConfig = {}, onA
  */
 async function finishAdaptiveTextToSpeech(sessionId) {
     try {
-        const streamingCoordinator = require('./streamingCoordinator');
+        const streamingCoordinator = require('../streamingCoordinator');
         const metrics = await streamingCoordinator.finishSession(sessionId);
         
         console.log(`[Adaptive TTS] Session ${sessionId} completed with metrics:`, metrics);
@@ -2492,7 +2492,7 @@ async function finishAdaptiveTextToSpeech(sessionId) {
  * @returns {Object} Session diagnostics
  */
 function getAdaptiveStreamingDiagnostics(sessionId) {
-    const streamingCoordinator = require('./streamingCoordinator');
+    const streamingCoordinator = require('../streamingCoordinator');
     return streamingCoordinator.getSessionStatus(sessionId);
 }
 

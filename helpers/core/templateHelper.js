@@ -4,11 +4,11 @@ const path = require('path');
 const { exec } = require('child_process');
 const { crypto, createHash } = require('crypto');
 const base64url = require('base64url');
-const { signMessage, txidToDid, getTurboArweave, getTemplateTxidByName, getWalletFilePath } = require('./utils');
+const { signMessage, txidToDid, getTurboArweave, getTemplateTxidByName, getWalletFilePath } = require('../utils');
 const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB, deleteRecordFromDB, deleteTemplateFromDB, searchCreatorByAddress, indexRecord, elasticClient, convertToOrgHandle, findTemplateByTxId } = require('./elasticsearch');
 const {getCurrentBlockHeight} = require('./arweave');
 const arweaveWallet = require('./arweave-wallet');
-const publisherManager = require('./publisher-manager');
+const publisherManager = require('../publisher-manager');
 const mediaManager = require('./media-manager');
 
 // const templatesConfig = require('../../config/templates.config');
@@ -905,7 +905,7 @@ async function publishToGun(record, recordType, options = {}) {
         const fs = require('fs');
         const { createHash } = require('crypto');
         const base64url = require('base64url');
-        const { signMessage, getWalletFilePath } = require('./utils');
+        const { signMessage, getWalletFilePath } = require('../utils');
         const { indexRecord } = require('./elasticsearch');
         
         const jwk = JSON.parse(fs.readFileSync(getWalletFilePath()));
