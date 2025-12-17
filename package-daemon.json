@@ -39,6 +39,7 @@
     "graphql-request": "^6.1.0",
     "@ardrive/turbo-sdk": "^1.22.1",
     "arbundles": "^0.11.0",
+    "tmp-promise": "^3.0.3",
     "@bitcoinerlab/secp256k1": "^1.2.0",
     "secp256k1": "^5.0.1",
     "bitcoinjs-lib": "^6.1.7",

@@ -1,4 +1,4 @@
-const { getRecords, getTemplatesInDB, getCreatorsInDB, searchTemplateByTxId } = require('./elasticsearch');
+const { getRecords, getTemplatesInDB, getCreatorsInDB, searchTemplateByTxId } = require('../elasticsearch');
 const axios = require('axios');
 const { getTemplateTxidByName } = require('../utils');
 const { 

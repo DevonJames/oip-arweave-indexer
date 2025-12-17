@@ -1,5 +1,5 @@
 const playdl = require('play-dl');
-const { makeVideoDirectory, retryDownloadVideoThumbnail, downloadVideoThumbnail } = require('./file');
+const { makeVideoDirectory, retryDownloadVideoThumbnail, downloadVideoThumbnail } = require('../file');
 
 const video_basic_info = async (url) => {
     try {
