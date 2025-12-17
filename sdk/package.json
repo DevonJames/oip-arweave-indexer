@@ -1,0 +1,48 @@
+{
+  "name": "@oip/client-sdk",
+  "version": "0.9.0",
+  "description": "OIP v0.9.0 Client SDK for signing records with HD wallets",
+  "main": "oip-client-sdk.cjs",
+  "module": "oip-client-sdk.js",
+  "types": "oip-client-sdk.d.ts",
+  "exports": {
+    ".": {
+      "import": "./oip-client-sdk.js",
+      "require": "./oip-client-sdk.cjs"
+    }
+  },
+  "files": [
+    "oip-client-sdk.js",
+    "oip-client-sdk.cjs",
+    "oip-client-sdk.d.ts"
+  ],
+  "keywords": [
+    "oip",
+    "open-index-protocol",
+    "arweave",
+    "did",
+    "decentralized-identity",
+    "hd-wallet",
+    "bip32",
+    "signing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oipwg/oip-arweave-indexer"
+  },
+  "peerDependencies": {
+    "@noble/curves": "^1.3.0",
+    "@noble/hashes": "^1.3.3",
+    "@scure/bip32": "^1.3.3",
+    "@scure/bip39": "^1.2.2"
+  },
+  "devDependencies": {
+    "@noble/curves": "^1.3.0",
+    "@noble/hashes": "^1.3.3",
+    "@scure/bip32": "^1.3.3",
+    "@scure/bip39": "^1.2.2"
+  }
+}
+

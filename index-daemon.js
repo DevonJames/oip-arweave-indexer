@@ -153,6 +153,7 @@ const publishRoutes = require('./routes/daemon/publish');
 const mediaRoutes = require('./routes/daemon/media');
 const cleanupRoutes = require('./routes/daemon/cleanup');
 const adminRoutes = require('./routes/daemon/admin');
+const didRoutes = require('./routes/daemon/did');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Import Daemon Helpers
@@ -391,6 +392,7 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/cleanup', cleanupRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/did', didRoutes);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Alexandria Service Stub Routes (for oip-only deployments)
