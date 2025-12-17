@@ -61,8 +61,8 @@ alexandria: ## Deploy: Full stack with AI, voice (CPU) - oip-daemon + alexandria
 	@echo ""
 	docker-compose -f $(COMPOSE_FILE) --profile alexandria up -d
 	@echo "$(YELLOW)🤖 Installing LLM models...$(NC)"
-	@make install-models-split
-	@make install-chatterbox-split
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
 	@echo ""
 	@echo "$(GREEN)✅ Alexandria Stack deployed$(NC)"
 	@echo "  • Daemon: http://localhost:3005"
@@ -71,16 +71,16 @@ alexandria: ## Deploy: Full stack with AI, voice (CPU) - oip-daemon + alexandria
 alexandria-gpu: ## Deploy: Full stack with GPU acceleration
 	@echo "$(BLUE)🎮 Deploying Alexandria Stack with GPU...$(NC)"
 	docker-compose -f $(COMPOSE_FILE) --profile alexandria-gpu up -d
-	@make install-models-split
-	@make install-chatterbox-split
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
 	@echo ""
 	@echo "$(GREEN)✅ Alexandria GPU Stack deployed$(NC)"
 
 alexandria-macMseries: ## Deploy: Full stack optimized for Apple Silicon
 	@echo "$(BLUE)🍎 Deploying Alexandria Stack for Apple Silicon...$(NC)"
 	docker-compose -f $(COMPOSE_FILE) --profile alexandria-macMseries up -d
-	@make install-models-split
-	@make install-chatterbox-split
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
 	@echo ""
 	@echo "$(GREEN)✅ Alexandria Mac M-Series Stack deployed$(NC)"
 
@@ -92,8 +92,8 @@ alexandria-decentralized: ## Deploy: Full stack + local Arweave gateway (CPU)
 	@echo "$(BLUE)🌐 Deploying Alexandria Decentralized Stack...$(NC)"
 	@echo "$(YELLOW)Includes local AR.IO gateway for Arweave access$(NC)"
 	docker-compose -f $(COMPOSE_FILE) --profile alexandria-decentralized up -d
-	@make install-models-split
-	@make install-chatterbox-split
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
 	@echo ""
 	@echo "$(GREEN)✅ Alexandria Decentralized Stack deployed$(NC)"
 	@echo "  • AR.IO Gateway: http://localhost:4000"
@@ -101,16 +101,16 @@ alexandria-decentralized: ## Deploy: Full stack + local Arweave gateway (CPU)
 alexandria-decentralized-gpu: ## Deploy: Full stack + local Arweave gateway (GPU)
 	@echo "$(BLUE)🌐🎮 Deploying Alexandria Decentralized Stack with GPU...$(NC)"
 	docker-compose -f $(COMPOSE_FILE) --profile alexandria-decentralized-gpu up -d
-	@make install-models-split
-	@make install-chatterbox-split
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
 	@echo ""
 	@echo "$(GREEN)✅ Alexandria Decentralized GPU Stack deployed$(NC)"
 
 alexandria-decentralized-macMseries: ## Deploy: Full stack + local Arweave gateway (Apple Silicon)
 	@echo "$(BLUE)🌐🍎 Deploying Alexandria Decentralized Stack for Apple Silicon...$(NC)"
 	docker-compose -f $(COMPOSE_FILE) --profile alexandria-decentralized-macMseries up -d
-	@make install-models-split
-	@make install-chatterbox-split
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
 	@echo ""
 	@echo "$(GREEN)✅ Alexandria Decentralized Mac M-Series Stack deployed$(NC)"
 
@@ -122,23 +122,23 @@ alexandria-noSTT: ## Deploy: Alexandria without STT (for Mac/iOS clients with lo
 	@echo "$(BLUE)📱 Deploying Alexandria without STT...$(NC)"
 	@echo "$(YELLOW)STT handled by native Mac/iOS client$(NC)"
 	docker-compose -f $(COMPOSE_FILE) --profile alexandria-noSTT up -d
-	@make install-models-split
-	@make install-chatterbox-split
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
 	@echo ""
 	@echo "$(GREEN)✅ Alexandria NoSTT Stack deployed$(NC)"
 
 alexandria-noSTT-decentralized: ## Deploy: Alexandria-noSTT + local Arweave gateway
 	@echo "$(BLUE)📱🌐 Deploying Alexandria NoSTT Decentralized...$(NC)"
 	docker-compose -f $(COMPOSE_FILE) --profile alexandria-noSTT-decentralized up -d
-	@make install-models-split
-	@make install-chatterbox-split
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
 	@echo ""
 	@echo "$(GREEN)✅ Alexandria NoSTT Decentralized Stack deployed$(NC)"
 
 chatterbox-split: ## Deploy: Standard with Chatterbox TTS focus (CPU)
 	@echo "$(BLUE)🎭 Deploying Chatterbox Stack...$(NC)"
 	docker-compose -f $(COMPOSE_FILE) --profile chatterbox up -d
-	@make install-chatterbox-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
 	@echo ""
 	@echo "$(GREEN)✅ Chatterbox Stack deployed$(NC)"
 
