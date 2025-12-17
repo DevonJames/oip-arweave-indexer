@@ -10,6 +10,7 @@ PUBLIC_API_BASE_URL=
 
 # Arweave Configuration
 WALLET_FILE=config/arweave-keyfile.json
+ARWEAVE_KEY_FILE=config/arweave-keyfile.json
 
 # AR.IO Gateway Configuration (Local Arweave Gateway)
 # For multi-stack deployments: Run ONE stack with max-decentralized or max-decentralized-gpu
@@ -48,22 +49,22 @@ ARIO_GATEWAY_DATA_PATH=./ario_gateway_data
 # 3. Set START_HEIGHT to your desired block height
 # 4. Restart: docker-compose up -d ario-gateway
 # Leave empty or unset to sync from genesis (block 0)
-# START_HEIGHT=
+START_HEIGHT=1579580
 # ARIO_START_BLOCK_HEIGHT=  # Alternative name (backward compatibility)
 # AR.IO Gateway Max Storage Limit (optional)
 # Limit the cache/storage size in GB
 # Gateway will cache on demand but won't exceed this limit
 # Example: ARIO_MAX_STORAGE_GB=100 (limit to 100GB)
 # Leave empty or unset for unlimited cache (on-demand only)
-# ARIO_MAX_STORAGE_GB=
+ARIO_MAX_STORAGE_GB=100
 # AR.IO Gateway Data Filters (optional - Advanced)
 # Control which bundles are processed and indexed to save storage
 # ANS104_UNBUNDLE_FILTER: Determines which bundles are processed/unbundled
 # ANS104_INDEX_FILTER: Controls which data items are indexed in the database
 # By default, all data is processed. Use filters to be selective.
 # Example: Only process OIP data items
-# ANS104_UNBUNDLE_FILTER='{"tags": [{"name": "App-Name", "value": "OIPArweave"}]}'
-# ANS104_INDEX_FILTER='{"tags": [{"name": "App-Name", "value": "OIPArweave"}]}'
+ANS104_UNBUNDLE_FILTER='{"tags": [{"name": "Index-Method", "values": ["OIP"]}]}'
+ANS104_INDEX_FILTER='{"tags": [{"name": "Index-Method", "values": ["OIP"]}]}'
 # Example: Filter by owner address
 # ANS104_UNBUNDLE_FILTER='{"attributes": {"owner_address": "YOUR_WALLET_ADDRESS"}}'
 # Leave commented out to process all data
@@ -77,7 +78,7 @@ ARIO_GATEWAY_DATA_PATH=./ario_gateway_data
 # This prevents silently missing hundreds of thousands of blocks of potential OIP transactions
 # Default: 1000 blocks (~17 hours at 2 min/block)
 # Set higher if you're okay with larger gaps, or lower for stricter data integrity
-# MAX_BLOCK_GAP_FOR_FALLBACK=1000
+MAX_BLOCK_GAP_FOR_FALLBACK=100
 
 # Turbo SDK Configuration (ArDrive)
 # These environment variables may help resolve ERR_INVALID_URL errors
@@ -126,7 +127,8 @@ GOOGLE_CLOUD_API_KEY=
 GOOGLE_APPLICATION_CREDENTIALS=config/google-service-account-key.json
 GOOGLE_API_TOKEN=
 ELEVENLABS_API_KEY=
-ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
+# default voice id is "daniel - steady broadcaster"
+ELEVENLABS_VOICE_ID=onwK4e9ZLuTAKqWW03F9
 FIRECRAWL=
 
 # Ngrok Domain Configuration
@@ -205,6 +207,12 @@ GUN_EXTERNAL_PEERS=
 # Default: 30000 (30 seconds)
 GUN_REGISTRY_TIMEOUT_MS=30000
 
+# Record Type Index Preferences
+# Controls which record types are indexed
+# Options: all, whitelist, blacklist
+# Default: all (indexes all record types)
+RECORD_TYPE_INDEX_MODE=all
+
 # Custom Public Directory Configuration
 # Set to 'true' to serve static files from parent directory's public/ folder
 # Useful for multi-deployment scenarios like RockHoppersGame/public/
@@ -223,7 +231,9 @@ LOCAL_MEDIA_PATH=
 COMPOSE_PROJECT_NAME=oip-arweave-indexer
 
 # Service Port Configuration (for running multiple OIP stacks)
-# Main OIP API port (already configured above as PORT)
+# Main OIP Daemon API port (already configured above as PORT)
+# Alexandria Service API port
+ALEXANDRIA_PORT=3006
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_TRANSPORT_PORT=9300
 KIBANA_PORT=5601
@@ -231,12 +241,32 @@ IPFS_SWARM_PORT=4001
 IPFS_API_PORT=5001
 IPFS_GATEWAY_PORT=8080
 OLLAMA_PORT=11434
-TEXT_GENERATOR_PORT=8081
 STT_SERVICE_PORT=8003
 TTS_SERVICE_PORT=8005
-SPEECH_SYNTHESIZER_PORT=8082
 GUN_RELAY_PORT=8765
 ARIO_GATEWAY_PORT=4000
 NGROK_DASHBOARD_PORT=4040
+NGROK_PORT=4035
 DEBUG_PORT=9229
 NEXT_FRONTEND_PORT=3000
+
+# Memory Configuration
+# Set by set-memory.sh script based on available system memory
+# Example: --max-old-space-size=32768 for 32GB
+NODE_OPTIONS=
+
+# Timezone Configuration
+# Set to your local timezone for proper timestamp handling
+# Example: America/Los_Angeles, America/New_York, Europe/London, UTC
+TZ=UTC
+
+# Database Keep-Alive Configuration
+# KEEP_DB_DELAY: Initial delay before starting keep-alive checks (seconds)
+# KEEP_DB_REFRESH: Interval between keep-alive refreshes (seconds)
+KEEP_DB_DELAY=15
+KEEP_DB_REFRESH=600
+
+# Memory Diagnostics
+# Enable memory usage logging for debugging memory leaks
+# Set to 'true' to enable detailed memory diagnostics
+MEMORY_DIAGNOSTICS_ENABLED=false

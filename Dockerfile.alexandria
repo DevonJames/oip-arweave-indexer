@@ -129,13 +129,10 @@ RUN npm rebuild canvas bcrypt sharp
 # Copy configuration
 COPY config ./config
 
-# Copy alexandria helpers
-COPY helpers/alexandria ./helpers/alexandria
-COPY helpers/utils.js ./helpers/utils.js
-COPY helpers/apiConfig.js ./helpers/apiConfig.js
-
-# Copy oipClient (for communicating with daemon)
-COPY helpers/oipClient.js ./helpers/oipClient.js
+# Copy ALL helpers (alexandria needs core helpers, oipClient, etc.)
+# Note: helpers/core/ contains reorganized files, helpers/ root contains legacy paths
+# Both are needed for backward compatibility until all imports are updated
+COPY helpers ./helpers
 
 # Copy alexandria routes
 COPY routes/alexandria ./routes/alexandria
@@ -188,14 +185,15 @@ ENV NODE_OPTIONS="--expose-gc --max-old-space-size=8192"
 # ─────────────────────────────────────────────────────────────────────────────
 # Expose Ports
 # ─────────────────────────────────────────────────────────────────────────────
-# 3006 - Alexandria API
+# Default Alexandria API port (actual port configurable via PORT env var at runtime)
 EXPOSE 3006
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Health Check
 # ─────────────────────────────────────────────────────────────────────────────
+# Uses shell form to allow runtime $PORT variable substitution
 HEALTHCHECK --interval=60s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:3006/health || exit 1
+    CMD sh -c 'curl -f http://localhost:${PORT:-3006}/health || exit 1'
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Startup

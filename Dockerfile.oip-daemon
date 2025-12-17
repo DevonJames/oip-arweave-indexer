@@ -89,13 +89,22 @@ RUN npm rebuild bcrypt sharp 2>/dev/null || true
 # Copy configuration
 COPY config ./config
 
-# Copy core helpers (daemon only)
-COPY helpers/core ./helpers/core
-COPY helpers/utils.js ./helpers/utils.js
-COPY helpers/apiConfig.js ./helpers/apiConfig.js
+# Copy ALL helpers (daemon needs elasticsearch, arweave, gun, etc.)
+# Note: helpers/core/ contains reorganized files, helpers/ root contains legacy paths
+# Both are needed for backward compatibility until all imports are updated
+COPY helpers ./helpers
 
 # Copy daemon routes
 COPY routes/daemon ./routes/daemon
+# Copy shared routes that daemon also needs
+COPY routes/api.js ./routes/api.js
+COPY routes/records.js ./routes/records.js
+COPY routes/publish.js ./routes/publish.js
+COPY routes/media.js ./routes/media.js
+COPY routes/organization.js ./routes/organization.js
+COPY routes/health.js ./routes/health.js
+COPY routes/user.js ./routes/user.js
+COPY routes/templates.js ./routes/templates.js
 
 # Copy services (daemon only)
 COPY services/mediaSeeder.js ./services/mediaSeeder.js
@@ -136,14 +145,15 @@ ENV NODE_OPTIONS="--expose-gc --max-old-space-size=4096"
 # ─────────────────────────────────────────────────────────────────────────────
 # Expose Ports
 # ─────────────────────────────────────────────────────────────────────────────
-# 3005 - Main API
+# Default API port (actual port configurable via PORT env var at runtime)
 EXPOSE 3005
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Health Check
 # ─────────────────────────────────────────────────────────────────────────────
+# Uses shell form to allow runtime $PORT variable substitution
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:3005/health || exit 1
+    CMD sh -c 'curl -f http://localhost:${PORT:-3005}/health || exit 1'
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Startup

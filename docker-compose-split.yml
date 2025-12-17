@@ -223,10 +223,10 @@ services:
     env_file:
       - .env
     ports:
-      - "${ALEXANDRIA_PORT:-3006}:3006"
+      - "${ALEXANDRIA_PORT:-3006}:${ALEXANDRIA_PORT:-3006}"
     environment:
       - NODE_ENV=production
-      - PORT=3006
+      - PORT=${ALEXANDRIA_PORT:-3006}
       - OIP_DAEMON_URL=http://oip-daemon-service:${PORT:-3005}
       - OLLAMA_HOST=http://ollama:11434
       - TTS_SERVICE_URL=http://tts-service:8005
@@ -263,7 +263,9 @@ services:
     volumes:
       - ollama-data:/root/.ollama
     networks:
-      - oip-network
+      oip-network:
+        aliases:
+          - ollama
     restart: unless-stopped
     dns:
       - 8.8.8.8
@@ -285,7 +287,9 @@ services:
     volumes:
       - ollama-data:/root/.ollama
     networks:
-      - oip-network
+      oip-network:
+        aliases:
+          - ollama
     restart: unless-stopped
     dns:
       - 8.8.8.8
@@ -311,7 +315,9 @@ services:
     ports:
       - "${TTS_SERVICE_PORT:-8005}:8005"
     networks:
-      - oip-network
+      oip-network:
+        aliases:
+          - tts-service
     restart: unless-stopped
     profiles:
       - alexandria
@@ -332,7 +338,9 @@ services:
       - CUDA_VISIBLE_DEVICES=0
       - TTS_GPU_ENABLED=true
     networks:
-      - oip-network
+      oip-network:
+        aliases:
+          - tts-service
     restart: unless-stopped
     profiles:
       - alexandria-gpu
@@ -360,7 +368,9 @@ services:
     volumes:
       - whisper-models:/app/models
     networks:
-      - oip-network
+      oip-network:
+        aliases:
+          - stt-service
     restart: unless-stopped
     profiles:
       - alexandria
@@ -383,7 +393,9 @@ services:
     volumes:
       - whisper-models:/app/models
     networks:
-      - oip-network
+      oip-network:
+        aliases:
+          - stt-service
     restart: unless-stopped
     profiles:
       - alexandria-gpu
