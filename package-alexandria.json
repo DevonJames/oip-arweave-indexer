@@ -11,7 +11,15 @@
   "author": "OIP",
   "license": "ISC",
   "dependencies": {
+    "@ardrive/turbo-sdk": "^1.22.1",
+    "@bitcoinerlab/secp256k1": "^1.2.0",
+    "@elastic/elasticsearch": "^8.17.0",
+    "arbundles": "^0.11.0",
+    "arweave": "^1.15.5",
+    "arweave-graphql": "^0.0.5",
     "axios": "^1.7.9",
+    "base64url": "^3.0.1",
+    "bitcoinjs-lib": "^6.1.7",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -20,9 +28,11 @@
     "mime-types": "^2.1.35",
     "multer": "^2.0.2",
     "node-fetch": "^2.7.0",
+    "semver": "^7.6.0",
     "socket.io": "^4.8.1",
     "uuid": "^9.0.1",
     "ws": "^8.18.1",
+    "graphql-request": "^6.1.0",
     
     "gpt-tokenizer": "^2.1.2",
     
@@ -60,12 +70,11 @@
     "node": ">=18.0.0"
   },
   "comments": {
-    "dependencies_from_daemon": [
-      "All blockchain operations go through oipClient.js",
-      "No direct Elasticsearch access",
-      "No GUN network access",
-      "No BitTorrent/IPFS access",
-      "No wallet management"
+    "notes": [
+      "Some helpers import elasticsearch directly for RAG/search functionality",
+      "Primary data operations should go through oipClient.js",
+      "No GUN network access (daemon only)",
+      "No BitTorrent/IPFS access (daemon only)"
     ]
   }
 }
