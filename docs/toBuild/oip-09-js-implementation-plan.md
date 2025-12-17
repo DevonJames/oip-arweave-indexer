@@ -18,6 +18,45 @@ This document provides the JavaScript implementation plan for OIP v0.9.0, portin
 
 ---
 
+## Implementation Status
+
+> **Last Updated:** December 17, 2024
+
+### Overall Progress: ✅ Core Implementation Complete
+
+| Phase | Status | Files Created | Notes |
+|-------|--------|---------------|-------|
+| **Phase 1**: Core Crypto | ✅ Complete | `helpers/core/oip-crypto.js` | Dependencies added to package.json |
+| **Phase 2**: Sign/Verify | ✅ Complete | `helpers/core/oip-signing.js`, `helpers/core/oip-verification.js` | — |
+| **Phase 3**: Templates | ✅ Complete | `config/templates-v09.js` | — |
+| **Phase 4**: Client SDK | ✅ Complete | `sdk/oip-client-sdk.js`, `sdk/oip-client-sdk.cjs`, `sdk/oip-client-sdk.d.ts`, `sdk/package.json` | ESM + CommonJS + TypeScript types |
+| **Phase 5**: Indexer Integration | ✅ Complete | `helpers/core/gateway-registry.js`, `helpers/core/sync-verification.js`, `config/elasticsearch-mappings-v09.js` | — |
+| **Phase 6**: API Endpoints | ✅ Complete | `routes/daemon/did.js` | Wired into `index-daemon.js` |
+| **Phase 7**: Migration | ✅ Complete | — | Integrated into oip-verification.js |
+
+### Remaining Work
+
+The following tasks remain before v0.9 is fully operational:
+
+| Task | Priority | Description |
+|------|----------|-------------|
+| **Wire `verifyBeforeIndex()` into sync** | 🔴 Critical | Call `verifyBeforeIndex()` in `helpers/core/elasticsearch.js` `keepDBUpToDate` function before indexing records |
+| **Wire gateway registry into arweave.js** | 🔴 Critical | Update `helpers/core/arweave.js` to use `getGatewayUrls()` for failover |
+| **First v0.9 creator bootstrap** | 🔴 Critical | Hardcode the first v0.9 creator registration (like v0.8's bootstrap creator) |
+| **Publish v0.9 template records** | 🟡 High | Use bootstrap creator to publish actual template records, then update `TEMPLATE_DIDS` |
+| **Unit tests** | 🟡 High | Test key derivation, signing, verification |
+| **Integration tests** | 🟢 Medium | Full sign → publish → sync → verify cycle |
+| **npm publish SDK** | 🟢 Medium | Publish `@oip/client-sdk` to npm |
+
+### Changes During Implementation
+
+1. **SDK dual format**: Added CommonJS (`oip-client-sdk.cjs`) in addition to ESM per user request
+2. **TypeScript definitions**: Added `oip-client-sdk.d.ts` for TypeScript support
+3. **SDK package.json**: Created standalone `sdk/package.json` for independent npm publishing with peer dependencies
+4. **DID routes wired**: Added `didRoutes` to `index-daemon.js` at `/api/did`
+
+---
+
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
@@ -152,6 +191,8 @@ Account: 0
 ---
 
 ## Phase 1: Core Crypto Infrastructure
+
+> **Status:** ✅ COMPLETE — File created: `helpers/core/oip-crypto.js`
 
 ### 1.1 HD Key Derivation Module
 
@@ -397,6 +438,8 @@ Add to `package.json`:
 ---
 
 ## Phase 2: Signing & Verification Services
+
+> **Status:** ✅ COMPLETE — Files created: `helpers/core/oip-signing.js`, `helpers/core/oip-verification.js`
 
 ### 2.1 Signing Service
 
@@ -771,6 +814,8 @@ module.exports = {
 
 ## Phase 3: Hardcoded v0.9 Templates
 
+> **Status:** ✅ COMPLETE — File created: `config/templates-v09.js`
+
 ### 3.1 Template Definitions
 
 **File: `config/templates-v09.js`**
@@ -969,9 +1014,15 @@ module.exports = {
 
 ## Phase 4: Client SDK
 
+> **Status:** ✅ COMPLETE — Files created:
+> - `sdk/oip-client-sdk.js` (ESM)
+> - `sdk/oip-client-sdk.cjs` (CommonJS)
+> - `sdk/oip-client-sdk.d.ts` (TypeScript definitions)
+> - `sdk/package.json` (for npm publishing as `@oip/client-sdk`)
+
 ### 4.1 Browser/Client SDK
 
-**File: `sdk/oip-client-sdk.js`** (for browser/client-side use)
+**File: `sdk/oip-client-sdk.js`** (ESM for browser/client-side use)
 
 ```javascript
 /**
@@ -1182,9 +1233,17 @@ export { OIPIdentity, canonicalJson, base64urlEncode };
 
 ## Phase 5: Indexer Integration
 
+> **Status:** ✅ COMPLETE — Files created:
+> - `helpers/core/gateway-registry.js`
+> - `helpers/core/sync-verification.js`
+> - `config/elasticsearch-mappings-v09.js`
+>
+> **⚠️ Remaining:** Wire `verifyBeforeIndex()` into actual sync loop in `helpers/core/elasticsearch.js`
+
 ### 5.0 Gateway Failover Architecture
 
-> **Status:** 📋 PLANNED - Required for reliable indexing
+> **Status:** ✅ COMPLETE — File created: `helpers/core/gateway-registry.js`
+> **⚠️ Remaining:** Update `helpers/core/arweave.js` to use `getGatewayUrls()` for failover
 
 #### Overview
 
@@ -1744,6 +1803,9 @@ module.exports = {
 
 ## Phase 6: API Endpoints
 
+> **Status:** ✅ COMPLETE — File created: `routes/daemon/did.js`
+> Routes wired into `index-daemon.js` at `/api/did`
+
 ### 6.1 DID Resolution Endpoints
 
 **File: `routes/daemon/did.js`**
@@ -1892,6 +1954,11 @@ module.exports = router;
 
 ## Phase 7: Migration & Backward Compatibility
 
+> **Status:** ✅ COMPLETE — Logic integrated into `oip-verification.js` and `sync-verification.js`
+> - `parseVersion()` handles version detection
+> - `verifyLegacy()` passes through v0.8 records unchanged
+> - `verifyBeforeIndex()` routes to appropriate verification based on version
+
 ### 7.1 Version Detection
 
 ```javascript
@@ -1937,17 +2004,18 @@ async function handleLegacyRecord(record, blockHeight) {
 
 ## Implementation Timeline
 
-| Phase | Duration | Priority | Dependencies |
-|-------|----------|----------|--------------|
-| **Phase 1**: Core Crypto | 1 week | 🔴 Critical | None |
-| **Phase 2**: Sign/Verify | 1 week | 🔴 Critical | Phase 1 |
-| **Phase 3**: Templates | 3 days | 🔴 Critical | None |
-| **Phase 4**: Client SDK | 1 week | 🟡 High | Phase 1-2 |
-| **Phase 5**: Indexer | 1 week | 🔴 Critical | Phase 2-3 |
-| **Phase 6**: API | 3 days | 🟡 High | Phase 5 |
-| **Phase 7**: Migration | 3 days | 🟢 Medium | Phase 5-6 |
+| Phase | Estimated | Actual | Status | Dependencies |
+|-------|-----------|--------|--------|--------------|
+| **Phase 1**: Core Crypto | 1 week | ✅ Complete | Done | None |
+| **Phase 2**: Sign/Verify | 1 week | ✅ Complete | Done | Phase 1 |
+| **Phase 3**: Templates | 3 days | ✅ Complete | Done | None |
+| **Phase 4**: Client SDK | 1 week | ✅ Complete | Done | Phase 1-2 |
+| **Phase 5**: Indexer | 1 week | ✅ Complete | Done (wiring pending) | Phase 2-3 |
+| **Phase 6**: API | 3 days | ✅ Complete | Done | Phase 5 |
+| **Phase 7**: Migration | 3 days | ✅ Complete | Done | Phase 5-6 |
 
-**Total: ~5-6 weeks**
+**Original Estimate:** ~5-6 weeks
+**Actual:** Core implementation complete December 17, 2024
 
 ---
 
@@ -1956,25 +2024,40 @@ async function handleLegacyRecord(record, blockHeight) {
 ```
 oip-arweave-indexer/
 ├── helpers/
-│   ├── core/
-│   │   ├── gateway-registry.js     # Multi-gateway failover (Phase 5.0)
-│   │   ├── oip-crypto.js           # HD key derivation (Phase 1)
-│   │   ├── oip-signing.js          # Signing service (Phase 2)
-│   │   ├── oip-verification.js     # Verification service (Phase 2)
-│   │   └── sync-verification.js    # Indexer integration (Phase 5)
-│   └── shared/                      # Shared between daemon & Alexandria
-│       └── verification.js          # Verification utilities
+│   └── core/
+│       ├── gateway-registry.js     # ✅ Multi-gateway failover (Phase 5.0)
+│       ├── oip-crypto.js           # ✅ HD key derivation (Phase 1)
+│       ├── oip-signing.js          # ✅ Signing service (Phase 2)
+│       ├── oip-verification.js     # ✅ Verification service (Phase 2)
+│       └── sync-verification.js    # ✅ Indexer integration (Phase 5)
 ├── config/
-│   ├── templates-v09.js            # Hardcoded v0.9 templates (Phase 3)
-│   └── elasticsearch-mappings-v09.js
+│   ├── templates-v09.js            # ✅ Hardcoded v0.9 templates (Phase 3)
+│   └── elasticsearch-mappings-v09.js # ✅ ES mappings for DID records (Phase 5)
 ├── routes/
 │   └── daemon/
-│       └── did.js                   # DID resolution endpoints (Phase 6)
+│       └── did.js                   # ✅ DID resolution endpoints (Phase 6)
 ├── sdk/
-│   └── oip-client-sdk.js           # Browser SDK (Phase 4)
+│   ├── oip-client-sdk.js           # ✅ Browser SDK - ESM (Phase 4)
+│   ├── oip-client-sdk.cjs          # ✅ Browser SDK - CommonJS (Phase 4)
+│   ├── oip-client-sdk.d.ts         # ✅ TypeScript definitions (Phase 4)
+│   └── package.json                # ✅ npm package config (Phase 4)
+├── index-daemon.js                  # ✅ Updated with DID routes
+├── package.json                     # ✅ Updated with crypto dependencies
 └── docs/
     └── toBuild/
         └── oip-09-js-implementation-plan.md
+```
+
+### New Dependencies Added to `package.json`
+
+```json
+{
+  "@scure/bip32": "^1.3.3",
+  "@scure/bip39": "^1.2.2",
+  "@noble/hashes": "^1.3.3",
+  "@noble/curves": "^1.3.0",
+  "base64url": "^3.0.1"
+}
 ```
 
 ---
@@ -2009,6 +2092,70 @@ oip-arweave-indexer/
 - Server transaction submission
 - Indexer verification
 - DID resolution API
+
+---
+
+## Next Steps
+
+### Immediate (Required for v0.9 to be operational)
+
+1. **Wire verification into sync process**
+   
+   In `helpers/core/elasticsearch.js`, update the `processOIPTransaction()` or equivalent function to call `verifyBeforeIndex()` before indexing:
+   
+   ```javascript
+   const { verifyBeforeIndex } = require('./sync-verification');
+   
+   // Inside the sync processing loop:
+   const { shouldIndex, verificationResult } = await verifyBeforeIndex(record, blockHeight);
+   if (!shouldIndex) {
+       console.log(`[Sync] Skipping record - verification failed: ${verificationResult.error}`);
+       return;
+   }
+   // Continue with indexing...
+   ```
+
+2. **Wire gateway registry into arweave.js**
+   
+   Update `helpers/core/arweave.js` to use the gateway registry for failover:
+   
+   ```javascript
+   const { getGatewayUrls } = require('./gateway-registry');
+   
+   async function getTransaction(txId) {
+       const gateways = await getGatewayUrls();
+       for (const gateway of gateways) {
+           try {
+               // ... existing fetch logic with this gateway
+           } catch (error) {
+               console.warn(`Gateway ${gateway} failed, trying next...`);
+           }
+       }
+       throw new Error(`All gateways failed for tx ${txId}`);
+   }
+   ```
+
+3. **Bootstrap first v0.9 creator**
+   
+   Hardcode the first v0.9 creator registration (mnemonic → DID document) similar to how the first v0.8 creator was bootstrapped.
+
+### Short-term
+
+4. **Publish v0.9 template records** using the bootstrap creator, then update `TEMPLATE_DIDS` in `config/templates-v09.js` with actual txIds
+
+5. **Write unit tests** for:
+   - Key derivation paths
+   - Payload digest computation
+   - Signature verification round-trip
+   - Version detection
+
+6. **Publish SDK to npm** as `@oip/client-sdk`
+
+### Medium-term
+
+7. **Integration tests** for full sign → publish → sync → verify cycle
+8. **Gateway health monitoring** dashboard
+9. **Client SDK documentation** and examples
 
 ---
 
