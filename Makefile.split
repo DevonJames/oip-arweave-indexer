@@ -19,7 +19,12 @@
 .PHONY: oip-only alexandria alexandria-gpu alexandria-macMseries \
         alexandria-decentralized alexandria-decentralized-gpu \
         alexandria-decentralized-macMseries alexandria-noSTT \
-        alexandria-noSTT-decentralized \
+        alexandria-noSTT-decentralized chatterbox-split \
+        rebuild-oip-only rebuild-alexandria rebuild-alexandria-gpu \
+        rebuild-alexandria-macMseries rebuild-alexandria-decentralized \
+        rebuild-alexandria-decentralized-gpu rebuild-alexandria-decentralized-macMseries \
+        rebuild-alexandria-noSTT rebuild-alexandria-noSTT-decentralized \
+        rebuild-chatterbox-split \
         logs-daemon logs-alexandria restart-daemon restart-alexandria \
         shell-daemon shell-alexandria test-daemon test-alexandria test-integration
 
@@ -236,6 +241,87 @@ install-chatterbox-split: ## Install Chatterbox TTS model for split deployment
 	@echo "$(YELLOW)Note: Chatterbox will download on first TTS request$(NC)"
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# REBUILD PROFILES (--no-cache builds)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+rebuild-oip-only: ## Rebuild: Core OIP daemon only (--no-cache)
+	@echo "$(BLUE)🔧 Rebuilding OIP Daemon Service...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile oip-only build --no-cache
+	docker-compose -f $(COMPOSE_FILE) --profile oip-only up -d
+	@echo "$(GREEN)✅ OIP Daemon rebuilt and deployed$(NC)"
+
+rebuild-alexandria: ## Rebuild: Full stack with AI, voice (CPU) (--no-cache)
+	@echo "$(BLUE)🔧 Rebuilding Alexandria Stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria build --no-cache
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria up -d
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
+	@echo "$(GREEN)✅ Alexandria Stack rebuilt and deployed$(NC)"
+
+rebuild-alexandria-gpu: ## Rebuild: Full stack with GPU acceleration (--no-cache)
+	@echo "$(BLUE)🔧🎮 Rebuilding Alexandria GPU Stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-gpu build --no-cache
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-gpu up -d
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
+	@echo "$(GREEN)✅ Alexandria GPU Stack rebuilt and deployed$(NC)"
+
+rebuild-alexandria-macMseries: ## Rebuild: Full stack for Apple Silicon (--no-cache)
+	@echo "$(BLUE)🔧🍎 Rebuilding Alexandria Mac M-Series Stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-macMseries build --no-cache
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-macMseries up -d
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
+	@echo "$(GREEN)✅ Alexandria Mac M-Series Stack rebuilt and deployed$(NC)"
+
+rebuild-alexandria-decentralized: ## Rebuild: Full stack + AR.IO gateway (CPU) (--no-cache)
+	@echo "$(BLUE)🔧🌐 Rebuilding Alexandria Decentralized Stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-decentralized build --no-cache
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-decentralized up -d
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
+	@echo "$(GREEN)✅ Alexandria Decentralized Stack rebuilt and deployed$(NC)"
+
+rebuild-alexandria-decentralized-gpu: ## Rebuild: Full stack + AR.IO gateway (GPU) (--no-cache)
+	@echo "$(BLUE)🔧🌐🎮 Rebuilding Alexandria Decentralized GPU Stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-decentralized-gpu build --no-cache
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-decentralized-gpu up -d
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
+	@echo "$(GREEN)✅ Alexandria Decentralized GPU Stack rebuilt and deployed$(NC)"
+
+rebuild-alexandria-decentralized-macMseries: ## Rebuild: Full stack + AR.IO gateway (Apple Silicon) (--no-cache)
+	@echo "$(BLUE)🔧🌐🍎 Rebuilding Alexandria Decentralized Mac M-Series Stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-decentralized-macMseries build --no-cache
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-decentralized-macMseries up -d
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
+	@echo "$(GREEN)✅ Alexandria Decentralized Mac M-Series Stack rebuilt and deployed$(NC)"
+
+rebuild-alexandria-noSTT: ## Rebuild: Alexandria without STT (--no-cache)
+	@echo "$(BLUE)🔧📱 Rebuilding Alexandria NoSTT Stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-noSTT build --no-cache
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-noSTT up -d
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
+	@echo "$(GREEN)✅ Alexandria NoSTT Stack rebuilt and deployed$(NC)"
+
+rebuild-alexandria-noSTT-decentralized: ## Rebuild: Alexandria-noSTT + AR.IO gateway (--no-cache)
+	@echo "$(BLUE)🔧📱🌐 Rebuilding Alexandria NoSTT Decentralized Stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-noSTT-decentralized build --no-cache
+	docker-compose -f $(COMPOSE_FILE) --profile alexandria-noSTT-decentralized up -d
+	@$(MAKE) -f Makefile.split install-models-split
+	@$(MAKE) -f Makefile.split install-chatterbox-split
+	@echo "$(GREEN)✅ Alexandria NoSTT Decentralized Stack rebuilt and deployed$(NC)"
+
+rebuild-chatterbox-split: ## Rebuild: Chatterbox TTS focus (--no-cache)
+	@echo "$(BLUE)🔧🎭 Rebuilding Chatterbox Stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile chatterbox build --no-cache
+	docker-compose -f $(COMPOSE_FILE) --profile chatterbox up -d
+	@$(MAKE) -f Makefile.split install-chatterbox-split
+	@echo "$(GREEN)✅ Chatterbox Stack rebuilt and deployed$(NC)"
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # BACKWARDS COMPATIBILITY ALIASES
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -297,6 +383,16 @@ help-split: ## Show help for split deployment
 	@echo "$(YELLOW)Specialized Profiles:$(NC)"
 	@echo "  $(GREEN)alexandria-noSTT$(NC)              - No STT (for Mac/iOS clients)"
 	@echo "  $(GREEN)alexandria-noSTT-decentralized$(NC) - NoSTT + AR.IO gateway"
+	@echo ""
+	@echo "$(YELLOW)Rebuild Profiles (--no-cache):$(NC)"
+	@echo "  $(GREEN)rebuild-oip-only$(NC)                          - Rebuild daemon only"
+	@echo "  $(GREEN)rebuild-alexandria$(NC)                        - Rebuild full stack (CPU)"
+	@echo "  $(GREEN)rebuild-alexandria-gpu$(NC)                    - Rebuild full stack (GPU)"
+	@echo "  $(GREEN)rebuild-alexandria-macMseries$(NC)             - Rebuild full stack (Apple Silicon)"
+	@echo "  $(GREEN)rebuild-alexandria-decentralized$(NC)          - Rebuild + AR.IO (CPU)"
+	@echo "  $(GREEN)rebuild-alexandria-decentralized-gpu$(NC)      - Rebuild + AR.IO (GPU)"
+	@echo "  $(GREEN)rebuild-alexandria-decentralized-macMseries$(NC) - Rebuild + AR.IO (Apple Silicon)"
+	@echo "  $(GREEN)rebuild-alexandria-noSTT$(NC)                  - Rebuild NoSTT"
 	@echo ""
 	@echo "$(YELLOW)Service Commands:$(NC)"
 	@echo "  $(GREEN)logs-daemon$(NC)       - View daemon logs"
