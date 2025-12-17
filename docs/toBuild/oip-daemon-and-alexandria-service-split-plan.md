@@ -1,6 +1,91 @@
 # Project Split Outline: oip-daemon-service vs alexandria-service
 ## Microservices Architecture within Single Docker Compose
 
+---
+
+## ✅ **IMPLEMENTATION STATUS: COMPLETE**
+
+> **Last Updated:** December 2024
+> **Status:** File reorganization and service separation complete. Ready for build & test.
+
+### What Was Implemented
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `Dockerfile.oip-daemon` | ✅ Complete | Optimized dependencies, memory leak fixes integrated |
+| `Dockerfile.alexandria` | ✅ Complete | AI/voice dependencies, puppeteer support |
+| `index-daemon.js` | ✅ Complete | Memory-safe entry point with all daemon routes |
+| `index-alexandria.js` | ✅ Complete | oipClient integration, all Alexandria routes |
+| `helpers/oipClient.js` | ✅ Complete | Full HTTP client with all needed methods |
+| `routes/daemon/*` | ✅ Complete | All daemon routes reorganized |
+| `routes/alexandria/*` | ✅ Complete | All Alexandria routes reorganized + refactored |
+| `helpers/core/*` | ✅ Complete | Daemon helpers reorganized |
+| `helpers/alexandria/*` | ✅ Complete | Alexandria helpers reorganized |
+| `docker-compose-split.yml` | ✅ Complete | New service definitions with profiles |
+| `Makefile.split` | ✅ Complete | New profile targets |
+| Import path fixes | ✅ Complete | All imports audited and corrected |
+| oipClient refactoring | ✅ Complete | Alexandria routes use oipClient for data ops |
+
+### Changes From Original Plan
+
+| Original Plan | Actual Implementation | Reason |
+|---------------|----------------------|--------|
+| Direct elasticsearch imports in Alexandria | Added daemon endpoints for `indexRecord` and `searchCreatorByAddress` | Proper service separation - Alexandria should not write directly to ES |
+| `resolveRecipeIngredients` in recipes.js | Extracted to `helpers/core/recipe-resolver.js` | Shared helper needed by both daemon publish and Alexandria recipes |
+| `/api/test-rag` in daemon api.js | Moved to `routes/alexandria/alfred.js` | AI functionality belongs in Alexandria |
+| Basic oipClient | Enhanced with `indexRecord()`, `getCreatorByAddress()`, and `request()` methods | Additional daemon endpoints needed for Alexandria operations |
+
+### New Daemon Endpoints Added (Not in Original Plan)
+
+```
+POST /api/records/index           # Index a record to Elasticsearch (for Alexandria)
+GET  /api/records/creator/:did    # Look up creator by DID address (for Alexandria)
+```
+
+### Files Created/Modified
+
+**New Files:**
+- `Dockerfile.oip-daemon`
+- `Dockerfile.alexandria`
+- `index-daemon.js`
+- `index-alexandria.js`
+- `helpers/oipClient.js`
+- `helpers/core/recipe-resolver.js`
+- `docker-compose-split.yml`
+- `Makefile.split`
+- `package-daemon.json`
+- `package-alexandria.json`
+- `scripts/docker-entrypoint-daemon.sh`
+- `scripts/docker-entrypoint-alexandria.sh`
+
+**Route Reorganization:**
+- `routes/daemon/` - api.js, records.js, templates.js, creators.js, user.js, wallet.js, publish.js, media.js, organizations.js, cleanup.js, health.js
+- `routes/alexandria/` - alfred.js, voice.js, generate.js, narration.js, photo.js, scrape.js, recipes.js, workout.js, jfk.js, notes.js
+
+### Remaining Tasks (Pre-Deployment)
+
+| Task | Priority | Notes |
+|------|----------|-------|
+| Build Docker images | 🔴 Required | `docker build -f Dockerfile.oip-daemon -t oip-daemon .` |
+| Test oip-only profile | 🔴 Required | `make -f Makefile.split oip-only` |
+| Test alexandria profile | 🔴 Required | `make -f Makefile.split alexandria` |
+| Verify all endpoints work | 🔴 Required | Run integration tests |
+| Update original docker-compose.yml | 🟡 Optional | Can replace with docker-compose-split.yml |
+| Update original Makefile | 🟡 Optional | Can replace with Makefile.split |
+
+### Memory Leak Fixes Integrated
+
+The following memory management best practices were integrated into the new entry points:
+
+- `keepAlive: false` for HTTP agents (prevents connection pooling memory growth)
+- Axios response interceptors for buffer cleanup
+- Stream semaphores for concurrent stream limiting
+- Aggressive GUN response cleanup
+- Bounded LRU caches with TTL
+- Periodic garbage collection hints
+
+---
+
 ## 📊 **High-Level Philosophy**
 
 **oip-daemon-service** = The complete library infrastructure - card catalog, shelves, and access control
@@ -199,6 +284,8 @@ GET    /api/records                    # Query/search records (Arweave + GUN)
 POST   /api/records/newRecord          # Publish record (?storage=arweave|gun)
 GET    /api/records/recordTypes        # Get record type summary
 POST   /api/records/deleteRecord       # Delete owned record
+POST   /api/records/index              # Index record to ES (NEW - for Alexandria)
+GET    /api/records/creator/:did       # Lookup creator by DID (NEW - for Alexandria)
 
 Template Operations:
 GET    /api/templates                  # Get all templates
@@ -530,99 +617,140 @@ GET    /api/health/voice              # Voice services status (TTS/STT)
 
 ## 🔄 **Integration: How Alexandria Calls the Daemon**
 
-### **OIP Client Helper**
+### **OIP Client Helper** ✅ IMPLEMENTED
 
-Alexandria uses a simple HTTP client to call `oip-daemon-service`:
+Alexandria uses an HTTP client to call `oip-daemon-service`. The actual implementation is more comprehensive than originally planned:
 
 ```javascript
-// helpers/oipClient.js in alexandria-service
+// helpers/oipClient.js - ACTUAL IMPLEMENTATION
 
 const axios = require('axios');
 
 const OIP_DAEMON_URL = process.env.OIP_DAEMON_URL || 'http://oip-daemon-service:3005';
 
 class OIPClient {
-  constructor(userToken = null) {
-    this.baseURL = OIP_DAEMON_URL;
-    this.token = userToken;
-  }
-
-  async request(method, endpoint, data = null, params = null) {
-    const config = {
-      method,
-      url: `${this.baseURL}${endpoint}`,
-      headers: {}
-    };
-    
-    if (this.token) {
-      config.headers['Authorization'] = `Bearer ${this.token}`;
+    constructor(req = null) {
+        this.baseURL = OIP_DAEMON_URL;
+        // Extract token from request if provided (for authenticated operations)
+        this.token = req?.headers?.authorization?.replace('Bearer ', '') || null;
+        
+        // Create axios instance with memory-safe defaults
+        this.client = axios.create({
+            baseURL: this.baseURL,
+            timeout: 30000,
+            httpAgent: new (require('http').Agent)({ keepAlive: false }),
+            maxContentLength: 50 * 1024 * 1024,
+            maxBodyLength: 50 * 1024 * 1024
+        });
     }
+
+    async request(method, endpoint, data = null, params = null) {
+        const config = { method, url: endpoint, headers: {} };
+        if (this.token) config.headers['Authorization'] = `Bearer ${this.token}`;
+        if (data) config.data = data;
+        if (params) config.params = params;
+        
+        const response = await this.client(config);
+        const result = response.data;
+        response.data = null; // MEMORY LEAK FIX
+        return result;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // CARD CATALOG - Record Operations
+    // ═══════════════════════════════════════════════════════════
     
-    if (data) config.data = data;
-    if (params) config.params = params;
+    async getRecords(params) {
+        return this.request('GET', '/api/records', null, params);
+    }
+
+    async publishRecord(recordData, options = {}) {
+        const queryParams = new URLSearchParams();
+        if (options.recordType) queryParams.append('recordType', options.recordType);
+        if (options.storage) queryParams.append('storage', options.storage);
+        if (options.blockchain) queryParams.append('blockchain', options.blockchain);
+        const endpoint = `/api/records/newRecord?${queryParams.toString()}`;
+        return this.request('POST', endpoint, recordData);
+    }
+
+    async deleteRecord(did) {
+        return this.request('POST', '/api/records/deleteRecord', { did });
+    }
+
+    async getRecordTypes() {
+        return this.request('GET', '/api/records/recordTypes');
+    }
+
+    // NEW: Added during implementation for Alexandria→Daemon indexing
+    async indexRecord(record) {
+        return this.request('POST', '/api/records/index', record);
+    }
+
+    // NEW: Added during implementation for creator lookup
+    async getCreatorByAddress(didAddress) {
+        return this.request('GET', `/api/records/creator/${encodeURIComponent(didAddress)}`);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // CARD CATALOG - Template Operations
+    // ═══════════════════════════════════════════════════════════
     
-    const response = await axios(config);
-    return response.data;
-  }
+    async getTemplates() {
+        return this.request('GET', '/api/templates');
+    }
 
-  // ═══════════════════════════════════════════════════════════
-  // CARD CATALOG - Record Operations
-  // ═══════════════════════════════════════════════════════════
-  
-  async getRecords(params) {
-    return this.request('GET', '/api/records', null, params);
-  }
+    async getTemplate(name) {
+        return this.request('GET', `/api/templates/${name}`);
+    }
 
-  async publishRecord(recordData, options = {}) {
-    const queryParams = new URLSearchParams();
-    if (options.recordType) queryParams.append('recordType', options.recordType);
-    if (options.storage) queryParams.append('storage', options.storage);
-    if (options.localId) queryParams.append('localId', options.localId);
+    async getPublishSchema(recordType) {
+        return this.request('GET', `/api/publish/schema?recordType=${recordType}`);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // SHELVES - Media Operations
+    // ═══════════════════════════════════════════════════════════
     
-    const endpoint = `/api/records/newRecord?${queryParams.toString()}`;
-    return this.request('POST', endpoint, recordData);
-  }
+    async uploadMedia(formData) {
+        return this.client.post('/api/media/upload', formData, {
+            headers: { 
+                ...formData.getHeaders?.() || {},
+                'Authorization': this.token ? `Bearer ${this.token}` : undefined 
+            }
+        }).then(res => res.data);
+    }
 
-  async getTemplates() {
-    return this.request('GET', '/api/templates');
-  }
+    async createMediaRecord(mediaData) {
+        return this.request('POST', '/api/media/createRecord', mediaData);
+    }
 
-  async getTemplate(name) {
-    return this.request('GET', `/api/templates/${name}`);
-  }
+    async getMediaInfo(mediaId) {
+        return this.request('GET', `/api/media/${mediaId}/info`);
+    }
 
-  // ═══════════════════════════════════════════════════════════
-  // SHELVES - Media Operations
-  // ═══════════════════════════════════════════════════════════
-  
-  async uploadMedia(formData) {
-    return axios.post(`${this.baseURL}/api/media/upload`, formData, {
-      headers: {
-        ...formData.getHeaders(),
-        'Authorization': `Bearer ${this.token}`
-      }
-    }).then(res => res.data);
-  }
+    // ═══════════════════════════════════════════════════════════
+    // ACCESS CONTROL - Organizations
+    // ═══════════════════════════════════════════════════════════
+    
+    async getOrganizations() {
+        return this.request('GET', '/api/organizations');
+    }
 
-  async createMediaRecord(mediaData) {
-    return this.request('POST', '/api/media/createRecord', mediaData);
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // ACCESS CONTROL - Organizations
-  // ═══════════════════════════════════════════════════════════
-  
-  async getOrganizations() {
-    return this.request('GET', '/api/organizations');
-  }
-
-  async getOrganization(id) {
-    return this.request('GET', `/api/organizations/${id}`);
-  }
+    async getOrganization(id) {
+        return this.request('GET', `/api/organizations/${id}`);
+    }
 }
 
 module.exports = OIPClient;
 ```
+
+**Key Enhancements from Original Plan:**
+
+1. **Request object constructor** - Can pass Express `req` to automatically extract auth token
+2. **Memory-safe axios instance** - `keepAlive: false`, response buffer cleanup
+3. **`indexRecord()` method** - For Alexandria helpers that need to index (e.g., podcast-generator)
+4. **`getCreatorByAddress()` method** - For creator lookup without direct ES access
+5. **Additional template/media methods** - More complete API coverage
 
 ### **Example: Alfred RAG Query**
 
@@ -1181,66 +1309,85 @@ For now, WebTorrent runs inside the OIP daemon container, which works fine for m
 
 ## 📦 **Migration Strategy**
 
-### **Phase 1: Create Dockerfiles (Week 1)**
+### **Phase 1: Create Dockerfiles** ✅ COMPLETE
 
-1. **Create `Dockerfile.oip-daemon`**
-   - Node.js image with native deps for GUN, WebTorrent
-   - Install only daemon dependencies
+1. **Create `Dockerfile.oip-daemon`** ✅
+   - Node.js 20 Alpine image with native deps for GUN, WebTorrent
+   - Optimized dependencies (package-daemon.json)
+   - Memory leak fixes integrated in entrypoint
    - Entry point: `index-daemon.js`
 
-2. **Create `Dockerfile.alexandria`**
-   - Node.js image with heavy deps (puppeteer, canvas, sharp)
-   - No GUN, WebTorrent (calls daemon instead)
+2. **Create `Dockerfile.alexandria`** ✅
+   - Node.js 20 with Puppeteer, canvas, sharp, ffmpeg
+   - Separate dependency file (package-alexandria.json)
+   - oipClient for daemon communication
    - Entry point: `index-alexandria.js`
 
-3. **Existing `Dockerfile.gun-relay`**
+3. **Existing `Dockerfile.gun-relay`** ✅
    - Already exists, no changes needed
 
-### **Phase 2: Split Entry Points (Week 1-2)**
+### **Phase 2: Split Entry Points** ✅ COMPLETE
 
-1. **Create `index-daemon.js`**
-   - Load core routes + GUN + media + organizations
-   - Start GUN sync service
-   - Start media seeder
-   - Listen on port 3005
+1. **Create `index-daemon.js`** ✅
+   - Loads all daemon routes from `routes/daemon/`
+   - Initializes GUN sync service
+   - Starts media seeder
+   - Memory-safe HTTP agent configuration
+   - Listens on port 3005
 
-2. **Create `index-alexandria.js`**
-   - Load AI/voice/scraping routes
-   - Configure OIP client connection
-   - Start WebSocket server
-   - Listen on port 3006
+2. **Create `index-alexandria.js`** ✅
+   - Loads all Alexandria routes from `routes/alexandria/`
+   - Initializes oipClient connection to daemon
+   - Configures WebSocket server
+   - Listens on port 3006
 
-3. **Create `helpers/oipClient.js`**
-   - HTTP client for daemon communication
-   - All CRUD operations go through this
+3. **Create `helpers/oipClient.js`** ✅
+   - Full HTTP client for daemon communication
+   - Methods: getRecords, publishRecord, deleteRecord, getTemplates, uploadMedia, indexRecord, getCreatorByAddress, and more
+   - Memory leak prevention (response buffer cleanup)
 
-### **Phase 3: Refactor Routes (Week 2)**
+### **Phase 3: Refactor Routes** ✅ COMPLETE
 
-1. **Split records.js**
-   - Core logic stays in daemon
-   - Alexandria gets `/api/publish/newRecipe` and `/api/publish/newWorkout` 
-     (with AI ingredient/exercise lookup)
+1. **Reorganize route files** ✅
+   - Created `routes/daemon/` with: api.js, records.js, templates.js, creators.js, user.js, wallet.js, publish.js, media.js, organizations.js, cleanup.js, health.js
+   - Created `routes/alexandria/` with: alfred.js, voice.js, generate.js, narration.js, photo.js, scrape.js, recipes.js, workout.js, jfk.js, notes.js
 
-2. **Split health.js**
-   - Daemon: ES, GUN, media seeder health
-   - Alexandria: AI, voice services health
+2. **Fix all import paths** ✅
+   - Audited and corrected all relative imports
+   - Updated helper paths for new directory structure
 
-3. **Move Alfred/Voice routes**
-   - Ensure they use OIPClient for all data access
+3. **Refactor Alexandria routes to use oipClient** ✅
+   - workout.js: Uses oipClient.getRecords() and oipClient.publishRecord()
+   - recipes.js: Uses oipClient.getRecords() for ingredient lookup
+   - notes.js: Uses oipClient.getRecords() for record retrieval
+   - jfk.js: Uses oipClient.getRecords() for record retrieval
+   - scrape.js: Uses oipClient.request() for publishing operations
 
-### **Phase 4: Update Docker Compose Profiles (Week 2-3)**
+4. **Technical debt resolved** ✅
+   - Extracted `resolveRecipeIngredients` to `helpers/core/recipe-resolver.js`
+   - Moved `/test-rag` endpoint from daemon to Alexandria alfred.js
+   - Added daemon endpoints for indexRecord and creator lookup
 
-1. Add new profile structure
-2. Update Makefile commands
-3. Test each profile independently
+### **Phase 4: Update Docker Compose Profiles** ✅ COMPLETE
 
-### **Phase 5: Testing & Documentation (Week 3)**
+1. **Created `docker-compose-split.yml`** ✅
+   - New service definitions for oip-daemon-service and alexandria-service
+   - All profiles configured: oip-only, alexandria, alexandria-gpu, etc.
+   - Proper dependency ordering
 
-1. Test daemon independently (minimal profile)
-2. Test alexandria with daemon
-3. Test full stack (alexandria-gpu)
-4. Update API documentation
-5. Create migration guide
+2. **Created `Makefile.split`** ✅
+   - New profile targets matching docker-compose-split.yml
+   - Service-specific operations (logs-daemon, restart-alexandria, etc.)
+   - Testing targets (test-daemon, test-alexandria, test-integration)
+   - Backwards compatibility aliases
+
+### **Phase 5: Testing & Documentation** 🔄 PENDING
+
+1. ⏳ Test daemon independently (oip-only profile)
+2. ⏳ Test Alexandria with daemon
+3. ⏳ Test full stack (alexandria-gpu)
+4. ✅ Update API documentation (this document)
+5. ✅ Create migration guide (included in this document)
 
 ---
 
@@ -1266,59 +1413,85 @@ For now, WebTorrent runs inside the OIP daemon container, which works fine for m
 
 ---
 
-## 🚀 **Directory Structure After Split**
+## 🚀 **Directory Structure After Split** ✅ IMPLEMENTED
 
 ```
 oip-arweave-indexer/
 ├── config/                    # Shared configuration
 ├── helpers/
-│   ├── core/                  # Daemon helpers
+│   ├── core/                  # Daemon helpers ✅
 │   │   ├── arweave.js
+│   │   ├── arweave-wallet.js
 │   │   ├── elasticsearch.js
 │   │   ├── templateHelper.js
 │   │   ├── gun.js
 │   │   ├── gunSyncService.js
 │   │   ├── media-manager.js
 │   │   ├── organizationEncryption.js
+│   │   ├── recipe-resolver.js     # NEW - shared helper for recipe ingredients
+│   │   ├── sharedState.js
 │   │   └── ...
-│   └── alexandria/            # Alexandria helpers
-│       ├── alfred.js
-│       ├── oipClient.js       # HTTP client for daemon
-│       ├── podcast-generator.js
-│       ├── nutritional-helper.js
-│       └── ...
+│   ├── alexandria/            # Alexandria helpers ✅
+│   │   ├── alfred.js
+│   │   ├── podcast-generator.js   # Updated to use oipClient
+│   │   ├── nutritional-helper.js
+│   │   ├── nutritional-helper-openai.js
+│   │   └── ...
+│   ├── oipClient.js           # HTTP client for daemon ✅ (in helpers root)
+│   └── utils.js               # Shared utilities
 ├── routes/
-│   ├── daemon/                # Daemon routes
-│   │   ├── records.js
+│   ├── daemon/                # Daemon routes ✅
+│   │   ├── api.js
+│   │   ├── records.js         # Includes new /index and /creator endpoints
 │   │   ├── templates.js
+│   │   ├── creators.js
+│   │   ├── user.js
+│   │   ├── wallet.js
+│   │   ├── publish.js
 │   │   ├── media.js
 │   │   ├── organizations.js
-│   │   └── ...
-│   └── alexandria/            # Alexandria routes
-│       ├── alfred.js
+│   │   ├── cleanup.js
+│   │   └── health.js
+│   └── alexandria/            # Alexandria routes ✅
+│       ├── alfred.js          # Includes /test-rag moved from daemon
 │       ├── voice.js
 │       ├── generate.js
-│       ├── scrape.js
-│       └── ...
+│       ├── narration.js
+│       ├── photo.js
+│       ├── scrape.js          # Refactored to use oipClient for publishing
+│       ├── recipes.js         # Refactored to use oipClient
+│       ├── workout.js         # Refactored to use oipClient
+│       ├── jfk.js             # Refactored to use oipClient
+│       └── notes.js           # Refactored to use oipClient
 ├── services/                  # Daemon background services
 │   └── mediaSeeder.js
 ├── middleware/                # Shared middleware
+│   └── auth.js
+├── scripts/                   # NEW - Docker entrypoint scripts ✅
+│   ├── docker-entrypoint-daemon.sh
+│   └── docker-entrypoint-alexandria.sh
 ├── docs/
 ├── public/                    # Static web interface
 ├── mac-client/
 ├── text-to-speech/
 ├── speech-to-text/
 │
-├── index-daemon.js            # Daemon entry point
-├── index-alexandria.js        # Alexandria entry point
+├── index.js                   # Original monolithic entry (kept for reference)
+├── index-daemon.js            # Daemon entry point ✅
+├── index-alexandria.js        # Alexandria entry point ✅
 ├── gun-relay-server.js
 │
-├── Dockerfile.oip-daemon
-├── Dockerfile.alexandria
+├── Dockerfile                 # Original monolithic Dockerfile
+├── Dockerfile.oip-daemon      # NEW - Daemon Dockerfile ✅
+├── Dockerfile.alexandria      # NEW - Alexandria Dockerfile ✅
 ├── Dockerfile.gun-relay
-├── docker-compose.yml
-├── Makefile
-├── package.json
+├── docker-compose.yml         # Original docker-compose
+├── docker-compose-split.yml   # NEW - Split services compose ✅
+├── Makefile                   # Original Makefile
+├── Makefile.split             # NEW - Split services Makefile ✅
+├── package.json               # Original full dependencies
+├── package-daemon.json        # NEW - Daemon dependencies ✅
+├── package-alexandria.json    # NEW - Alexandria dependencies ✅
 └── README.md
 ```
 
