@@ -101,10 +101,14 @@ COPY routes/api.js ./routes/api.js
 COPY routes/records.js ./routes/records.js
 COPY routes/publish.js ./routes/publish.js
 COPY routes/media.js ./routes/media.js
-COPY routes/organization.js ./routes/organization.js
+COPY routes/organizations.js ./routes/organizations.js
 COPY routes/health.js ./routes/health.js
 COPY routes/user.js ./routes/user.js
 COPY routes/templates.js ./routes/templates.js
+COPY routes/wallet.js ./routes/wallet.js
+COPY routes/creators.js ./routes/creators.js
+COPY routes/admin.js ./routes/admin.js
+COPY routes/cleanup.js ./routes/cleanup.js
 
 # Copy services (daemon only)
 COPY services/mediaSeeder.js ./services/mediaSeeder.js

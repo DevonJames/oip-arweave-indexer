@@ -409,50 +409,6 @@ services:
               capabilities: [gpu]
 
   # ════════════════════════════════════════════════════════════════════════════
-  # CONTENT GENERATION SERVICES
-  # ════════════════════════════════════════════════════════════════════════════
-
-  speech-synthesizer:
-    build:
-      context: ./speech-synthesizer
-    ports:
-      - "${SPEECH_SYNTHESIZER_PORT:-8082}:8082"
-    networks:
-      - oip-network
-    restart: unless-stopped
-    profiles:
-      - alexandria
-      - alexandria-macMseries
-      - alexandria-decentralized
-      - alexandria-decentralized-macMseries
-      - alexandria-noSTT
-      - alexandria-noSTT-decentralized
-      - chatterbox
-
-  text-generator:
-    build: ./text-generator
-    env_file:
-      - .env
-    environment:
-      - OLLAMA_HOST=http://ollama:11434
-      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN:-}
-    ports:
-      - "${TEXT_GENERATOR_PORT:-8081}:8081"
-    depends_on:
-      - ollama
-    networks:
-      - oip-network
-    restart: unless-stopped
-    profiles:
-      - alexandria
-      - alexandria-macMseries
-      - alexandria-decentralized
-      - alexandria-decentralized-macMseries
-      - alexandria-noSTT
-      - alexandria-noSTT-decentralized
-      - chatterbox
-
-  # ════════════════════════════════════════════════════════════════════════════
   # DECENTRALIZED INFRASTRUCTURE - Local Arweave Gateway
   # ════════════════════════════════════════════════════════════════════════════
 
