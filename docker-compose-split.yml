@@ -4,7 +4,7 @@
 #
 # This docker-compose splits the monolithic OIP application into two services:
 #
-#   oip-daemon-service (port 3005):
+#   oip-daemon-service (port ${PORT:-3005}):
 #     The Library Infrastructure - card catalog, shelves, access control
 #     - Arweave blockchain indexing
 #     - GUN network (private records)
@@ -14,13 +14,30 @@
 #     - HD wallet authentication
 #     - Organization management
 #
-#   alexandria-service (port 3006):
+#   alexandria-service (port ${ALEXANDRIA_PORT:-3006}):
 #     The Librarian - AI, voice, content creation
 #     - Alfred AI/RAG
 #     - Voice interface (STT/TTS)
 #     - Content generation
 #     - Web scraping
 #     - Photo analysis
+#
+# PORT CONFIGURATION:
+#   All ports are configurable via .env file. Key variables:
+#   - PORT: Main OIP daemon API port (default: 3005)
+#   - ALEXANDRIA_PORT: Alexandria service port (default: 3006)
+#   - ELASTICSEARCH_PORT: Elasticsearch HTTP port (default: 9200)
+#   - ELASTICSEARCH_TRANSPORT_PORT: Elasticsearch transport (default: 9300)
+#   - KIBANA_PORT: Kibana dashboard (default: 5601)
+#   - GUN_RELAY_PORT: GUN relay (default: 8765)
+#   - IPFS_API_PORT: IPFS API (default: 5001)
+#   - IPFS_GATEWAY_PORT: IPFS Gateway (default: 8080)
+#   - OLLAMA_PORT: Ollama LLM (default: 11434)
+#   - TTS_SERVICE_PORT: Text-to-Speech (default: 8005)
+#   - STT_SERVICE_PORT: Speech-to-Text (default: 8003)
+#   - ARIO_GATEWAY_PORT: AR.IO gateway (default: 4000)
+#   - DEBUG_PORT: Node.js debug port (default: 9229)
+#   - NGROK_DASHBOARD_PORT: Ngrok dashboard (default: 4040)
 #
 # PROFILES:
 #   - oip-only:       Just the daemon (indexing, publishing, media)
@@ -56,7 +73,8 @@ services:
     volumes:
       - ${ELASTICSEARCH_DATA_PATH:-./elasticsearch_data}:/usr/share/elasticsearch/data
     ports:
-      - "${ES_PORT:-9200}:9200"
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
+      - "${ELASTICSEARCH_TRANSPORT_PORT:-9300}:9300"
     networks:
       - oip-network
     restart: unless-stopped
@@ -104,10 +122,11 @@ services:
     env_file:
       - .env
     ports:
-      - "${OIP_DAEMON_PORT:-3005}:3005"
+      - "${PORT:-3005}:${PORT:-3005}"
+      - "${DEBUG_PORT:-9229}:9229"
     environment:
       - NODE_ENV=production
-      - PORT=3005
+      - PORT=${PORT:-3005}
       - ELASTICSEARCH_HOST=elasticsearch
       - ELASTICSEARCH_PORT=9200
       - GUN_PEERS=http://gun-relay:8765/gun
@@ -208,10 +227,10 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3006
-      - OIP_DAEMON_URL=http://oip-daemon-service:3005
+      - OIP_DAEMON_URL=http://oip-daemon-service:${PORT:-3005}
       - OLLAMA_HOST=http://ollama:11434
-      - TTS_SERVICE_URL=http://tts-service:5500
-      - STT_SERVICE_URL=http://stt-service:8013
+      - TTS_SERVICE_URL=http://tts-service:8005
+      - STT_SERVICE_URL=http://stt-service:8003
       - JWT_SECRET=${JWT_SECRET}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - XAI_API_KEY=${XAI_API_KEY:-}
@@ -290,7 +309,7 @@ services:
     build:
       context: ./text-to-speech
     ports:
-      - "${TTS_PORT:-5500}:5500"
+      - "${TTS_SERVICE_PORT:-8005}:8005"
     networks:
       - oip-network
     restart: unless-stopped
@@ -308,7 +327,7 @@ services:
       context: ./text-to-speech
       dockerfile: Dockerfile.gpu
     ports:
-      - "${TTS_PORT:-5500}:5500"
+      - "${TTS_SERVICE_PORT:-8005}:8005"
     environment:
       - CUDA_VISIBLE_DEVICES=0
       - TTS_GPU_ENABLED=true
@@ -337,7 +356,7 @@ services:
       - WHISPER_DEVICE=cpu
       - WHISPER_COMPUTE_TYPE=int8
     ports:
-      - "${STT_PORT:-8013}:8013"
+      - "${STT_SERVICE_PORT:-8003}:8003"
     volumes:
       - whisper-models:/app/models
     networks:
@@ -360,7 +379,7 @@ services:
       - WHISPER_COMPUTE_TYPE=float16
       - CUDA_VISIBLE_DEVICES=0
     ports:
-      - "${STT_PORT:-8013}:8013"
+      - "${STT_SERVICE_PORT:-8003}:8003"
     volumes:
       - whisper-models:/app/models
     networks:
@@ -458,7 +477,7 @@ services:
 
   ngrok:
     image: ngrok/ngrok:latest
-    command: http --domain=${NGROK_DOMAIN} oip-daemon-service:3005
+    command: http --domain=${NGROK_DOMAIN} oip-daemon-service:${PORT:-3005}
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
     depends_on:
