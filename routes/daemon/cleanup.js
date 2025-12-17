@@ -5,7 +5,7 @@ const { publishNewRecord } = require('../../helpers/core/templateHelper');
 const { authenticateToken } = require('../../helpers/utils');
 
 // Clear cache and reload config to ensure we get the latest version
-delete require.cache[require.resolve('../config/templates.config')];
+delete require.cache[require.resolve('../../config/templates.config')];
 const templatesConfig = require('../../config/templates.config');
 
 /**
@@ -28,8 +28,8 @@ router.get('/analyze-templates', authenticateToken, async (req, res) => {
         let unusedFields = 0;
         
         // Get list of default template transaction IDs to protect
-        console.log(`🔍 Config file path:`, require.resolve('../config/templates.config'));
-        console.log(`🔍 Config exists:`, require('fs').existsSync(require.resolve('../config/templates.config')));
+        console.log(`🔍 Config file path:`, require.resolve('../../config/templates.config'));
+        console.log(`🔍 Config exists:`, require('fs').existsSync(require.resolve('../../config/templates.config')));
         
         // Test direct require
         const testConfig = require('../../config/templates.config');
