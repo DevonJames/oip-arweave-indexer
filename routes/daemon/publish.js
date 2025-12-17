@@ -5,11 +5,19 @@ const cheerio = require('cheerio');
 
 const { authenticateToken, getTemplateTxidByName } = require('../../helpers/utils'); // Import the authentication middleware
 const { TurboFactory, ArDriveUploadDriver } = require('@ardrive/turbo-sdk');
-const { 
-  encryptContent,
-  decryptContent,
-  createBitcoinPaymentCondition 
-} = require('../../helpers/lit-protocol');
+// Lit Protocol is optional - lazy load only if needed
+let encryptContent, decryptContent, createBitcoinPaymentCondition;
+try {
+    const litProtocol = require('../../helpers/lit-protocol');
+    encryptContent = litProtocol.encryptContent;
+    decryptContent = litProtocol.decryptContent;
+    createBitcoinPaymentCondition = litProtocol.createBitcoinPaymentCondition;
+} catch (e) {
+    const notAvailable = async () => { throw new Error('Lit Protocol not available'); };
+    encryptContent = notAvailable;
+    decryptContent = notAvailable;
+    createBitcoinPaymentCondition = () => { throw new Error('Lit Protocol not available'); };
+}
 const fs = require('fs').promises;
 const path = require('path');
 const { getRecords, searchTemplateByTxId, addRecipeNutritionalSummary, calculateRecipeNutrition } = require('../../helpers/core/elasticsearch');

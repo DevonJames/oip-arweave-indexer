@@ -8,7 +8,13 @@ const { getRecords, searchRecordInDB, getRecordTypesSummary, deleteRecordsByDID,
 // const { resolveRecords } = require('../../helpers/utils');
 const { publishNewRecord} = require('../../helpers/core/templateHelper');
 // const paymentManager = require('../../helpers/payment-manager');
-const { decryptContent } = require('../../helpers/lit-protocol');
+// Lit Protocol is optional - lazy load only if needed
+let decryptContent;
+try {
+    decryptContent = require('../../helpers/lit-protocol').decryptContent;
+} catch (e) {
+    decryptContent = async () => { throw new Error('Lit Protocol not available'); };
+}
 const arweaveWallet = require('../../helpers/core/arweave-wallet');
 const { GunHelper } = require('../../helpers/core/gun');
 
