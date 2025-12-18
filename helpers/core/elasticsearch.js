@@ -5568,6 +5568,21 @@ async function keepDBUpToDate(remapTemplates) {
         // to do standardize these names a bit better
         let { finalMaxArweaveBlock, qtyTemplatesInDB, templatesInDB } = await getTemplatesInDB();
         // console.log(getFileInfo(), getLineNumber(), 'Templates:', { finalMaxArweaveBlock, qtyTemplatesInDB });
+        
+        // Ensure Elasticsearch mappings are updated from templates on first cycle
+        // This ensures field types (string vs float) are correctly defined BEFORE indexing records
+        if (keepDBCycleCount === 0 && qtyTemplatesInDB > 0) {
+            try {
+                console.log('📋 [keepDBUpToDate] Updating Elasticsearch mappings from templates...');
+                const { updateAllRecordsMappings } = require('../generateElasticsearchMappings');
+                await updateAllRecordsMappings();
+                console.log('✅ [keepDBUpToDate] Elasticsearch mappings updated from templates');
+            } catch (mappingError) {
+                console.warn('⚠️ [keepDBUpToDate] Failed to update mappings from templates:', mappingError.message);
+                // Don't throw - continue with sync even if mapping update fails
+            }
+        }
+        
         // MEMORY LEAK FIX: Only refresh cache every 10 cycles to prevent constant memory allocation
         keepDBCycleCount++;
         const shouldRefresh = keepDBCycleCount % 10 === 0; // Refresh every 10 cycles (50 minutes)
