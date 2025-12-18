@@ -136,6 +136,9 @@ COPY config ./config
 # Both are needed for backward compatibility until all imports are updated
 COPY helpers ./helpers
 
+# Copy lib directory (kaggle fetcher, etc.)
+COPY lib ./lib
+
 # Copy alexandria routes
 COPY routes/alexandria ./routes/alexandria
 
