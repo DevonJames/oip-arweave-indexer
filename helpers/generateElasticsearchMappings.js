@@ -1,9 +1,15 @@
 /**
  * Generate Elasticsearch mappings from OIP templates
  * This ensures field types defined in templates are respected in Elasticsearch
+ * 
+ * IMPORTANT: When processing historical templates with incorrect field types,
+ * this module uses the canonical template from templates.config.js to determine
+ * the correct field types for ES mappings. This prevents mapping conflicts when
+ * older templates had mistakes (e.g., 'repeated float' instead of 'repeated string').
  */
 
-const { elasticClient } = require('./elasticsearch');
+const { elasticClient, searchTemplateByTxId } = require('./elasticsearch');
+const { mergeWithCanonicalFieldTypes, hasCanonicalTemplate } = require('./canonicalTemplateResolver');
 
 /**
  * Map OIP field types to Elasticsearch types
@@ -60,12 +66,36 @@ function generateMappingFromTemplate(templateName, fieldsInTemplate) {
 
 /**
  * Update records index mapping for a specific template
+ * 
+ * IMPORTANT: This function now checks templates.config.js for the canonical version
+ * of the template. If field types differ between the template being indexed and the
+ * canonical version, the canonical types are used for the ES mapping.
+ * 
+ * This allows historical templates with incorrect field types to still be indexed
+ * while ensuring records using the corrected types can be properly stored.
+ * 
+ * @param {string} templateName - Name of the template
+ * @param {object} fieldsInTemplate - Fields from the template being indexed
+ * @param {object} options - Optional settings
+ * @param {boolean} options.skipCanonicalMerge - If true, skip canonical type resolution
+ * @param {string} options.templateTxid - Transaction ID of the template being indexed
  */
-async function updateRecordsMappingForTemplate(templateName, fieldsInTemplate) {
+async function updateRecordsMappingForTemplate(templateName, fieldsInTemplate, options = {}) {
     try {
-        // console.log(`📋 Generating Elasticsearch mapping for template: ${templateName}`);
+        // Check if we should use canonical field types for this mapping
+        let fieldsForMapping = fieldsInTemplate;
         
-        const properties = generateMappingFromTemplate(templateName, fieldsInTemplate);
+        if (!options.skipCanonicalMerge && hasCanonicalTemplate(templateName)) {
+            console.log(`📋 [Mapping] Template '${templateName}' has canonical version - checking for type overrides...`);
+            fieldsForMapping = await mergeWithCanonicalFieldTypes(
+                templateName, 
+                fieldsInTemplate, 
+                searchTemplateByTxId,
+                options.templateTxid || null  // Pass txid to detect if this IS the canonical
+            );
+        }
+        
+        const properties = generateMappingFromTemplate(templateName, fieldsForMapping);
         
         // Must preserve the nested type for data field when updating
         const mappingUpdate = {
@@ -179,11 +209,20 @@ async function updateAllRecordsMappings() {
 }
 
 /**
- * Hook to update mapping when a new template is published
+ * Hook to update mapping when a new template is published during indexing.
+ * 
+ * This automatically resolves field types against the canonical template
+ * from templates.config.js to ensure correct ES mappings even when processing
+ * historical templates with incorrect field definitions.
+ * 
+ * @param {string} templateName - Name of the template
+ * @param {object} fieldsInTemplate - Fields from the template
+ * @param {string} templateTxid - Optional: Transaction ID of the template being indexed
  */
-async function updateMappingForNewTemplate(templateName, fieldsInTemplate) {
+async function updateMappingForNewTemplate(templateName, fieldsInTemplate, templateTxid = null) {
     try {
-        await updateRecordsMappingForTemplate(templateName, fieldsInTemplate);
+        // Let updateRecordsMappingForTemplate handle canonical resolution
+        await updateRecordsMappingForTemplate(templateName, fieldsInTemplate, { templateTxid });
         console.log(`✅ Elasticsearch mapping auto-generated for new template: ${templateName}`);
     } catch (error) {
         console.warn(`⚠️  Could not auto-generate mapping for template ${templateName}:`, error.message);

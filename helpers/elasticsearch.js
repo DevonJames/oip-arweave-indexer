@@ -6280,9 +6280,10 @@ async function processNewTemplate(transaction) {
                 // });
                 
                 // Auto-generate Elasticsearch mapping from template field types
+                // Pass the txid so the resolver can detect if this IS the canonical template
                 try {
                     const { updateMappingForNewTemplate } = require('./generateElasticsearchMappings');
-                    await updateMappingForNewTemplate(templateName, fieldsInTemplate);
+                    await updateMappingForNewTemplate(templateName, fieldsInTemplate, transaction.transactionId);
                 } catch (mappingError) {
                     console.warn(`⚠️  Could not auto-generate Elasticsearch mapping for ${templateName}:`, mappingError.message);
                     // Don't fail template indexing if mapping update fails

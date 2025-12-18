@@ -571,6 +571,28 @@ router.post('/newRecipe', async (req, res) => {
     }
 });
 
+// Get job status for async publishing operations
+router.get('/status/:jobId', async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const { getJob } = require('../../helpers/alexandria/jobTracker');
+        
+        const job = getJob(jobId);
+        
+        if (!job) {
+            return res.status(404).json({
+                error: 'Job not found',
+                jobId
+            });
+        }
+        
+        res.status(200).json(job);
+    } catch (error) {
+        console.error('Error getting job status:', error);
+        res.status(500).json({ error: 'Failed to get job status' });
+    }
+});
+
 /**
  * Process recipe publishing asynchronously
  * @param {string} jobId - Job tracker ID
