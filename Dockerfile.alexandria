@@ -139,6 +139,9 @@ COPY helpers ./helpers
 # Copy lib directory (kaggle fetcher, etc.)
 COPY lib ./lib
 
+# Copy remapTemplates (for template field remapping)
+COPY remapTemplates ./remapTemplates
+
 # Copy alexandria routes
 COPY routes/alexandria ./routes/alexandria
 

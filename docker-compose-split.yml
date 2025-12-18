@@ -227,7 +227,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=${ALEXANDRIA_PORT:-3006}
-      - OIP_DAEMON_URL=http://oip-daemon-service:${PORT:-3005}
+      - OIP_DAEMON_URL=http://oip-daemon-service:3005
       - OLLAMA_HOST=http://ollama:11434
       - TTS_SERVICE_URL=http://tts-service:8005
       - STT_SERVICE_URL=http://stt-service:8003
@@ -235,7 +235,10 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - XAI_API_KEY=${XAI_API_KEY:-}
     depends_on:
-      - oip-daemon-service
+      oip-daemon-service:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_started
     volumes:
       - ./data:/usr/src/app/data
       - ./media:/usr/src/app/media
