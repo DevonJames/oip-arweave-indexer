@@ -135,6 +135,9 @@ RUN sed -i 's/\r$//' wait-for-it.sh && chmod +x wait-for-it.sh
 COPY scripts/docker-entrypoint-daemon.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Copy utility scripts (backup, restore, etc.)
+COPY scripts ./scripts
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Directory Structure
 # ─────────────────────────────────────────────────────────────────────────────
