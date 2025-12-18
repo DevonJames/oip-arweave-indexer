@@ -361,7 +361,8 @@ async function getBlockHeightFromTxId(txId) {
 // Cache for last successful block height to gracefully handle temporary network failures
 let cachedBlockHeight = null;
 let lastBlockHeightFetchTime = null;
-const BLOCK_HEIGHT_CACHE_TTL = 60000; // 1 minute TTL for cache
+// Cache TTL: 1 hour - block height updates ~every 2 min but exact value isn't critical for progress display
+const BLOCK_HEIGHT_CACHE_TTL = parseInt(process.env.BLOCK_HEIGHT_CACHE_TTL) || 3600000; // 1 hour default
 
 /**
  * Retrieves the cached block height without making a network call.
@@ -369,14 +370,38 @@ const BLOCK_HEIGHT_CACHE_TTL = 60000; // 1 minute TTL for cache
  * @returns {number|null} The cached block height, or null if no cache available.
  */
 const getCachedBlockHeight = () => {
-    if (cachedBlockHeight) {
-        const cacheAge = Date.now() - (lastBlockHeightFetchTime || 0);
-        const cacheAgeMinutes = Math.floor(cacheAge / 60000);
-        if (cacheAgeMinutes > 60) {
-            console.warn(`⚠️  Block height cache is stale (${cacheAgeMinutes}m old). Consider checking keepDBUpToDate process.`);
-        }
-    }
     return cachedBlockHeight;
+};
+
+/**
+ * Checks if the block height cache is stale (older than TTL).
+ * @returns {boolean} True if cache is stale or empty
+ */
+const isBlockHeightCacheStale = () => {
+    if (!cachedBlockHeight || !lastBlockHeightFetchTime) {
+        return true;
+    }
+    const cacheAge = Date.now() - lastBlockHeightFetchTime;
+    return cacheAge > BLOCK_HEIGHT_CACHE_TTL;
+};
+
+/**
+ * Refreshes the block height cache only if it's stale (older than TTL).
+ * This should be called at the start of sync cycles to avoid excessive network calls.
+ * @returns {Promise<number|null>} The current block height
+ */
+const refreshBlockHeightIfStale = async () => {
+    if (!isBlockHeightCacheStale()) {
+        const cacheAgeMinutes = Math.floor((Date.now() - lastBlockHeightFetchTime) / 60000);
+        // Only log occasionally to avoid spam
+        if (cacheAgeMinutes % 10 === 0) {
+            console.log(`📊 Using cached block height: ${cachedBlockHeight} (${cacheAgeMinutes}m old, TTL: ${BLOCK_HEIGHT_CACHE_TTL / 60000}m)`);
+        }
+        return cachedBlockHeight;
+    }
+    
+    console.log('📊 Block height cache stale, refreshing from network...');
+    return await getCurrentBlockHeight();
 };
 
 /**
@@ -542,6 +567,7 @@ module.exports = {
     getBlockHeightFromTxId,
     getCurrentBlockHeight,
     getCachedBlockHeight,
+    refreshBlockHeightIfStale,
     upfrontFunding,
     lazyFunding,
     arweave,

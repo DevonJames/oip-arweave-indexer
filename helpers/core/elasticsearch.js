@@ -1,6 +1,6 @@
 const { Client } = require('@elastic/elasticsearch');
 const Arweave = require('arweave');
-const { getTransaction, getBlockHeightFromTxId, getCurrentBlockHeight, getCachedBlockHeight } = require('./arweave');
+const { getTransaction, getBlockHeightFromTxId, getCachedBlockHeight, refreshBlockHeightIfStale } = require('./arweave');
 // const { resolveRecords, getLineNumber } = require('./utils');
 const { setIsProcessing } = require('./processingState');  // Adjust the path as needed
 const arweaveConfig = require('../../config/arweave.config');
@@ -3844,13 +3844,14 @@ async function getRecords(queryParams) {
 
         // console.log('es 982 resolvedRecords:', resolvedRecords.length);
 
-        // Use cached block height from keepDBUpToDate (no network call)
+        // Use cached block height from keepDBUpToDate - NO network call here to keep API fast
+        // Cache is populated by keepDBUpToDate sync cycle (hourly refresh)
         const currentBlockHeight = getCachedBlockHeight();
         
         // Calculate progress using cached block height - use 0 if cache unavailable
         let progress = 0;
         if (currentBlockHeight && currentBlockHeight > startBlockHeight) {
-            progress = Math.round((maxArweaveBlockInDB - startBlockHeight) / (currentBlockHeight - startBlockHeight)  * 100);
+            progress = Math.round((maxArweaveBlockInDB - startBlockHeight) / (currentBlockHeight - startBlockHeight) * 100);
         }
         const searchResults = resolvedRecords.length;
         if (summarizeTags === 'true') {
@@ -5523,6 +5524,15 @@ async function keepDBUpToDate(remapTemplates) {
     console.log('🔄 [keepDBUpToDate] CYCLE STARTED');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     try {
+        // Refresh block height cache if stale (hourly by default)
+        // This avoids network calls on every API request while keeping progress reasonably accurate
+        const currentChainBlock = await refreshBlockHeightIfStale();
+        if (currentChainBlock) {
+            console.log(`📊 Current Arweave block height: ${currentChainBlock}`);
+        } else {
+            console.warn('⚠️  Could not fetch current block height - progress will show 0%');
+        }
+        
         await ensureIndexExists();
         let { qtyCreatorsInDB, maxArweaveCreatorRegBlockInDB, creatorsInDB } = await getCreatorsInDB();
         let { qtyOrganizationsInDB, maxArweaveOrgBlockInDB, organizationsInDB } = await getOrganizationsInDB();
@@ -5846,12 +5856,12 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
                         const maxBlockGap = parseInt(process.env.MAX_BLOCK_GAP_FOR_FALLBACK) || 1000;
                         
                         try {
-                            // Get current block height from the fallback endpoint
-                            const currentBlockHeight = await getCurrentBlockHeight();
+                            // Use cached block height for safety check (no extra network call)
+                            const currentBlockHeight = getCachedBlockHeight();
                             
-                            // Skip safety check if block height unavailable (network issues)
+                            // Skip safety check if cache unavailable
                             if (!currentBlockHeight) {
-                                console.warn(`⚠️  [SAFETY CHECK SKIPPED] Cannot fetch current block height due to network issues. Proceeding with caution.`);
+                                console.warn(`⚠️  [SAFETY CHECK SKIPPED] Block height cache unavailable. Proceeding with caution.`);
                             } else {
                                 const blockGap = currentBlockHeight - maxArweaveBlockInDB;
                                 

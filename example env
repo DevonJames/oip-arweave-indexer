@@ -111,6 +111,9 @@ ES_CLIENT_RECREATION_INTERVAL=1800000
 # Lower values = more frequent recreation, reducing connection accumulation
 GRAPHQL_CLIENT_RECREATION_INTERVAL=1800000
 
+# Optional: Adjust cache TTL in your .env (default: 1 hour)
+BLOCK_HEIGHT_CACHE_TTL=3600000  # milliseconds
+
 # API Keys
 OPENAI_API_KEY=
 XAI_API_KEY=
@@ -270,3 +273,14 @@ KEEP_DB_REFRESH=600
 # Enable memory usage logging for debugging memory leaks
 # Set to 'true' to enable detailed memory diagnostics
 MEMORY_DIAGNOSTICS_ENABLED=false
+
+# STT Max Duration (5 hours)
+STT_MAX_DURATION_SECONDS=18000
+
+# LLM Timeout (10 minutes base)
+LLM_TIMEOUT_MS=600000
+
+# HTTP Server Timeouts
+HTTP_SERVER_TIMEOUT_MS=1800000
+HTTP_KEEPALIVE_TIMEOUT_MS=2100000
+HTTP_HEADERS_TIMEOUT_MS=2100000
