@@ -3992,12 +3992,8 @@ const getOrganizationsInDB = async (limit = 100) => {
                 sort: [
                     { "oip.inArweaveBlock": { order: "desc" } }
                 ],
+                track_total_hits: true, // Get accurate total count
                 aggs: {
-                    count: {
-                        value_count: {
-                            field: "_id"
-                        }
-                    },
                     max_block: {
                         max: {
                             field: "oip.inArweaveBlock"
@@ -4007,7 +4003,8 @@ const getOrganizationsInDB = async (limit = 100) => {
             }
         });
 
-        const qtyOrganizationsInDB = response.aggregations?.count?.value || 0;
+        // Use hits.total.value instead of value_count on _id (which is disallowed in newer ES)
+        const qtyOrganizationsInDB = response.hits?.total?.value || 0;
         const maxArweaveOrgBlockInDB = response.aggregations?.max_block?.value || 0;
         const organizationsInDB = response.hits.hits.map(hit => hit._source);
         response = null; // MEMORY LEAK FIX: Release response buffer immediately

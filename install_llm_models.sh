@@ -15,6 +15,13 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}🚀 OIP LLM Model Installation${NC}"
 echo ""
 
+# Load OLLAMA_PORT from .env file if present (default: 11434)
+if [ -f .env ]; then
+    export $(grep -E "^OLLAMA_PORT=" .env | xargs)
+fi
+OLLAMA_PORT=${OLLAMA_PORT:-11434}
+echo -e "${BLUE}🔧 Using Ollama port: ${OLLAMA_PORT}${NC}"
+
 # Check if Ollama containers are running using docker ps (more reliable)
 if ! docker ps --format "{{.Names}}" | grep -q -E "ollama|ollama-gpu"; then
     echo -e "${YELLOW}⚠️  Ollama service not running. Starting services...${NC}"
@@ -36,7 +43,7 @@ fi
 echo -e "${BLUE}🔍 Checking Ollama service...${NC}"
 max_retries=30
 for i in $(seq 1 $max_retries); do
-    if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+    if curl -s http://localhost:${OLLAMA_PORT}/api/tags > /dev/null 2>&1; then
         echo -e "${GREEN}✅ Ollama service is ready${NC}"
         break
     else

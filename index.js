@@ -624,6 +624,35 @@ app.use('/media', forceStaticCleanup, express.static(path.join(__dirname, 'data'
 app.use('/api/user', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/wallet', walletRoutes);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Backward Compatibility: Direct /api/* routes that redirect to /api/user/*
+// This allows clients to use either /api/register or /api/user/register
+// ═══════════════════════════════════════════════════════════════════════════════
+app.post('/api/register', (req, res, next) => {
+    req.url = '/register';
+    userRoutes(req, res, next);
+});
+app.post('/api/login', (req, res, next) => {
+    req.url = '/login';
+    userRoutes(req, res, next);
+});
+app.post('/api/joinWaitlist', (req, res, next) => {
+    req.url = '/joinWaitlist';
+    userRoutes(req, res, next);
+});
+app.post('/api/reset-password', (req, res, next) => {
+    req.url = '/reset-password';
+    userRoutes(req, res, next);
+});
+app.post('/api/import-wallet', (req, res, next) => {
+    req.url = '/import-wallet';
+    userRoutes(req, res, next);
+});
+app.get('/api/mnemonic', (req, res, next) => {
+    req.url = '/mnemonic';
+    userRoutes(req, res, next);
+});
 app.use('/api/workout', workoutRoutes);
 app.use('/api/lit', litRoutes);
 app.use('/api/jfk', jfkRoutes);

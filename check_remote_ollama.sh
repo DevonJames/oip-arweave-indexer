@@ -3,6 +3,13 @@
 echo "=== OLLAMA SERVICE DIAGNOSTICS ==="
 echo ""
 
+# Load OLLAMA_PORT from .env file if present (default: 11434)
+if [ -f .env ]; then
+    export $(grep -E "^OLLAMA_PORT=" .env | xargs)
+fi
+OLLAMA_PORT=${OLLAMA_PORT:-11434}
+echo "Using Ollama port: ${OLLAMA_PORT}"
+
 # Check if Ollama service is running
 echo "1. Checking Docker services:"
 docker ps | grep ollama
@@ -13,7 +20,7 @@ docker exec ollama-gpu ollama list 2>/dev/null || echo "❌ ollama-gpu container
 
 echo ""
 echo "3. Checking Ollama API endpoint:"
-curl -s http://localhost:11434/api/tags 2>/dev/null | head -20 || echo "❌ Cannot reach Ollama API on port 11434"
+curl -s http://localhost:${OLLAMA_PORT}/api/tags 2>/dev/null | head -20 || echo "❌ Cannot reach Ollama API on port ${OLLAMA_PORT}"
 
 echo ""
 echo "4. Checking network connectivity:"
