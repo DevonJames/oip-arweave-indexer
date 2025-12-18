@@ -14,29 +14,39 @@ const recordTypeIndexConfig = require('../../config/recordTypesToIndex');
 const http = require('http');
 const https = require('https');
 
-// Helper function to get GraphQL endpoints (local AR.IO gateway first, then arweave.net fallback)
+// Import gateway registry for multi-gateway failover support
+const { 
+    getGatewayUrls: getRegistryGatewayUrls, 
+    getGraphQLEndpoints: getRegistryGraphQLEndpoints,
+    HARDCODED_GATEWAYS 
+} = require('./gateway-registry');
+
+// Cache for gateway URLs (populated asynchronously, falls back to hardcoded)
+let cachedGatewayUrls = null;
+let cachedGraphQLEndpoints = null;
+
+// Helper function to get GraphQL endpoints (uses gateway registry with multi-gateway failover)
 function getGraphQLEndpoints() {
-    const endpoints = [];
-    const useLocalGateway = process.env.USE_LOCAL_ARIO_GATEWAY === 'true';
-    const gatewayAddress = process.env.LOCAL_ARIO_GATEWAY_ADDRESS || 'localhost:4000';
-    
-    // Add local gateway first if enabled
-    if (useLocalGateway && gatewayAddress) {
-        try {
-            // Handle addresses with or without protocol
-            const addressWithProtocol = gatewayAddress.startsWith('http') 
-                ? gatewayAddress 
-                : `http://${gatewayAddress}`;
-            const url = new URL(addressWithProtocol);
-            endpoints.push(`${url.protocol}//${url.host}/graphql`);
-        } catch (error) {
-            console.warn(`⚠️  Invalid LOCAL_ARIO_GATEWAY_ADDRESS format: ${error.message}`);
-        }
+    // Return cached if available
+    if (cachedGraphQLEndpoints && cachedGraphQLEndpoints.length > 0) {
+        return cachedGraphQLEndpoints;
     }
     
-    // Always add arweave.net as fallback
-    endpoints.push('https://arweave.net/graphql');
+    // Fallback to hardcoded gateways if cache not yet populated
+    const endpoints = HARDCODED_GATEWAYS.map(gw => `${gw.protocol}://${gw.host}/graphql`);
     
+    // Trigger async cache population for next call
+    getRegistryGraphQLEndpoints().then(urls => {
+        cachedGraphQLEndpoints = urls;
+    }).catch(() => {});
+    
+    return endpoints;
+}
+
+// Async version for contexts that support await
+async function getGraphQLEndpointsAsync() {
+    const endpoints = await getRegistryGraphQLEndpoints();
+    cachedGraphQLEndpoints = endpoints;
     return endpoints;
 }
 
@@ -45,29 +55,28 @@ function getGraphQLEndpoint() {
     return getGraphQLEndpoints()[0];
 }
 
-// Helper function to get gateway base URLs (local AR.IO gateway first, then arweave.net fallback)
+// Helper function to get gateway base URLs (uses gateway registry with multi-gateway failover)
 function getGatewayBaseUrls() {
-    const urls = [];
-    const useLocalGateway = process.env.USE_LOCAL_ARIO_GATEWAY === 'true';
-    const gatewayAddress = process.env.LOCAL_ARIO_GATEWAY_ADDRESS || 'localhost:4000';
-    
-    // Add local gateway first if enabled
-    if (useLocalGateway && gatewayAddress) {
-        try {
-            // Handle addresses with or without protocol
-            const addressWithProtocol = gatewayAddress.startsWith('http') 
-                ? gatewayAddress 
-                : `http://${gatewayAddress}`;
-            const url = new URL(addressWithProtocol);
-            urls.push(`${url.protocol}//${url.host}`);
-        } catch (error) {
-            console.warn(`⚠️  Invalid LOCAL_ARIO_GATEWAY_ADDRESS format: ${error.message}`);
-        }
+    // Return cached if available
+    if (cachedGatewayUrls && cachedGatewayUrls.length > 0) {
+        return cachedGatewayUrls;
     }
     
-    // Always add arweave.net as fallback
-    urls.push('https://arweave.net');
+    // Fallback to hardcoded gateways if cache not yet populated
+    const urls = HARDCODED_GATEWAYS.map(gw => `${gw.protocol}://${gw.host}`);
     
+    // Trigger async cache population for next call
+    getRegistryGatewayUrls().then(gwUrls => {
+        cachedGatewayUrls = gwUrls;
+    }).catch(() => {});
+    
+    return urls;
+}
+
+// Async version for contexts that support await
+async function getGatewayBaseUrlsAsync() {
+    const urls = await getRegistryGatewayUrls();
+    cachedGatewayUrls = urls;
     return urls;
 }
 
@@ -5773,7 +5782,7 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
     let hasNextPage = true;
     let afterCursor = null;  // Cursor for pagination
     let rateLimited = false;  // Track if we hit rate limit
-    const endpoints = getGraphQLEndpoints(); // Get all endpoints (local first, then fallback)
+    const endpoints = await getGraphQLEndpointsAsync(); // Get all endpoints with multi-gateway failover
     
     // Store transactions in reverse order as we process them (newest last, oldest first in processing)
     let transactionsToProcess = [];

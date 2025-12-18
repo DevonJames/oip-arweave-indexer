@@ -7,9 +7,16 @@ const axios = require('axios');
 const { crypto, createHash } = require('crypto');
 const base64url = require('base64url');
 
-
 const arweaveConfig = require('../../config/arweave.config');
 const arweave = Arweave.init(arweaveConfig);
+
+// Import gateway registry for multi-gateway failover
+const { getGatewayUrls, getGraphQLEndpoints, initializeGatewayRegistry } = require('./gateway-registry');
+
+// Initialize gateway registry on module load
+initializeGatewayRegistry().catch(err => {
+    console.warn('⚠️  Gateway registry initialization failed:', err.message);
+});
 
 // Hardcoded fallback data for critical creator registration transactions
 // These are used when the Arweave gateway is unavailable
@@ -108,31 +115,13 @@ const getTransaction = async (transactionId) => {
                 variables: { id: transactionId }
             };
 
-            // Try local AR.IO gateway first, then fallback to arweave.net
-            const useLocalGateway = process.env.USE_LOCAL_ARIO_GATEWAY === 'true';
-            const gatewayAddress = process.env.LOCAL_ARIO_GATEWAY_ADDRESS || 'localhost:4000';
-            const graphqlEndpoints = [];
-            
-            // Add local gateway first if enabled
-            if (useLocalGateway && gatewayAddress) {
-                try {
-                    const addressWithProtocol = gatewayAddress.startsWith('http') 
-                        ? gatewayAddress 
-                        : `http://${gatewayAddress}`;
-                    const url = new URL(addressWithProtocol);
-                    graphqlEndpoints.push(`${url.protocol}//${url.host}/graphql`);
-                } catch (error) {
-                    console.warn(`⚠️  Invalid LOCAL_ARIO_GATEWAY_ADDRESS format: ${error.message}`);
-                }
-            }
-            
-            // Always add arweave.net as fallback
-            graphqlEndpoints.push('https://arweave.net/graphql');
+            // Get all available GraphQL endpoints from gateway registry
+            const graphqlEndpoints = await getGraphQLEndpoints();
             
             let graphqlResponse = null;
             let lastError = null;
             
-            // Try each endpoint in order
+            // Try each endpoint in order (with failover)
             for (const graphqlEndpoint of graphqlEndpoints) {
                 try {
                     graphqlResponse = await axios.post(graphqlEndpoint, graphqlQuery, {
@@ -173,31 +162,13 @@ const getTransaction = async (transactionId) => {
 
         // Now get the actual data content
         try {
-            // Try local AR.IO gateway first, then fallback to arweave.net
-            const useLocalGateway = process.env.USE_LOCAL_ARIO_GATEWAY === 'true';
-            const gatewayAddress = process.env.LOCAL_ARIO_GATEWAY_ADDRESS || 'localhost:4000';
-            const gatewayUrls = [];
-            
-            // Add local gateway first if enabled
-            if (useLocalGateway && gatewayAddress) {
-                try {
-                    const addressWithProtocol = gatewayAddress.startsWith('http') 
-                        ? gatewayAddress 
-                        : `http://${gatewayAddress}`;
-                    const url = new URL(addressWithProtocol);
-                    gatewayUrls.push(`${url.protocol}//${url.host}`);
-                } catch (error) {
-                    console.warn(`⚠️  Invalid LOCAL_ARIO_GATEWAY_ADDRESS format: ${error.message}`);
-                }
-            }
-            
-            // Always add arweave.net as fallback
-            gatewayUrls.push('https://arweave.net');
+            // Get all available gateways from registry (with failover support)
+            const gatewayUrls = await getGatewayUrls();
             
             let dataResponse = null;
             let gatewayError = null;
             
-            // Try each gateway URL in order
+            // Try each gateway URL in order (with failover)
             for (const gatewayBaseUrl of gatewayUrls) {
                 try {
                     // Try direct gateway fetch first for data items (avoids the native client bug)
