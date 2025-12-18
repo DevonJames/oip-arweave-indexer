@@ -91,6 +91,9 @@ RUN npm rebuild bcrypt sharp 2>/dev/null || true
 # Copy configuration
 COPY config ./config
 
+# Copy remapTemplates (for template field remapping during sync)
+COPY remapTemplates ./remapTemplates
+
 # Copy ALL helpers (daemon needs elasticsearch, arweave, gun, etc.)
 # Note: helpers/core/ contains reorganized files, helpers/ root contains legacy paths
 # Both are needed for backward compatibility until all imports are updated
