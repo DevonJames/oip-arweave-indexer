@@ -147,10 +147,26 @@ LLAMA_MODEL=llama3.2:3b
 HUGGINGFACE_TOKEN=
 
 # LLM Timeout Configuration
-# Timeout for LLM API calls (summarization, chunk tagging) in milliseconds
-# Increase for long meetings (35+ minutes of audio generates long transcripts)
-# Default: 300000 (5 minutes)
-LLM_TIMEOUT_MS=300000
+# Base timeout for LLM API calls. For very long transcripts, timeout is calculated dynamically.
+# Increase for very long meetings (4+ hours of audio generates 100k+ character transcripts)
+# Default: 600000 (10 minutes base, plus 1 min per 10k chars, capped at 30 min)
+LLM_TIMEOUT_MS=600000
+
+# STT (Speech-to-Text) Max Duration Configuration
+# Maximum duration for transcription in seconds (supports meetings up to 4+ hours)
+# Default: 18000 (5 hours - allows for processing overhead on very long meetings)
+STT_MAX_DURATION_SECONDS=18000
+
+# HTTP Server Timeout Configuration
+# Extended timeouts for long-running operations like meeting processing
+# For very long meetings (60+ min), use the async endpoint: /api/notes/from-audio-async
+#
+# HTTP_SERVER_TIMEOUT_MS: Maximum time for a single request (default: 30 minutes)
+HTTP_SERVER_TIMEOUT_MS=1800000
+# HTTP_KEEPALIVE_TIMEOUT_MS: Keep-alive timeout (default: 35 minutes)
+HTTP_KEEPALIVE_TIMEOUT_MS=2100000
+# HTTP_HEADERS_TIMEOUT_MS: Headers timeout (default: 35 minutes)  
+HTTP_HEADERS_TIMEOUT_MS=2100000
 
 # Chunk Tagging Configuration (for Alfred Notes)
 # CHUNK_TAG_BATCH_SIZE: Number of chunks to process simultaneously
