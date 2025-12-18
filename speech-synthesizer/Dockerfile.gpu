@@ -4,6 +4,9 @@ FROM nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu20.04
 # Set environment variables to bypass prompts (adjust TZ to your timezone)
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=America/Los_Angeles
+# Set pip timeout to 1200 seconds (20 minutes) for large PyTorch downloads
+ENV PIP_DEFAULT_TIMEOUT=1200
+ENV PIP_RETRIES=10
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -54,8 +57,8 @@ RUN python3 -m pip install pillow==9.3.0
 # Install compatible versions of NumPy, pandas, and related packages
 RUN python3 -m pip install numpy==1.21.6 pandas==1.3.3 numba scipy==1.7.1 cffi==1.14.6 llvmlite==0.36.0 soxr librosa matplotlib==3.4.3
 
-# Install PyTorch and Spacy
-RUN python3 -m pip install torch torchvision torchaudio wheel cython spacy==3.2.0
+# Install PyTorch and Spacy (with extended timeout for large downloads)
+RUN python3 -m pip install --timeout 1200 --retries 10 torch torchvision torchaudio wheel cython spacy==3.2.0
 
 # Install Rust for compiling dependencies like sudachipy
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y

@@ -25,10 +25,13 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Install Python dependencies
+# Set pip timeout to 1200 seconds (20 minutes) for large PyTorch downloads
+ENV PIP_DEFAULT_TIMEOUT=1200
+ENV PIP_RETRIES=10
 RUN pip3 install --upgrade pip
 
 # Install PyTorch with CUDA support (cached layer)
-RUN pip3 install --no-cache-dir \
+RUN pip3 install --no-cache-dir --timeout 1200 --retries 10 \
     torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu117
 
 # Pre-install av separately with extended timeout (most problematic package)

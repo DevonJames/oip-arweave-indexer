@@ -27,6 +27,9 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Install Python dependencies with GPU acceleration
+# Set pip timeout to 1200 seconds (20 minutes) for large PyTorch downloads
+ENV PIP_DEFAULT_TIMEOUT=1200
+ENV PIP_RETRIES=10
 RUN pip3 install --upgrade pip setuptools wheel
 
 # Install core packages FIRST (matching working standard profile)
@@ -75,7 +78,7 @@ RUN pip3 install --no-cache-dir \
 # Installing LAST ensures nothing can downgrade it
 # CRITICAL: Must use --force-reinstall to overwrite any PyTorch 1.x/2.0.x installed by dependencies
 RUN pip3 uninstall -y torch torchvision torchaudio || true && \
-    pip3 install --no-cache-dir --force-reinstall \
+    pip3 install --no-cache-dir --force-reinstall --timeout 1200 --retries 10 \
     torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 \
     --extra-index-url https://download.pytorch.org/whl/cu118 && \
     python3 -c "import torch; version=torch.__version__; assert version.startswith('2.1'), f'PyTorch version {version} is not 2.1.x - SNAC will fail!'; print(f'✅ PyTorch {version} installed successfully'); from torch.nn.utils.parametrizations import weight_norm; print('✅ weight_norm import successful')"
