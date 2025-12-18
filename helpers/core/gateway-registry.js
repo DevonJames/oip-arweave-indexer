@@ -42,6 +42,7 @@ const HARDCODED_GATEWAYS = [
 // Cache for dynamically fetched gateways
 let dynamicGateways = [];
 let lastFetchTime = 0;
+let dynamicFetchFailed = false; // Track if dynamic fetch has failed (to avoid repeated errors)
 const GATEWAY_CACHE_TTL = parseInt(process.env.GATEWAY_CACHE_TTL) || 3600000; // 1 hour default
 
 // Gateway health metrics
@@ -53,43 +54,77 @@ const gatewayMetrics = new Map();
 
 /**
  * Fetches the current list of online gateways from AR.IO network.
- * Uses the ar.io smart contract / API to get registered gateways.
+ * Tries multiple API endpoints since the AR.IO API may change.
  * 
  * @returns {Promise<Array>} List of gateway objects
  */
 async function fetchLiveGateways() {
-    try {
-        // AR.IO Gateway Registry API
-        // This endpoint returns all registered gateways with their status
-        const response = await axios.get('https://api.arns.app/v1/gateways', {
-            timeout: 10000,
-            headers: { 'Accept': 'application/json' }
-        });
-        
-        if (response.data && response.data.gateways) {
-            const gateways = Object.entries(response.data.gateways)
-                .filter(([_, gw]) => gw.status === 'joined' && gw.settings?.fqdn)
-                .map(([address, gw]) => ({
-                    host: gw.settings.fqdn,
-                    protocol: gw.settings.protocol || 'https',
-                    port: gw.settings.port || (gw.settings.protocol === 'http' ? 80 : 443),
-                    stake: gw.operatorStake || 0,
-                    address: address,
-                    joinedAt: gw.startTimestamp
-                }))
-                .sort((a, b) => b.stake - a.stake); // Sort by stake (highest first)
-            
-            console.log(`🌐 [Gateway Registry] Fetched ${gateways.length} live gateways from AR.IO`);
-            dynamicGateways = gateways;
-            lastFetchTime = Date.now();
-            return gateways;
-        }
-        
-        return [];
-    } catch (error) {
-        console.warn(`⚠️  [Gateway Registry] Failed to fetch live gateways: ${error.message}`);
-        return [];
+    // If we already know the API is down, skip retries until cache expires
+    if (dynamicFetchFailed && Date.now() - lastFetchTime < GATEWAY_CACHE_TTL) {
+        return dynamicGateways;
     }
+    
+    // Try multiple potential API endpoints
+    const apiEndpoints = [
+        'https://api.arns.app/v1/gateways',
+        'https://dev.arns.app/v1/gateways',
+        'https://arns.app/api/v1/gateways'
+    ];
+    
+    for (const endpoint of apiEndpoints) {
+        try {
+            const response = await axios.get(endpoint, {
+                timeout: 10000,
+                headers: { 'Accept': 'application/json' }
+            });
+            
+            // Handle different response formats
+            let gatewaysData = response.data?.gateways || response.data?.items || response.data;
+            
+            if (gatewaysData && typeof gatewaysData === 'object') {
+                const entries = Array.isArray(gatewaysData) 
+                    ? gatewaysData.map((gw, i) => [i, gw])
+                    : Object.entries(gatewaysData);
+                    
+                const gateways = entries
+                    .filter(([_, gw]) => {
+                        // Handle different data formats
+                        const status = gw.status || gw.state;
+                        const fqdn = gw.settings?.fqdn || gw.fqdn || gw.host;
+                        return (status === 'joined' || status === 'active' || !status) && fqdn;
+                    })
+                    .map(([address, gw]) => ({
+                        host: gw.settings?.fqdn || gw.fqdn || gw.host,
+                        protocol: gw.settings?.protocol || gw.protocol || 'https',
+                        port: gw.settings?.port || gw.port || 443,
+                        stake: gw.operatorStake || gw.stake || 0,
+                        address: String(address),
+                        joinedAt: gw.startTimestamp || gw.joinedAt
+                    }))
+                    .filter(gw => gw.host) // Ensure we have a valid host
+                    .sort((a, b) => (b.stake || 0) - (a.stake || 0));
+                
+                if (gateways.length > 0) {
+                    console.log(`🌐 [Gateway Registry] Fetched ${gateways.length} live gateways from ${endpoint}`);
+                    dynamicGateways = gateways;
+                    lastFetchTime = Date.now();
+                    dynamicFetchFailed = false;
+                    return gateways;
+                }
+            }
+        } catch (error) {
+            // Silently continue to next endpoint
+        }
+    }
+    
+    // All endpoints failed - log once and mark as failed
+    if (!dynamicFetchFailed) {
+        console.warn(`⚠️  [Gateway Registry] Dynamic gateway fetch unavailable - using ${HARDCODED_GATEWAYS.length} hardcoded gateways`);
+        dynamicFetchFailed = true;
+        lastFetchTime = Date.now(); // Set time to prevent immediate retries
+    }
+    
+    return dynamicGateways;
 }
 
 /**
