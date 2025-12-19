@@ -4,8 +4,10 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
+// Detect if we're being served from /onion-press/ path or standalone
+const isProxied = window.location.pathname.startsWith('/onion-press');
 const API_BASE = window.location.origin;
-const OIP_API = '/api';
+const OIP_API = isProxied ? '/onion-press/api' : '/api';
 
 // Auth token storage
 let authToken = localStorage.getItem('onionpress_token');

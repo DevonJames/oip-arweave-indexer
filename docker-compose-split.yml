@@ -140,17 +140,23 @@ services:
       - TURBO_URL=${TURBO_URL:-https://turbo.ardrive.io}
       - USE_LOCAL_ARIO_GATEWAY=${USE_LOCAL_ARIO_GATEWAY:-false}
       - LOCAL_ARIO_GATEWAY_ADDRESS=${LOCAL_ARIO_GATEWAY_ADDRESS:-ario-gateway:4000}
+      # Onion Press proxy configuration (for profiles that include onion-press-service)
+      - ONION_PRESS_URL=http://onion-press-service:${ONION_PRESS_PORT:-3007}
+      - ONION_PRESS_PORT=${ONION_PRESS_PORT:-3007}
+      - ONION_PRESS_ENABLED=${ONION_PRESS_ENABLED:-true}
     depends_on:
       - elasticsearch
       - gun-relay
     volumes:
       - ./data:/usr/src/app/data
       - ./wallets:/usr/src/app/wallets
+      - ./public/onion-press:/usr/src/app/public/onion-press:ro
     networks:
       - oip-network
     restart: unless-stopped
     profiles:
       - oip-only
+      - onion-press-server
       - alexandria
       - alexandria-gpu
       - alexandria-macMseries
@@ -227,11 +233,11 @@ services:
     env_file:
       - .env
     ports:
-      - "${ONION_PRESS_PORT:-3007}:3007"
+      - "${ONION_PRESS_PORT:-3007}:${ONION_PRESS_PORT:-3007}"
     environment:
       - NODE_ENV=production
-      - PORT=3007
-      - OIP_DAEMON_URL=http://oip-daemon-service:3005
+      - PORT=${ONION_PRESS_PORT:-3007}
+      - OIP_DAEMON_URL=http://oip-daemon-service:${PORT:-3005}
       - PUBLISH_TO_ARWEAVE=${PUBLISH_TO_ARWEAVE:-true}
       - PUBLISH_TO_GUN=${PUBLISH_TO_GUN:-true}
       - PUBLISH_TO_INTERNETARCHIVE=${PUBLISH_TO_INTERNETARCHIVE:-false}
@@ -254,7 +260,7 @@ services:
       - oip-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3007/health"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:${ONION_PRESS_PORT:-3007}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

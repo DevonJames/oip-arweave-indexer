@@ -446,6 +446,79 @@ app.use('/api/workout', alexandriaStub);
 app.use('/api/notes', alexandriaStub);
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Onion Press Proxy Routes (for profiles that include onion-press-service)
+// ═══════════════════════════════════════════════════════════════════════════════
+const ONION_PRESS_URL = process.env.ONION_PRESS_URL || `http://onion-press-service:${process.env.ONION_PRESS_PORT || 3007}`;
+const ONION_PRESS_ENABLED = process.env.ONION_PRESS_ENABLED !== 'false';
+
+if (ONION_PRESS_ENABLED) {
+    // Proxy API requests to onion-press-service
+    app.use('/onion-press/api', async (req, res) => {
+        let response = null;
+        try {
+            const targetUrl = `${ONION_PRESS_URL}/api${req.url}`;
+            
+            response = await axios({
+                method: req.method,
+                url: targetUrl,
+                data: req.body,
+                headers: {
+                    'Content-Type': req.headers['content-type'] || 'application/json',
+                    'Authorization': req.headers.authorization || ''
+                },
+                timeout: 30000,
+                validateStatus: () => true // Don't throw on any status
+            });
+            
+            const data = response.data;
+            const status = response.status;
+            response.data = null;
+            response = null;
+            
+            res.status(status).json(data);
+            
+        } catch (error) {
+            if (response) {
+                response.data = null;
+                response = null;
+            }
+            
+            // Check if onion-press-service is not available
+            if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+                res.status(503).json({
+                    error: 'Onion Press service not available',
+                    message: 'This endpoint requires the onion-press-server or alexandria profile',
+                    hint: 'Deploy with: make -f Makefile.split onion-press-server'
+                });
+            } else {
+                res.status(500).json({ error: error.message });
+            }
+        }
+    });
+    
+    // Serve onion-press static files
+    app.use('/onion-press', express.static(path.join(__dirname, 'public', 'onion-press'), {
+        index: 'index.html',
+        etag: true,
+        lastModified: true
+    }));
+    
+    // Fallback for SPA routing - serve index.html for any unmatched /onion-press/* routes
+    app.get('/onion-press/*', (req, res) => {
+        res.sendFile(path.join(__dirname, 'public', 'onion-press', 'index.html'));
+    });
+    
+    console.log(`🧅 Onion Press proxy enabled → ${ONION_PRESS_URL}`);
+} else {
+    app.use('/onion-press', (req, res) => {
+        res.status(503).json({
+            error: 'Onion Press service disabled',
+            message: 'Set ONION_PRESS_ENABLED=true to enable'
+        });
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Static File Serving with Memory-Safe Patterns
 // ═══════════════════════════════════════════════════════════════════════════════
 const mediaStaticOptions = {

@@ -260,6 +260,14 @@ NEXT_FRONTEND_PORT=3000
 # Onion Press Service Port
 ONION_PRESS_PORT=3007
 
+# Enable Onion Press proxy in OIP Daemon (allows /onion-press/ path on main domain)
+# Set to 'false' to disable the /onion-press/ route on the daemon
+ONION_PRESS_ENABLED=true
+
+# Internal URL for Onion Press service (used by OIP daemon proxy)
+# Usually doesn't need to be changed unless using custom networking
+# ONION_PRESS_URL=http://onion-press-service:3007
+
 # Publishing Destinations - control where records are published
 # Set to 'true' or 'false' to enable/disable each destination
 PUBLISH_TO_ARWEAVE=true
