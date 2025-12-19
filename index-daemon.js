@@ -606,6 +606,11 @@ if (ONION_PRESS_ENABLED) {
     // ─────────────────────────────────────────────────────────────────────────
     // Static files and SPA routing
     // ─────────────────────────────────────────────────────────────────────────
+    
+    // Serve root public directory (alfreds-notes.html, reference-client.html, etc.)
+    app.use(express.static(path.join(__dirname, 'public')));
+    
+    // Serve onion-press subdirectory
     app.use('/onion-press', express.static(path.join(__dirname, 'public', 'onion-press'), {
         index: 'index.html',
         etag: true,

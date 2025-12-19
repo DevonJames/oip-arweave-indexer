@@ -287,7 +287,17 @@ app.use('/podcastHosts', express.static(path.join(__dirname, 'podcastHosts')));
 app.use('/podcastShows', express.static(path.join(__dirname, 'podcastShows')));
 
 // Serve public directory for static HTML files (alfreds-notes.html, etc.)
-app.use(express.static(path.join(__dirname, 'public')));
+const publicPath = path.join(__dirname, 'public');
+console.log(`📁 Serving static files from: ${publicPath}`);
+app.use(express.static(publicPath));
+
+// Debug: List files in public directory on startup
+try {
+    const publicFiles = fs.readdirSync(publicPath);
+    console.log(`📁 Public directory contents: ${publicFiles.join(', ')}`);
+} catch (e) {
+    console.error(`❌ Cannot read public directory: ${e.message}`);
+}
 
 // Serve onion-press static files
 app.use('/onion-press', express.static(path.join(__dirname, 'public', 'onion-press'), {

@@ -150,7 +150,7 @@ services:
     volumes:
       - ./data:/usr/src/app/data
       - ./wallets:/usr/src/app/wallets
-      - ./public/onion-press:/usr/src/app/public/onion-press:ro
+      - ./public:/usr/src/app/public:ro
     networks:
       - oip-network
     restart: unless-stopped
@@ -345,6 +345,7 @@ services:
     volumes:
       - ./data:/usr/src/app/data
       - ./media:/usr/src/app/media
+      - ./public:/usr/src/app/public:ro
     networks:
       - oip-network
     restart: unless-stopped
