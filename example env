@@ -1,6 +1,7 @@
 # OIP Configuration
 REGISTRATION_LIMIT=50
 PORT=3005
+OIP_DAEMON_PORT=3005
 JWT_SECRET=
 
 # Public API Base URL (for generating media URLs)

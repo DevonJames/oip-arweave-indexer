@@ -237,7 +237,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=${ONION_PRESS_PORT:-3007}
-      - OIP_DAEMON_URL=http://oip-daemon-service:3005
+      - OIP_DAEMON_URL=http://oip-daemon-service:${OIP_DAEMON_PORT:-3005}
       - PUBLISH_TO_ARWEAVE=${PUBLISH_TO_ARWEAVE:-true}
       - PUBLISH_TO_GUN=${PUBLISH_TO_GUN:-true}
       - PUBLISH_TO_INTERNETARCHIVE=${PUBLISH_TO_INTERNETARCHIVE:-false}
@@ -342,7 +342,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=${ALEXANDRIA_PORT:-3006}
-      - OIP_DAEMON_URL=http://oip-daemon-service:3005
+      - OIP_DAEMON_URL=http://oip-daemon-service:${OIP_DAEMON_PORT:-3005}
       - OLLAMA_HOST=http://ollama:11434
       - TTS_SERVICE_URL=http://tts-service:8005
       - STT_SERVICE_URL=http://stt-service:8003
