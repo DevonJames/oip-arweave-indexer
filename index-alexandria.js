@@ -286,6 +286,9 @@ app.use('/media/generated', express.static(path.join(__dirname, 'media', 'genera
 app.use('/podcastHosts', express.static(path.join(__dirname, 'podcastHosts')));
 app.use('/podcastShows', express.static(path.join(__dirname, 'podcastShows')));
 
+// Serve public directory for static HTML files (alfred-notes.html, etc.)
+app.use(express.static(path.join(__dirname, 'public')));
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Basic Health Check
 // ═══════════════════════════════════════════════════════════════════════════════

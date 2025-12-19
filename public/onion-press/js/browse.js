@@ -302,19 +302,63 @@ function renderRecords(records) {
 }
 
 /**
+ * Detect publishing sources from record metadata
+ */
+function detectSources(record) {
+    const sources = [];
+    const oip = record.oip || {};
+    const did = oip.did || oip.didTx || '';
+    
+    // Check DID format for source
+    if (did.includes('did:arweave:') || oip.inArweaveBlock) {
+        sources.push('arweave');
+    }
+    if (did.includes('did:gun:') || oip.gunSoul) {
+        sources.push('gun');
+    }
+    // Check for Internet Archive indicator
+    if (oip.viaInternetArchive || oip.viaTor) {
+        sources.push('tor');
+    }
+    
+    return sources;
+}
+
+/**
  * Render a single record card
  */
 function renderRecordCard(record) {
     const data = record.data || {};
     const oip = record.oip || {};
-    const sources = record._publishingSources || [];
+    const sources = record._publishingSources || detectSources(record);
     
+    // OIP records nest fields under data.basic and data.[recordType]
+    const basic = data.basic || {};
     const type = oip.recordType || 'basic';
+    const typeData = data[type] || {};
+    
     const icon = getTypeIcon(type);
-    const title = data.name || data.title || 'Untitled';
-    const description = data.description || data.articleText?.substring(0, 200) || '';
-    const tags = data.tagItems || [];
-    const date = data.date ? new Date(data.date * 1000).toLocaleDateString() : '';
+    
+    // Title: prefer basic.name, fall back to type-specific fields
+    const title = basic.name || typeData.title || typeData.name || data.name || 'Untitled';
+    
+    // Description: prefer basic.description, fall back to type-specific
+    const description = basic.description || typeData.description || 
+        (typeData.articleText?.data?.text?.webUrl ? '' : typeData.articleText?.substring?.(0, 200)) || '';
+    
+    // Tags from basic template
+    const tags = basic.tagItems || data.tagItems || [];
+    
+    // Date: use basic.date (unix timestamp) or dateReadable
+    let date = '';
+    if (basic.date) {
+        date = new Date(basic.date * 1000).toLocaleDateString();
+    } else if (basic.dateReadable) {
+        date = basic.dateReadable;
+    } else if (oip.indexedAt) {
+        date = new Date(oip.indexedAt).toLocaleDateString();
+    }
+    
     const did = oip.did || oip.didTx || '';
     
     return `
@@ -383,16 +427,58 @@ async function showRecordDetail(did) {
 function renderRecordDetail(record) {
     const data = record.data || {};
     const oip = record.oip || {};
-    const sources = record._publishingSources || [];
+    const sources = record._publishingSources || detectSources(record);
+    
+    // OIP records nest fields under data.basic and data.[recordType]
+    const basic = data.basic || {};
+    const type = oip.recordType || 'basic';
+    const typeData = data[type] || {};
+    
+    // Extract fields from proper locations
+    const title = basic.name || typeData.title || typeData.name || 'Untitled';
+    const description = basic.description || typeData.description || '';
+    const tags = basic.tagItems || [];
+    
+    // Date handling
+    let dateStr = 'N/A';
+    if (basic.date) {
+        dateStr = new Date(basic.date * 1000).toLocaleString();
+    } else if (basic.dateReadable) {
+        dateStr = basic.dateReadable;
+    } else if (oip.indexedAt) {
+        dateStr = new Date(oip.indexedAt).toLocaleString();
+    }
+    
+    // Article text for posts - handle nested structure
+    let articleContent = '';
+    if (typeData.articleText) {
+        if (typeof typeData.articleText === 'string') {
+            articleContent = typeData.articleText;
+        } else if (typeData.articleText.data?.text?.webUrl) {
+            // Article text is stored as a reference - show link
+            articleContent = `[Article content stored at: ${typeData.articleText.data.text.webUrl}]`;
+        }
+    }
+    
+    // Post-specific fields
+    const webUrl = typeData.webUrl || '';
+    const author = typeData.bylineWriter || basic.author || '';
     
     return `
-        <h2>${escapeHtml(data.name || 'Untitled')}</h2>
+        <h2>${escapeHtml(title)}</h2>
         <div class="record-meta" style="margin-bottom: 1rem;">
-            <span>Type: ${oip.recordType || 'unknown'}</span>
-            <span>Date: ${data.date ? new Date(data.date * 1000).toLocaleString() : 'N/A'}</span>
+            <span>Type: ${type}</span>
+            <span>Date: ${dateStr}</span>
         </div>
-        ${data.description ? `<p style="margin-bottom: 1rem;">${escapeHtml(data.description)}</p>` : ''}
-        ${data.articleText ? `<div style="margin-bottom: 1rem; white-space: pre-wrap;">${escapeHtml(data.articleText)}</div>` : ''}
+        ${author ? `<p style="margin-bottom: 0.5rem; color: var(--text-muted);">By: ${escapeHtml(author)}</p>` : ''}
+        ${webUrl ? `<p style="margin-bottom: 1rem;"><a href="${escapeHtml(webUrl)}" target="_blank" rel="noopener" style="color: var(--accent-purple);">🔗 Original Source</a></p>` : ''}
+        ${description ? `<p style="margin-bottom: 1rem;">${escapeHtml(description)}</p>` : ''}
+        ${articleContent ? `<div style="margin-bottom: 1rem; white-space: pre-wrap;">${escapeHtml(articleContent)}</div>` : ''}
+        ${tags.length > 0 ? `
+            <div class="record-tags" style="margin-bottom: 1rem;">
+                ${tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+            </div>
+        ` : ''}
         ${sources.length > 0 ? `
             <div class="record-sources" style="margin-bottom: 1rem;">
                 ${sources.map(s => `<span class="source-badge ${s}">${s}</span>`).join('')}
