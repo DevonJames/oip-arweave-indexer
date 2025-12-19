@@ -476,7 +476,7 @@ if (ONION_PRESS_ENABLED) {
                 limit = 20,
                 page = 1,
                 sortBy = 'inArweaveBlock:desc',
-                resolveDepth = 0,
+                resolveDepth = 1,
                 noDuplicates = true,
             } = req.query;
             
