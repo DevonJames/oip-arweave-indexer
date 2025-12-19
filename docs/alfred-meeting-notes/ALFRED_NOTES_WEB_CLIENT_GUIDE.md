@@ -424,7 +424,7 @@ Response:
 
 1. **Access the Web Client**
    ```
-   https://api.oip.onl/alfred-notes.html
+   https://api.oip.onl/alfreds-notes.html
    ```
 
 2. **Register or Login**
@@ -509,13 +509,13 @@ Response:
    cd /Users/devon/Documents/CODE-local/oip-arweave-indexer/public
    npx serve .
    ```
-3. **Access**: `http://localhost:3000/alfred-notes.html`
+3. **Access**: `http://localhost:3000/alfreds-notes.html`
 
 ### Production Deployment
 
 **Already Deployed**: The file is in the `public/` directory of the OIP backend, making it accessible at:
 ```
-https://api.oip.onl/alfred-notes.html
+https://api.oip.onl/alfreds-notes.html
 ```
 
 **No Build Step Required**: The application is a single HTML file with embedded CSS and JavaScript.
