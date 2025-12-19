@@ -29,6 +29,10 @@ done
 # ─────────────────────────────────────────────────────────────────────────────
 echo "🔐 Starting TOR daemon..."
 
+# Clean up any stale lock files from previous runs
+rm -f /var/lib/tor/data/lock 2>/dev/null || true
+rm -f /var/lib/tor/lock 2>/dev/null || true
+
 # Ensure TOR directories have correct ownership
 chown -R tor:tor /var/lib/tor 2>/dev/null || true
 chmod 700 /var/lib/tor/hidden_service 2>/dev/null || true
