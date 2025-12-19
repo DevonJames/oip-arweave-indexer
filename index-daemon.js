@@ -226,13 +226,18 @@ const corsOptions = {
             'http://localhost:3005',
             'http://localhost:3006',  // Alexandria service
             `http://localhost:${process.env.PORT || 3005}`,
+            'https://alexandria.io',
+            'http://alexandria.io',
             'https://api.oip.onl',
+            'http://api.oip.onl',
+            'https://oip.fitnessally.io',
+            'http://oip.fitnessally.io',
             'https://app.fitnessally.io',
             'https://mobile.fitnessally.io',
             'https://rockhoppersgame.com',
             'https://lyra.ninja',
-            'https://alexandria.io',
-            // Add your production domains here
+            // Add additional production domains to ALLOWED_ORIGINS env var
+            ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) : []),
         ];
         
         // Development mode allows any localhost
