@@ -187,8 +187,8 @@ logs-onion-press: ## Show onion-press-service logs
 logs-wordpress: ## Show WordPress logs
 	docker-compose -f $(COMPOSE_FILE) logs -f wordpress
 
-logs-tor: ## Show TOR daemon logs
-	docker-compose -f $(COMPOSE_FILE) logs -f tor-daemon
+logs-tor: ## Show TOR logs (integrated in onion-press-service)
+	docker-compose -f $(COMPOSE_FILE) logs -f onion-press-service | grep -E "(TOR|tor|onion|bootstrap)"
 
 restart-daemon: ## Restart oip-daemon-service
 	@echo "$(BLUE)🔄 Restarting OIP Daemon...$(NC)"
@@ -215,9 +215,9 @@ shell-onion-press: ## Shell into onion-press-service
 	docker-compose -f $(COMPOSE_FILE) exec onion-press-service /bin/sh
 
 tor-status: ## Check TOR status and show .onion address
-	@echo "$(BLUE)🧅 TOR Status$(NC)"
+	@echo "$(BLUE)🧅 TOR Status (integrated in onion-press-service)$(NC)"
 	@echo ""
-	@docker-compose -f $(COMPOSE_FILE) exec tor-daemon cat /var/lib/tor/hidden_service/hostname 2>/dev/null && \
+	@docker-compose -f $(COMPOSE_FILE) exec onion-press-service cat /var/lib/tor/hidden_service/hostname 2>/dev/null && \
 		echo "" || echo "$(YELLOW)TOR hidden service not ready yet$(NC)"
 	@echo ""
 	@echo "$(YELLOW)API Status:$(NC)"

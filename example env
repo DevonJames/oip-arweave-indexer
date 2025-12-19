@@ -281,7 +281,10 @@ WORDPRESS_DB_PASSWORD=wordpress
 WORDPRESS_DB_NAME=wordpress
 WORDPRESS_DB_ROOT_PASSWORD=rootpassword
 
-# TOR Configuration
+# TOR Configuration (integrated into onion-press-service)
+# TOR runs within the onion-press container, providing:
+# - SOCKS proxy for outbound .onion requests
+# - Hidden service for incoming .onion connections
 TOR_SOCKS_PORT=9050
 TOR_CONTROL_PORT=9051
 

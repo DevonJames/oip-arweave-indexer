@@ -36,8 +36,8 @@ const DEFAULT_SETTINGS = {
     // Internet Archive configuration
     iaOrganizationHandle: process.env.IA_ORGANIZATION_HANDLE || 'internetarchive',
     
-    // TOR configuration (read-only, set via environment)
-    torProxyHost: process.env.TOR_PROXY_HOST || 'tor-daemon',
+    // TOR configuration (integrated - runs in same container)
+    torProxyHost: process.env.TOR_PROXY_HOST || '127.0.0.1',
     torProxyPort: parseInt(process.env.TOR_PROXY_PORT) || 9050
 };
 

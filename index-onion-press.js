@@ -181,7 +181,10 @@ server.listen(port, async () => {
     console.log(`    GUN:              ${settingsManager.getSetting('publishToGun') ? '✓' : '✗'}`);
     console.log(`    Internet Archive: ${settingsManager.getSetting('publishToInternetArchive') ? '✓' : '✗'}`);
     console.log(`\n  OIP Daemon: ${process.env.OIP_DAEMON_URL || 'http://oip-daemon-service:3005'}`);
-    console.log(`  TOR Proxy:  ${process.env.TOR_PROXY_HOST || 'tor-daemon'}:${process.env.TOR_PROXY_PORT || 9050}`);
+    console.log(`  TOR Proxy:  127.0.0.1:9050 (integrated)`);
+    if (process.env.ONION_ADDRESS) {
+        console.log(`  .onion:     ${process.env.ONION_ADDRESS}`);
+    }
     console.log(`\n═══════════════════════════════════════════════════════════════\n`);
 });
 
