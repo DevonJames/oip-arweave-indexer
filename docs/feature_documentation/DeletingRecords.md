@@ -388,7 +388,122 @@ After publishing a delete message, you can verify deletion by:
 - **Creator-Only**: Only record creators can delete their records
 - **Irreversible**: Once processed by the network, deletion cannot be undone
 - **Propagation Time**: Delete messages take time to propagate across all nodes
-- **Template Deletion**: Requires different format (`deleteTemplate` instead of `delete`)
+- **Template Deletion**: Requires different format (`deleteTemplate` instead of `delete`) - see section below
+
+---
+
+## Template Deletion (Blockchain-Based)
+
+### Overview
+
+Template deletion uses a different message format from regular record deletion. This separation was introduced to prevent accidental deletion of templates (which define data schemas) when intending to delete regular records.
+
+**Important**: Regular `delete` messages will NOT work for templates. A safety check blocks old-format delete messages that target templates.
+
+### Delete Template Message Format
+
+```json
+{
+    "deleteTemplate": {
+        "didTx": "TEMPLATE_TRANSACTION_ID",
+        "version": "1.0.0"
+    }
+}
+```
+
+**Note**: The `didTx` value can be either:
+- Just the transaction ID: `fYKZBiM7zgL7c6Lj0PDn51c14I2Fea6T-bjxKCO-ISQ`
+- Full DID format: `did:arweave:fYKZBiM7zgL7c6Lj0PDn51c14I2Fea6T-bjxKCO-ISQ`
+
+Both formats are accepted and normalized internally.
+
+### API Endpoints for Template Deletion
+
+#### Option 1: Delete a Specific Template
+
+**Endpoint:** `POST /api/cleanup/delete-template`
+
+**Request:**
+```bash
+curl -X POST https://api.oip.onl/api/cleanup/delete-template \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "templateDid": "did:arweave:YOUR_TEMPLATE_DID",
+    "confirm": true
+  }'
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "message": "Template deletion message published successfully",
+    "templateDid": "did:arweave:YOUR_TEMPLATE_DID",
+    "deleteTransactionId": "NEW_DELETE_MESSAGE_TXID"
+}
+```
+
+#### Option 2: Analyze and Delete Unused Templates
+
+**Step 1: Analyze template usage**
+```bash
+curl -X GET https://api.oip.onl/api/cleanup/analyze-templates \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Step 2: Delete unused templates (with safety limit)**
+```bash
+curl -X POST https://api.oip.onl/api/cleanup/delete-unused-templates \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "confirm": true,
+    "maxToDelete": 5
+  }'
+```
+
+#### Option 3: Publish via newRecord Endpoint
+
+```bash
+curl -X POST https://api.oip.onl/api/records/newRecord \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "deleteTemplate": {
+      "didTx": "YOUR_TEMPLATE_TRANSACTION_ID",
+      "version": "1.0.0"
+    }
+  }'
+```
+
+### How Template Deletion Works
+
+1. **Publish Delete Message**: The `deleteTemplate` message is published to Arweave
+2. **Immediate Local Deletion**: The publishing node immediately deletes the template from its local Elasticsearch index
+3. **Network Propagation**: Other OIP nodes discover the delete message during blockchain sync
+4. **Authorization Check**: Each node verifies the delete message creator matches the original template creator
+5. **Usage Check**: Templates with existing records using them cannot be deleted
+6. **Deletion**: If authorized and not in use, the template is removed from the `templates` index
+
+### Safety Features
+
+- **Format Requirement**: Only `deleteTemplate` format works for templates; `delete` format is blocked
+- **Creator Verification**: Only the original template creator can delete their template
+- **Usage Protection**: Templates in use by existing records cannot be deleted
+- **Protected Templates**: Default templates in `config/templates.config.js` are protected from bulk deletion
+
+### Verification
+
+After deletion, verify the template was removed:
+
+```bash
+# Check if template still exists
+curl "https://api.oip.onl/api/templates/TEMPLATE_NAME"
+
+# Or check by transaction ID
+curl "https://api.oip.onl/api/records?recordType=template&search=TEMPLATE_TXID"
+```
 
 ---
 

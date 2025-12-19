@@ -1167,37 +1167,50 @@ async function deleteTemplateFromDB(creatorDid, transaction) {
             ? JSON.parse(transaction.data) 
             : transaction.data;
         
-        const didTxToDelete = parsedData.deleteTemplate?.didTx;
+        const didTxToDelete = parsedData.deleteTemplate?.didTx || parsedData.deleteTemplate?.did;
         
-        console.log(getFileInfo(), getLineNumber(), 'template didTxToDelete:', creatorDid, transaction.creator, transaction.data, { didTxToDelete });
+        // Extract just the transaction ID (strip did:arweave: prefix if present)
+        const templateTxIdToSearch = didTxToDelete?.replace('did:arweave:', '');
+        
+        console.log(getFileInfo(), getLineNumber(), 'template didTxToDelete:', creatorDid, transaction.creator, transaction.data, { didTxToDelete, templateTxIdToSearch });
+        
+        if (!templateTxIdToSearch) {
+            console.log(getFileInfo(), getLineNumber(), 'No valid template ID provided for deletion');
+            return { error: 'No valid template ID provided' };
+        }
         
         if (creatorDid === 'did:arweave:' + transaction.creator) {
             console.log(getFileInfo(), getLineNumber(), 'same creator, template deletion authorized');
 
-            // First, check if the template exists
+            // Search by data.TxId (consistent with searchTemplateByTxId)
             let searchResponse = await getElasticsearchClient().search({
                 index: 'templates',
                 body: {
-                    query: createDIDQuery(didTxToDelete)
+                    query: {
+                        match: { "data.TxId": templateTxIdToSearch }
+                    }
                 }
             });
 
             if (searchResponse.hits.hits.length === 0) {
                 searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
-                console.log(getFileInfo(), getLineNumber(), 'No template found with the specified ID:', didTxToDelete);
-                return;
+                console.log(getFileInfo(), getLineNumber(), 'No template found with TxId:', templateTxIdToSearch);
+                return { error: `Template not found: ${templateTxIdToSearch}` };
             }
 
             const template = searchResponse.hits.hits[0]._source;
             const templateTxId = template.data.TxId;
             const templateId = searchResponse.hits.hits[0]._id;
+            const templateName = template.data.template || 'unknown';
             searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
+            
+            console.log(getFileInfo(), getLineNumber(), `Found template "${templateName}" (${templateTxId}), checking if in use...`);
             
             // Check if any records are using this template
             const templateInUse = await checkTemplateUsage(templateTxId);
             
             if (templateInUse) {
-                console.log(getFileInfo(), getLineNumber(), 'Template is in use by existing records, deletion not allowed:', didTxToDelete);
+                console.log(getFileInfo(), getLineNumber(), 'Template is in use by existing records, deletion not allowed:', templateTxIdToSearch);
                 return { error: 'Template is in use by existing records and cannot be deleted' };
             }
 
