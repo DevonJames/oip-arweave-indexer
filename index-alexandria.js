@@ -289,6 +289,21 @@ app.use('/podcastShows', express.static(path.join(__dirname, 'podcastShows')));
 // Serve public directory for static HTML files (alfreds-notes.html, etc.)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Serve onion-press static files
+app.use('/onion-press', express.static(path.join(__dirname, 'public', 'onion-press'), {
+    index: 'index.html',
+    etag: true,
+    lastModified: true
+}));
+
+// Proxy onion-press API routes to daemon
+app.use('/onion-press/api', createDaemonProxy('/onion-press/api'));
+
+// Fallback for onion-press SPA routing
+app.get('/onion-press/*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'onion-press', 'index.html'));
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Basic Health Check
 // ═══════════════════════════════════════════════════════════════════════════════

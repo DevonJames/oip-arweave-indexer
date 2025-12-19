@@ -476,7 +476,8 @@ if (ONION_PRESS_ENABLED) {
                 limit = 20,
                 page = 1,
                 sortBy = 'inArweaveBlock:desc',
-                resolveDepth = 0
+                resolveDepth = 0,
+                noDuplicates = true,
             } = req.query;
             
             const params = {
