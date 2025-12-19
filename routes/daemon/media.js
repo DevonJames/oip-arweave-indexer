@@ -13,7 +13,8 @@ const { getBaseUrl, getMediaFileUrl } = require('../../helpers/core/urlHelper');
 const router = express.Router();
 
 // Media directory configuration
-const MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, '../data/media');
+// Note: __dirname is routes/daemon/, so we need ../../ to reach project root
+const MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, '../../data/media');
 
 // Function to ensure media directory exists (called when needed)
 function ensureMediaDir() {
