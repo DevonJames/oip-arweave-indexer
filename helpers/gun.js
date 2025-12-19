@@ -10,7 +10,12 @@ class GunHelper {
     constructor() {
         // Use HTTP API instead of GUN peer protocol
         const gunApiUrl = process.env.GUN_PEERS || 'http://gun-relay:8765';
-        this.apiUrl = gunApiUrl.split(',')[0]; // Use first peer as API endpoint
+        // Take first peer and strip /gun suffix (that's for GUN protocol, not HTTP API)
+        let baseUrl = gunApiUrl.split(',')[0].trim();
+        if (baseUrl.endsWith('/gun')) {
+            baseUrl = baseUrl.slice(0, -4); // Remove '/gun' suffix
+        }
+        this.apiUrl = baseUrl; // HTTP API endpoints are at root: /put, /get, /list
         
         this.encryptionEnabled = process.env.GUN_ENABLE_ENCRYPTION === 'true';
         this.defaultPrivacy = process.env.GUN_DEFAULT_PRIVACY === 'true';
