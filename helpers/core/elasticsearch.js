@@ -4759,10 +4759,11 @@ const buildElasticsearchSort = (sortBy = 'inArweaveBlock:desc') => {
     
     const esField = sortMap[field];
     
-    // Some sorts require post-processing (scores, complex fields)
+    // Some sorts require post-processing (scores, complex fields, nested fields)
+    // 'date' is in post-processing because data.basic.date is nested in some indexes
     const postProcessSorts = ['score', 'tags', 'exerciseScore', 'ingredientScore', 
                               'equipmentScore', 'exerciseTypeScore', 'cuisineScore', 
-                              'modelScore', 'matchCount', 'scheduleDate'];
+                              'modelScore', 'matchCount', 'scheduleDate', 'date'];
     
     if (postProcessSorts.includes(field)) {
         // Return null to indicate post-processing needed
