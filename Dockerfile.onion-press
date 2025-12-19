@@ -7,13 +7,12 @@
 # INCLUDED:
 #   - Multi-destination publishing (Arweave, GUN, Internet Archive)
 #   - WordPress integration (LO Publisher plugin)
-#   - TOR client for anonymous publishing
+#   - TOR daemon (for hidden service + anonymous publishing)
 #   - Enhanced browsing interface
 #   - Admin settings management
 #
 # REQUIRES:
 #   - oip-daemon-service (for all data operations)
-#   - tor-daemon (for TOR connectivity)
 #   - wordpress (for authoring interface)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -25,12 +24,14 @@ ENV NODE_ENV=production
 WORKDIR /usr/src/app
 
 # ─────────────────────────────────────────────────────────────────────────────
-# System Dependencies
+# System Dependencies (including TOR)
 # ─────────────────────────────────────────────────────────────────────────────
 RUN apk update && apk add --no-cache \
     bash \
     curl \
-    git
+    git \
+    tor \
+    netcat-openbsd
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Node.js Dependencies
@@ -67,11 +68,20 @@ COPY scripts/docker-entrypoint-onion-press.sh /usr/local/bin/docker-entrypoint.s
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # ─────────────────────────────────────────────────────────────────────────────
+# TOR Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+COPY tor-daemon/torrc /etc/tor/torrc
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Directory Structure
 # ─────────────────────────────────────────────────────────────────────────────
 RUN mkdir -p \
     ./data/onion-press \
-    ./data/settings
+    ./data/settings \
+    /var/lib/tor/hidden_service \
+    /var/lib/tor/data && \
+    chown -R tor:tor /var/lib/tor && \
+    chmod 700 /var/lib/tor/hidden_service
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Memory Configuration

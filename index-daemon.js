@@ -227,6 +227,11 @@ const corsOptions = {
             'http://localhost:3006',  // Alexandria service
             `http://localhost:${process.env.PORT || 3005}`,
             'https://api.oip.onl',
+            'https://app.fitnessally.io',
+            'https://mobile.fitnessally.io',
+            'https://rockhoppersgame.com',
+            'https://lyra.ninja',
+            'https://alexandria.io',
             // Add your production domains here
         ];
         
@@ -446,13 +451,93 @@ app.use('/api/workout', alexandriaStub);
 app.use('/api/notes', alexandriaStub);
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Onion Press Proxy Routes (for profiles that include onion-press-service)
+// Onion Press Routes (browse handled locally, other APIs proxy to onion-press-service)
 // ═══════════════════════════════════════════════════════════════════════════════
 const ONION_PRESS_URL = process.env.ONION_PRESS_URL || `http://onion-press-service:${process.env.ONION_PRESS_PORT || 3007}`;
 const ONION_PRESS_ENABLED = process.env.ONION_PRESS_ENABLED !== 'false';
 
+// Import Elasticsearch helper for browse routes
+const { getRecords: getRecordsFromES } = require('./helpers/core/elasticsearch');
+
 if (ONION_PRESS_ENABLED) {
-    // Proxy API requests to onion-press-service
+    // ─────────────────────────────────────────────────────────────────────────
+    // Browse API - handled locally (no need for onion-press-service)
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    // GET /onion-press/api/browse/records - Browse records
+    app.get('/onion-press/api/browse/records', async (req, res) => {
+        try {
+            const {
+                recordType,
+                search,
+                tags,
+                tagsMatchMode,
+                creator,
+                limit = 20,
+                offset = 0,
+                sortBy = 'date:desc',
+                resolveDepth = 0
+            } = req.query;
+            
+            const params = {
+                limit: Math.min(parseInt(limit) || 20, 100),
+                offset: parseInt(offset) || 0,
+                sortBy,
+                resolveDepth: parseInt(resolveDepth) || 0
+            };
+            
+            if (recordType) params.recordType = recordType;
+            if (search) params.search = search;
+            if (tags) params.tags = tags;
+            if (tagsMatchMode) params.tagsMatchMode = tagsMatchMode;
+            if (creator) params.creator = creator;
+            
+            const data = await getRecordsFromES(params);
+            res.status(200).json(data);
+            
+        } catch (error) {
+            console.error('Onion Press browse error:', error.message);
+            res.status(500).json({
+                error: 'Failed to browse records',
+                message: error.message
+            });
+        }
+    });
+    
+    // GET /onion-press/api/browse/types - Get record types
+    app.get('/onion-press/api/browse/types', async (req, res) => {
+        try {
+            // Get unique record types with counts
+            const data = await getRecordsFromES({ limit: 0 });
+            res.status(200).json({ 
+                recordTypes: data.recordTypes || {},
+                total: data.total || 0
+            });
+        } catch (error) {
+            console.error('Onion Press types error:', error.message);
+            res.status(500).json({
+                error: 'Failed to get record types',
+                message: error.message
+            });
+        }
+    });
+    
+    // GET /onion-press/api/browse/templates - Get templates (proxy to local /api/templates)
+    app.get('/onion-press/api/browse/templates', async (req, res) => {
+        try {
+            // Redirect internally to templates route
+            const response = await axios.get(`http://localhost:${port}/api/templates`, {
+                timeout: 10000
+            });
+            res.status(200).json(response.data);
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to get templates', message: error.message });
+        }
+    });
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // Publish/Admin/TOR API - proxy to onion-press-service (if available)
+    // ─────────────────────────────────────────────────────────────────────────
     app.use('/onion-press/api', async (req, res) => {
         let response = null;
         try {
@@ -467,7 +552,7 @@ if (ONION_PRESS_ENABLED) {
                     'Authorization': req.headers.authorization || ''
                 },
                 timeout: 30000,
-                validateStatus: () => true // Don't throw on any status
+                validateStatus: () => true
             });
             
             const data = response.data;
@@ -483,11 +568,31 @@ if (ONION_PRESS_ENABLED) {
                 response = null;
             }
             
-            // Check if onion-press-service is not available
+            // If onion-press-service is not available, return stub response
             if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+                // For publish destinations endpoint, return local settings
+                if (req.url.startsWith('/publish/destinations')) {
+                    return res.status(200).json({
+                        destinations: {
+                            arweave: { enabled: true, description: 'Permanent blockchain storage' },
+                            gun: { enabled: true, description: 'Real-time peer sync' },
+                            internetArchive: { enabled: false, description: 'Requires onion-press-service' }
+                        },
+                        enabledDestinations: ['arweave', 'gun'],
+                        note: 'Full publishing requires onion-press-server profile'
+                    });
+                }
+                // For TOR status, return disconnected
+                if (req.url.startsWith('/tor/')) {
+                    return res.status(200).json({
+                        connected: false,
+                        onionAddress: null,
+                        message: 'TOR requires onion-press-server profile'
+                    });
+                }
                 res.status(503).json({
                     error: 'Onion Press service not available',
-                    message: 'This endpoint requires the onion-press-server or alexandria profile',
+                    message: 'Publishing and TOR features require the onion-press-server profile',
                     hint: 'Deploy with: make -f Makefile.split onion-press-server'
                 });
             } else {
@@ -496,19 +601,21 @@ if (ONION_PRESS_ENABLED) {
         }
     });
     
-    // Serve onion-press static files
+    // ─────────────────────────────────────────────────────────────────────────
+    // Static files and SPA routing
+    // ─────────────────────────────────────────────────────────────────────────
     app.use('/onion-press', express.static(path.join(__dirname, 'public', 'onion-press'), {
         index: 'index.html',
         etag: true,
         lastModified: true
     }));
     
-    // Fallback for SPA routing - serve index.html for any unmatched /onion-press/* routes
+    // Fallback for SPA routing
     app.get('/onion-press/*', (req, res) => {
         res.sendFile(path.join(__dirname, 'public', 'onion-press', 'index.html'));
     });
     
-    console.log(`🧅 Onion Press proxy enabled → ${ONION_PRESS_URL}`);
+    console.log(`🧅 Onion Press enabled (browse: local, publish/tor: ${ONION_PRESS_URL})`);
 } else {
     app.use('/onion-press', (req, res) => {
         res.status(503).json({

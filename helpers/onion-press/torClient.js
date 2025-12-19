@@ -16,17 +16,20 @@ const { SocksProxyAgent } = require('socks-proxy-agent');
 const fs = require('fs');
 const path = require('path');
 
-// TOR proxy configuration
-const TOR_PROXY_HOST = process.env.TOR_PROXY_HOST || 'tor-daemon';
+// TOR proxy configuration (runs in same container)
+const TOR_PROXY_HOST = process.env.TOR_PROXY_HOST || '127.0.0.1';
 const TOR_PROXY_PORT = parseInt(process.env.TOR_PROXY_PORT) || 9050;
 
-// Path to .onion hostname file (set by TOR daemon)
+// Path to .onion hostname file (TOR runs in same container)
 const ONION_HOSTNAME_FILE = process.env.ONION_HOSTNAME_FILE || '/var/lib/tor/hidden_service/hostname';
 
 // Cache for .onion address
 let cachedOnionAddress = null;
 let lastOnionCheck = 0;
 const ONION_CHECK_INTERVAL = 60000; // Check every minute
+
+// Only log warnings once
+let hasLoggedMissingHostname = false;
 
 /**
  * Create a TOR-proxied axios client
@@ -86,8 +89,11 @@ async function getOnionAddress() {
             }
         }
         
-        // If we're not in Docker, TOR might not be running
-        console.log('⚠️ TOR hidden service hostname not found');
+        // Only log warning once
+        if (!hasLoggedMissingHostname) {
+            console.log('⚠️ TOR hidden service hostname not found (this message won\'t repeat)');
+            hasLoggedMissingHostname = true;
+        }
         return null;
         
     } catch (error) {

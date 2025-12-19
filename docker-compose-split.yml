@@ -237,7 +237,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=${ONION_PRESS_PORT:-3007}
-      - OIP_DAEMON_URL=http://oip-daemon-service:${PORT:-3005}
+      - OIP_DAEMON_URL=http://oip-daemon-service:3005
       - PUBLISH_TO_ARWEAVE=${PUBLISH_TO_ARWEAVE:-true}
       - PUBLISH_TO_GUN=${PUBLISH_TO_GUN:-true}
       - PUBLISH_TO_INTERNETARCHIVE=${PUBLISH_TO_INTERNETARCHIVE:-false}
@@ -251,11 +251,11 @@ services:
     depends_on:
       oip-daemon-service:
         condition: service_healthy
-      tor-daemon:
-        condition: service_started
     volumes:
       - ./data/onion-press:/usr/src/app/data
       - ./public/onion-press:/usr/src/app/public/onion-press
+      - tor-hidden-service:/var/lib/tor/hidden_service
+      - tor-data:/var/lib/tor/data
     networks:
       - oip-network
     restart: unless-stopped
@@ -313,29 +313,6 @@ services:
       - MYSQL_PASSWORD=${WORDPRESS_DB_PASSWORD:-wordpress}
     volumes:
       - wordpress-db-data:/var/lib/mysql
-    networks:
-      - oip-network
-    restart: unless-stopped
-    profiles:
-      - onion-press-server
-      - alexandria
-      - alexandria-gpu
-      - alexandria-macMseries
-      - alexandria-decentralized
-      - alexandria-decentralized-gpu
-      - alexandria-decentralized-macMseries
-      - alexandria-noSTT
-      - alexandria-noSTT-decentralized
-
-  tor-daemon:
-    build:
-      context: ./tor-daemon
-      dockerfile: Dockerfile
-    volumes:
-      - tor-hidden-service:/var/lib/tor/hidden_service
-      - tor-data:/var/lib/tor/data
-    ports:
-      - "${TOR_SOCKS_PORT:-9050}:9050"
     networks:
       - oip-network
     restart: unless-stopped
