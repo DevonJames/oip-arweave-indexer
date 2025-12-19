@@ -468,20 +468,20 @@ if (ONION_PRESS_ENABLED) {
     app.get('/onion-press/api/browse/records', async (req, res) => {
         try {
             const {
-                recordType,
+                recordType = 'post',
                 search,
                 tags,
                 tagsMatchMode,
                 creator,
                 limit = 20,
-                offset = 0,
-                sortBy = 'date:desc',
+                page = 1,
+                sortBy = 'inArweaveBlock:desc',
                 resolveDepth = 0
             } = req.query;
             
             const params = {
                 limit: Math.min(parseInt(limit) || 20, 100),
-                offset: parseInt(offset) || 0,
+                page: parseInt(page) || 1,
                 sortBy,
                 resolveDepth: parseInt(resolveDepth) || 0
             };
