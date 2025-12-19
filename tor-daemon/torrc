@@ -1,0 +1,28 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# TOR CONFIGURATION FOR ONION PRESS SERVER
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# SOCKS proxy for outbound connections
+# Binds to all interfaces so other containers can use it
+SocksPort 0.0.0.0:9050
+
+# Control port for status queries
+ControlPort 9051
+
+# Hidden service configuration
+# This creates a unique .onion address for this instance
+HiddenServiceDir /var/lib/tor/hidden_service/
+HiddenServicePort 80 onion-press-service:3007
+
+# Data directory
+DataDirectory /var/lib/tor/data
+
+# Logging
+Log notice stdout
+
+# Allow connections from Docker network
+SocksPolicy accept 172.0.0.0/8
+SocksPolicy accept 10.0.0.0/8
+SocksPolicy accept 192.168.0.0/16
+SocksPolicy reject *
+

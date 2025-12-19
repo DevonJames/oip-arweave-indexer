@@ -1,0 +1,97 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# ONION PRESS SERVICE DOCKERFILE
+# ═══════════════════════════════════════════════════════════════════════════════
+# Purpose: Anonymous publishing platform with WordPress integration and TOR
+# Analogy: The Underground Press (anonymous publishing, distributed syndication)
+#
+# INCLUDED:
+#   - Multi-destination publishing (Arweave, GUN, Internet Archive)
+#   - WordPress integration (LO Publisher plugin)
+#   - TOR client for anonymous publishing
+#   - Enhanced browsing interface
+#   - Admin settings management
+#
+# REQUIRES:
+#   - oip-daemon-service (for all data operations)
+#   - tor-daemon (for TOR connectivity)
+#   - wordpress (for authoring interface)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+FROM node:18-alpine3.20
+
+# Production mode for optimized builds
+ENV NODE_ENV=production
+
+WORKDIR /usr/src/app
+
+# ─────────────────────────────────────────────────────────────────────────────
+# System Dependencies
+# ─────────────────────────────────────────────────────────────────────────────
+RUN apk update && apk add --no-cache \
+    bash \
+    curl \
+    git
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Node.js Dependencies
+# ─────────────────────────────────────────────────────────────────────────────
+COPY package-onion-press.json ./package.json
+
+# Install dependencies
+RUN npm install --verbose
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Application Code
+# ─────────────────────────────────────────────────────────────────────────────
+# Copy configuration
+COPY config ./config
+
+# Copy helpers
+COPY helpers/onion-press ./helpers/onion-press
+COPY helpers/utils.js ./helpers/utils.js
+
+# Copy routes
+COPY routes/onion-press ./routes/onion-press
+
+# Copy middleware
+COPY middleware ./middleware
+
+# Copy public files
+COPY public/onion-press ./public/onion-press
+
+# Copy entry point
+COPY index-onion-press.js ./index.js
+
+# Copy startup script
+COPY scripts/docker-entrypoint-onion-press.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Directory Structure
+# ─────────────────────────────────────────────────────────────────────────────
+RUN mkdir -p \
+    ./data/onion-press \
+    ./data/settings
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Memory Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+ENV NODE_OPTIONS="--expose-gc --max-old-space-size=2048"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Expose Ports
+# ─────────────────────────────────────────────────────────────────────────────
+EXPOSE 3007
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Health Check
+# ─────────────────────────────────────────────────────────────────────────────
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+    CMD sh -c 'curl -f http://localhost:${PORT:-3007}/health || exit 1'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Startup
+# ─────────────────────────────────────────────────────────────────────────────
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["node", "--expose-gc", "index.js"]
+

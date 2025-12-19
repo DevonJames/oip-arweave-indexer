@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧅 Onion Press</title>
+    <link rel="stylesheet" href="css/onion-press.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <span class="logo-icon">🧅</span>
+                <span class="logo-text">Onion Press</span>
+            </div>
+            <nav class="nav">
+                <button class="nav-btn active" data-tab="browse">Browse</button>
+                <button class="nav-btn" data-tab="publish">Publish</button>
+                <button class="nav-btn admin-only hidden" data-tab="admin">⚙️ Admin</button>
+            </nav>
+            <div class="header-actions">
+                <div class="tor-status" id="torStatus" title="TOR Status">
+                    <span class="tor-indicator"></span>
+                    <span class="tor-label">TOR</span>
+                </div>
+                <button class="login-btn" id="loginBtn">Login</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <!-- Browse Tab -->
+        <section id="browseTab" class="tab-content active">
+            <!-- Filters -->
+            <div class="filters">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search records..." class="search-input">
+                    <button id="searchBtn" class="search-btn">🔍</button>
+                </div>
+                <div class="filter-group">
+                    <select id="typeFilter" class="filter-select">
+                        <option value="">All Types</option>
+                        <option value="post">📰 Posts</option>
+                        <option value="image">🖼️ Images</option>
+                        <option value="video">🎬 Videos</option>
+                        <option value="audio">🎵 Audio</option>
+                        <option value="recipe">🍳 Recipes</option>
+                        <option value="exercise">🏋️ Exercises</option>
+                    </select>
+                    <select id="sortFilter" class="filter-select">
+                        <option value="date:desc">Newest First</option>
+                        <option value="date:asc">Oldest First</option>
+                        <option value="name:asc">Name A-Z</option>
+                        <option value="name:desc">Name Z-A</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Records Grid -->
+            <div id="recordsContainer" class="records-container">
+                <div class="loading">Loading records...</div>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination" id="pagination">
+                <button class="page-btn" id="prevBtn" disabled>← Previous</button>
+                <span class="page-info" id="pageInfo">Page 1</span>
+                <button class="page-btn" id="nextBtn">Next →</button>
+            </div>
+        </section>
+
+        <!-- Publish Tab -->
+        <section id="publishTab" class="tab-content hidden">
+            <div class="publish-container">
+                <h2>Publish to OIP</h2>
+                <p class="publish-description">
+                    Use WordPress with the LO Publisher plugin for full authoring capabilities,
+                    or submit a raw record below.
+                </p>
+
+                <!-- Destination Checkboxes -->
+                <div class="destinations-box">
+                    <h3>Publishing Destinations</h3>
+                    <div class="destination-options">
+                        <label class="destination-option">
+                            <input type="checkbox" id="destArweave" checked>
+                            <span class="dest-icon">⛓️</span>
+                            <span class="dest-name">Arweave</span>
+                            <span class="dest-desc">Permanent blockchain storage</span>
+                        </label>
+                        <label class="destination-option">
+                            <input type="checkbox" id="destGun" checked>
+                            <span class="dest-icon">🔄</span>
+                            <span class="dest-name">GUN</span>
+                            <span class="dest-desc">Real-time peer sync</span>
+                        </label>
+                        <label class="destination-option">
+                            <input type="checkbox" id="destIA">
+                            <span class="dest-icon">🧅</span>
+                            <span class="dest-name">Internet Archive</span>
+                            <span class="dest-desc">Anonymous via TOR</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Simple Record Form -->
+                <div class="record-form">
+                    <h3>Quick Publish</h3>
+                    <div class="form-group">
+                        <label for="recordType">Record Type</label>
+                        <select id="recordType">
+                            <option value="post">Post</option>
+                            <option value="image">Image</option>
+                            <option value="video">Video</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="recordTitle">Title</label>
+                        <input type="text" id="recordTitle" placeholder="Enter title...">
+                    </div>
+                    <div class="form-group">
+                        <label for="recordDescription">Description</label>
+                        <textarea id="recordDescription" rows="3" placeholder="Enter description..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="recordContent">Content</label>
+                        <textarea id="recordContent" rows="6" placeholder="Enter main content..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="recordTags">Tags (comma-separated)</label>
+                        <input type="text" id="recordTags" placeholder="news, politics, tech">
+                    </div>
+                    <button id="publishBtn" class="publish-btn">📤 Publish Record</button>
+                </div>
+
+                <!-- Status -->
+                <div id="publishStatus" class="publish-status hidden"></div>
+            </div>
+        </section>
+
+        <!-- Admin Tab (requires login) -->
+        <section id="adminTab" class="tab-content hidden">
+            <div class="admin-container">
+                <h2>⚙️ Admin Settings</h2>
+
+                <!-- Publishing Destinations -->
+                <div class="settings-section">
+                    <h3>📤 Publishing Destinations</h3>
+                    <div class="setting-item">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="adminArweave" class="setting-toggle">
+                            <span class="toggle-slider"></span>
+                            <span>Publish to Arweave</span>
+                        </label>
+                        <span class="setting-desc">Permanent blockchain storage</span>
+                    </div>
+                    <div class="setting-item">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="adminGun" class="setting-toggle">
+                            <span class="toggle-slider"></span>
+                            <span>Publish to GUN</span>
+                        </label>
+                        <span class="setting-desc">Real-time peer synchronization</span>
+                    </div>
+                    <div class="setting-item">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="adminIA" class="setting-toggle">
+                            <span class="toggle-slider"></span>
+                            <span>Publish to Internet Archive (via TOR)</span>
+                        </label>
+                        <span class="setting-desc">Anonymous submission to IA gateway</span>
+                    </div>
+                </div>
+
+                <!-- GUN Settings -->
+                <div class="settings-section">
+                    <h3>🔄 GUN Synchronization</h3>
+                    <div class="form-group">
+                        <label for="adminGunPeers">External Peers (comma-separated)</label>
+                        <input type="text" id="adminGunPeers" placeholder="https://gun-relay.example.com/gun">
+                    </div>
+                    <div class="form-group">
+                        <label for="adminGunInterval">Sync Interval (ms)</label>
+                        <input type="number" id="adminGunInterval" value="30000" min="5000" max="300000">
+                    </div>
+                    <div class="form-group">
+                        <label for="adminGunTrusted">Trusted Nodes (comma-separated public keys)</label>
+                        <input type="text" id="adminGunTrusted" placeholder="pubkey1, pubkey2">
+                    </div>
+                </div>
+
+                <!-- TOR Status -->
+                <div class="settings-section">
+                    <h3>🧅 TOR Status</h3>
+                    <div class="tor-status-box" id="torStatusBox">
+                        <div class="tor-status-row">
+                            <span>Status:</span>
+                            <span id="torConnected" class="status-value">Checking...</span>
+                        </div>
+                        <div class="tor-status-row">
+                            <span>Your .onion address:</span>
+                            <span id="torOnionAddr" class="status-value monospace">Loading...</span>
+                        </div>
+                        <button id="copyOnionBtn" class="small-btn">📋 Copy Address</button>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="admin-actions">
+                    <button id="saveSettingsBtn" class="primary-btn">💾 Save Settings</button>
+                    <button id="resetSettingsBtn" class="secondary-btn">↺ Reset to Defaults</button>
+                </div>
+
+                <div id="adminStatus" class="admin-status hidden"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal hidden">
+        <div class="modal-content">
+            <button class="modal-close" id="closeLoginModal">×</button>
+            <h2>Login</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">Email</label>
+                    <input type="email" id="loginEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" required>
+                </div>
+                <button type="submit" class="primary-btn">Login</button>
+            </form>
+            <div id="loginError" class="error-msg hidden"></div>
+        </div>
+    </div>
+
+    <!-- Record Detail Modal -->
+    <div id="recordModal" class="modal hidden">
+        <div class="modal-content large">
+            <button class="modal-close" id="closeRecordModal">×</button>
+            <div id="recordDetail"></div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <span>Onion Press v1.0.0</span>
+            <span class="separator">|</span>
+            <span>Powered by <a href="https://oip.io" target="_blank">Open Index Protocol</a></span>
+            <span class="separator">|</span>
+            <span>🧅 Anonymous Publishing</span>
+        </div>
+    </footer>
+
+    <script src="js/api.js"></script>
+    <script src="js/browse.js"></script>
+    <script src="js/admin.js"></script>
+</body>
+</html>
+

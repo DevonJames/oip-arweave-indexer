@@ -253,6 +253,37 @@ NGROK_PORT=4035
 DEBUG_PORT=9229
 NEXT_FRONTEND_PORT=3000
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# ONION PRESS SERVER CONFIGURATION (onion-press-server profile)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Onion Press Service Port
+ONION_PRESS_PORT=3007
+
+# Publishing Destinations - control where records are published
+# Set to 'true' or 'false' to enable/disable each destination
+PUBLISH_TO_ARWEAVE=true
+PUBLISH_TO_GUN=true
+PUBLISH_TO_INTERNETARCHIVE=false
+
+# WordPress Configuration
+WORDPRESS_PORT=8080
+WORDPRESS_DB_USER=wordpress
+WORDPRESS_DB_PASSWORD=wordpress
+WORDPRESS_DB_NAME=wordpress
+WORDPRESS_DB_ROOT_PASSWORD=rootpassword
+
+# TOR Configuration
+TOR_SOCKS_PORT=9050
+TOR_CONTROL_PORT=9051
+
+# Internet Archive Organization Handle
+# The organization record that contains the IA gateway's .onion address
+# This organization should have a 'gateway_onion_address' field
+IA_ORGANIZATION_HANDLE=internetarchive
+
+# ═══════════════════════════════════════════════════════════════════════════════
+
 # Memory Configuration
 # Set by set-memory.sh script based on available system memory
 # Example: --max-old-space-size=32768 for 32GB

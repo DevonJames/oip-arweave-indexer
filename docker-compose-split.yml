@@ -41,7 +41,8 @@
 #
 # PROFILES:
 #   - oip-only:       Just the daemon (indexing, publishing, media)
-#   - alexandria:     Full stack with AI/voice (CPU)
+#   - onion-press-server: OIP + WordPress + TOR anonymous publishing
+#   - alexandria:     Full stack with AI/voice (CPU) - includes onion-press
 #   - alexandria-gpu: Full stack with GPU acceleration
 #   - alexandria-macMseries: Full stack for Apple Silicon
 #   - alexandria-decentralized: Full stack + local Arweave gateway (CPU)
@@ -80,6 +81,7 @@ services:
     restart: unless-stopped
     profiles:
       - oip-only
+      - onion-press-server
       - alexandria
       - alexandria-gpu
       - alexandria-macMseries
@@ -103,6 +105,7 @@ services:
     restart: unless-stopped
     profiles:
       - oip-only
+      - onion-press-server
       - alexandria
       - alexandria-gpu
       - alexandria-macMseries
@@ -202,6 +205,7 @@ services:
     restart: unless-stopped
     profiles:
       - oip-only
+      - onion-press-server
       - alexandria
       - alexandria-gpu
       - alexandria-macMseries
@@ -211,6 +215,134 @@ services:
       - alexandria-noSTT
       - alexandria-noSTT-decentralized
       - chatterbox
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # ONION PRESS SERVER SERVICES - Anonymous Publishing Platform
+  # ════════════════════════════════════════════════════════════════════════════
+
+  onion-press-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.onion-press
+    env_file:
+      - .env
+    ports:
+      - "${ONION_PRESS_PORT:-3007}:3007"
+    environment:
+      - NODE_ENV=production
+      - PORT=3007
+      - OIP_DAEMON_URL=http://oip-daemon-service:3005
+      - PUBLISH_TO_ARWEAVE=${PUBLISH_TO_ARWEAVE:-true}
+      - PUBLISH_TO_GUN=${PUBLISH_TO_GUN:-true}
+      - PUBLISH_TO_INTERNETARCHIVE=${PUBLISH_TO_INTERNETARCHIVE:-false}
+      - GUN_EXTERNAL_PEERS=${GUN_EXTERNAL_PEERS:-}
+      - GUN_SYNC_INTERVAL=${GUN_SYNC_INTERVAL:-30000}
+      - GUN_SYNC_TRUSTED_NODES=${GUN_SYNC_TRUSTED_NODES:-}
+      - TOR_PROXY_HOST=tor-daemon
+      - TOR_PROXY_PORT=9050
+      - JWT_SECRET=${JWT_SECRET}
+      - IA_ORGANIZATION_HANDLE=${IA_ORGANIZATION_HANDLE:-internetarchive}
+    depends_on:
+      oip-daemon-service:
+        condition: service_healthy
+      tor-daemon:
+        condition: service_started
+    volumes:
+      - ./data/onion-press:/usr/src/app/data
+      - ./public/onion-press:/usr/src/app/public/onion-press
+    networks:
+      - oip-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    profiles:
+      - onion-press-server
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+
+  wordpress:
+    image: wordpress:latest
+    ports:
+      - "${WORDPRESS_PORT:-8080}:80"
+    environment:
+      - WORDPRESS_DB_HOST=wordpress-db
+      - WORDPRESS_DB_USER=${WORDPRESS_DB_USER:-wordpress}
+      - WORDPRESS_DB_PASSWORD=${WORDPRESS_DB_PASSWORD:-wordpress}
+      - WORDPRESS_DB_NAME=${WORDPRESS_DB_NAME:-wordpress}
+    depends_on:
+      - wordpress-db
+    volumes:
+      - wordpress-data:/var/www/html
+      - ./wordpress-plugin/lo-publisher:/var/www/html/wp-content/plugins/lo-publisher:ro
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - onion-press-server
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+
+  wordpress-db:
+    image: mariadb:latest
+    environment:
+      - MYSQL_ROOT_PASSWORD=${WORDPRESS_DB_ROOT_PASSWORD:-rootpassword}
+      - MYSQL_DATABASE=${WORDPRESS_DB_NAME:-wordpress}
+      - MYSQL_USER=${WORDPRESS_DB_USER:-wordpress}
+      - MYSQL_PASSWORD=${WORDPRESS_DB_PASSWORD:-wordpress}
+    volumes:
+      - wordpress-db-data:/var/lib/mysql
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - onion-press-server
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
+
+  tor-daemon:
+    build:
+      context: ./tor-daemon
+      dockerfile: Dockerfile
+    volumes:
+      - tor-hidden-service:/var/lib/tor/hidden_service
+      - tor-data:/var/lib/tor/data
+    ports:
+      - "${TOR_SOCKS_PORT:-9050}:9050"
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - onion-press-server
+      - alexandria
+      - alexandria-gpu
+      - alexandria-macMseries
+      - alexandria-decentralized
+      - alexandria-decentralized-gpu
+      - alexandria-decentralized-macMseries
+      - alexandria-noSTT
+      - alexandria-noSTT-decentralized
 
   # ════════════════════════════════════════════════════════════════════════════
   # ALEXANDRIA SERVICE - The Librarian
@@ -483,6 +615,14 @@ volumes:
     name: ${COMPOSE_PROJECT_NAME:-oip}_ollama-data
   whisper-models:
     name: ${COMPOSE_PROJECT_NAME:-oip}_whisper-models
+  wordpress-data:
+    name: ${COMPOSE_PROJECT_NAME:-oip}_wordpress-data
+  wordpress-db-data:
+    name: ${COMPOSE_PROJECT_NAME:-oip}_wordpress-db-data
+  tor-hidden-service:
+    name: ${COMPOSE_PROJECT_NAME:-oip}_tor-hidden-service
+  tor-data:
+    name: ${COMPOSE_PROJECT_NAME:-oip}_tor-data
 
 # ════════════════════════════════════════════════════════════════════════════
 # NETWORKS

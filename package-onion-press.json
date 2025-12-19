@@ -1,0 +1,31 @@
+{
+  "name": "onion-press-service",
+  "version": "1.0.0",
+  "description": "Onion Press Service - Anonymous publishing platform with WordPress integration and TOR",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --expose-gc index.js",
+    "start:dev": "node --expose-gc index.js",
+    "test": "mocha test/onion-press/**/*.js --timeout 30000"
+  },
+  "author": "OIP",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "socks-proxy-agent": "^8.0.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "chai": "^4.3.10",
+    "mocha": "^10.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+

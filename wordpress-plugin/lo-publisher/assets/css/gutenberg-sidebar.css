@@ -1,0 +1,105 @@
+/**
+ * LO Publisher - Gutenberg Sidebar Styles
+ */
+
+/* Sidebar styling */
+.lo-publisher-sidebar .components-panel__body {
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.lo-publisher-sidebar .components-panel__body-title {
+    font-size: 13px;
+}
+
+/* Checkbox styling */
+.lo-publisher-sidebar .components-checkbox-control__label {
+    font-weight: 500;
+}
+
+.lo-publisher-sidebar .components-base-control__help {
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+/* Publish button */
+.lo-publisher-sidebar .components-button.is-primary {
+    background: #7c3aed;
+    border-color: #7c3aed;
+}
+
+.lo-publisher-sidebar .components-button.is-primary:hover {
+    background: #6d28d9;
+    border-color: #6d28d9;
+}
+
+.lo-publisher-sidebar .components-button.is-primary:disabled {
+    background: #9ca3af;
+    border-color: #9ca3af;
+}
+
+/* Status box */
+.lo-publisher-status-box {
+    background: #f3f4f6;
+    padding: 12px;
+    border-radius: 4px;
+    margin-top: 12px;
+}
+
+.lo-publisher-status-box .status-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+.lo-publisher-status-box .status-success {
+    color: #059669;
+}
+
+.lo-publisher-status-box .status-error {
+    color: #dc2626;
+}
+
+.lo-publisher-status-box .status-pending {
+    color: #9ca3af;
+}
+
+.lo-publisher-status-box .status-skipped {
+    color: #6b7280;
+}
+
+/* DID display */
+.lo-publisher-did {
+    font-family: monospace;
+    font-size: 10px;
+    word-break: break-all;
+    background: #e5e7eb;
+    padding: 4px 6px;
+    border-radius: 2px;
+    margin-top: 4px;
+}
+
+/* Spinner */
+.lo-publisher-sidebar .components-spinner {
+    margin-right: 8px;
+}
+
+/* Notice styling */
+.lo-publisher-sidebar .components-notice {
+    margin: 8px 0;
+}
+
+/* About section */
+.lo-publisher-about {
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.5;
+}
+
+.lo-publisher-server-info {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 8px;
+    font-family: monospace;
+}
+

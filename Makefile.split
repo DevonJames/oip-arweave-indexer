@@ -16,17 +16,19 @@
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 
-.PHONY: oip-only alexandria alexandria-gpu alexandria-macMseries \
+.PHONY: oip-only onion-press-server alexandria alexandria-gpu alexandria-macMseries \
         alexandria-decentralized alexandria-decentralized-gpu \
         alexandria-decentralized-macMseries alexandria-noSTT \
         alexandria-noSTT-decentralized chatterbox-split \
-        rebuild-oip-only rebuild-alexandria rebuild-alexandria-gpu \
+        rebuild-oip-only rebuild-onion-press-server rebuild-alexandria rebuild-alexandria-gpu \
         rebuild-alexandria-macMseries rebuild-alexandria-decentralized \
         rebuild-alexandria-decentralized-gpu rebuild-alexandria-decentralized-macMseries \
         rebuild-alexandria-noSTT rebuild-alexandria-noSTT-decentralized \
         rebuild-chatterbox-split \
-        logs-daemon logs-alexandria restart-daemon restart-alexandria \
-        shell-daemon shell-alexandria test-daemon test-alexandria test-integration
+        logs-daemon logs-alexandria logs-onion-press logs-wordpress logs-tor \
+        restart-daemon restart-alexandria restart-onion-press \
+        shell-daemon shell-alexandria shell-onion-press \
+        test-daemon test-alexandria test-onion-press test-integration tor-status
 
 # Colors
 GREEN := \033[0;32m
@@ -55,6 +57,25 @@ oip-only: ## Deploy: Core OIP daemon only (indexing, publishing, media) - no AI
 	@echo ""
 	@echo "$(GREEN)✅ OIP Daemon deployed on port 3005$(NC)"
 	@echo "$(YELLOW)Note: AI/voice endpoints will return 503 (not available)$(NC)"
+
+onion-press-server: ## Deploy: OIP + WordPress + TOR anonymous publishing
+	@echo "$(BLUE)🧅 Deploying Onion Press Server (Underground Press)...$(NC)"
+	@echo "$(YELLOW)This deployment includes:$(NC)"
+	@echo "  • OIP Daemon (port 3005)"
+	@echo "  • Onion Press Service (port 3007)"
+	@echo "  • WordPress (port 8080)"
+	@echo "  • TOR Daemon (SOCKS5 proxy)"
+	@echo "  • Elasticsearch + Kibana"
+	@echo ""
+	docker-compose -f $(COMPOSE_FILE) --profile onion-press-server up -d
+	@echo ""
+	@echo "$(GREEN)✅ Onion Press Server deployed$(NC)"
+	@echo "  • OIP Daemon: http://localhost:3005"
+	@echo "  • Onion Press: http://localhost:3007"
+	@echo "  • WordPress: http://localhost:8080"
+	@echo ""
+	@echo "$(YELLOW)📋 To get your .onion address:$(NC)"
+	@echo "  make -f Makefile.split tor-status"
 
 alexandria: ## Deploy: Full stack with AI, voice (CPU) - oip-daemon + alexandria-service
 	@echo "$(BLUE)📖 Deploying Alexandria Stack (Library + Librarian)...$(NC)"
@@ -160,6 +181,15 @@ logs-alexandria: ## Show alexandria-service logs
 logs-both: ## Show both daemon and alexandria logs
 	docker-compose -f $(COMPOSE_FILE) logs -f oip-daemon-service alexandria-service
 
+logs-onion-press: ## Show onion-press-service logs
+	docker-compose -f $(COMPOSE_FILE) logs -f onion-press-service
+
+logs-wordpress: ## Show WordPress logs
+	docker-compose -f $(COMPOSE_FILE) logs -f wordpress
+
+logs-tor: ## Show TOR daemon logs
+	docker-compose -f $(COMPOSE_FILE) logs -f tor-daemon
+
 restart-daemon: ## Restart oip-daemon-service
 	@echo "$(BLUE)🔄 Restarting OIP Daemon...$(NC)"
 	docker-compose -f $(COMPOSE_FILE) restart oip-daemon-service
@@ -170,11 +200,28 @@ restart-alexandria: ## Restart alexandria-service
 	docker-compose -f $(COMPOSE_FILE) restart alexandria-service
 	@echo "$(GREEN)✅ Alexandria restarted$(NC)"
 
+restart-onion-press: ## Restart onion-press-service
+	@echo "$(BLUE)🔄 Restarting Onion Press...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) restart onion-press-service
+	@echo "$(GREEN)✅ Onion Press restarted$(NC)"
+
 shell-daemon: ## Shell into oip-daemon-service
 	docker-compose -f $(COMPOSE_FILE) exec oip-daemon-service /bin/sh
 
 shell-alexandria: ## Shell into alexandria-service
 	docker-compose -f $(COMPOSE_FILE) exec alexandria-service /bin/sh
+
+shell-onion-press: ## Shell into onion-press-service
+	docker-compose -f $(COMPOSE_FILE) exec onion-press-service /bin/sh
+
+tor-status: ## Check TOR status and show .onion address
+	@echo "$(BLUE)🧅 TOR Status$(NC)"
+	@echo ""
+	@docker-compose -f $(COMPOSE_FILE) exec tor-daemon cat /var/lib/tor/hidden_service/hostname 2>/dev/null && \
+		echo "" || echo "$(YELLOW)TOR hidden service not ready yet$(NC)"
+	@echo ""
+	@echo "$(YELLOW)API Status:$(NC)"
+	@curl -s http://localhost:3007/api/tor/status 2>/dev/null | jq . || echo "$(RED)Onion Press service not running$(NC)"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TESTING
@@ -214,6 +261,23 @@ test-alexandria: ## Test alexandria-service endpoints
 	@echo ""
 	@echo "$(GREEN)✅ Alexandria tests complete$(NC)"
 
+test-onion-press: ## Test onion-press-service endpoints
+	@echo "$(BLUE)🧪 Testing Onion Press Service...$(NC)"
+	@echo ""
+	@echo "Testing basic health..."
+	@curl -s http://localhost:3007/health | jq . || echo "$(RED)Failed$(NC)"
+	@echo ""
+	@echo "Testing publishing destinations..."
+	@curl -s http://localhost:3007/api/publish/destinations | jq . || echo "$(RED)Failed$(NC)"
+	@echo ""
+	@echo "Testing TOR status..."
+	@curl -s http://localhost:3007/api/tor/status | jq . || echo "$(RED)Failed$(NC)"
+	@echo ""
+	@echo "Testing browse endpoint..."
+	@curl -s "http://localhost:3007/api/browse/records?limit=1" | jq '.total' || echo "$(RED)Failed$(NC)"
+	@echo ""
+	@echo "$(GREEN)✅ Onion Press tests complete$(NC)"
+
 test-integration: ## Test daemon-alexandria integration
 	@echo "$(BLUE)🧪 Testing Service Integration...$(NC)"
 	@echo ""
@@ -249,6 +313,12 @@ rebuild-oip-only: ## Rebuild: Core OIP daemon only (--no-cache)
 	docker-compose -f $(COMPOSE_FILE) --profile oip-only build --no-cache
 	docker-compose -f $(COMPOSE_FILE) --profile oip-only up -d
 	@echo "$(GREEN)✅ OIP Daemon rebuilt and deployed$(NC)"
+
+rebuild-onion-press-server: ## Rebuild: Onion Press Server (--no-cache)
+	@echo "$(BLUE)🔧🧅 Rebuilding Onion Press Server...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile onion-press-server build --no-cache
+	docker-compose -f $(COMPOSE_FILE) --profile onion-press-server up -d
+	@echo "$(GREEN)✅ Onion Press Server rebuilt and deployed$(NC)"
 
 rebuild-alexandria: ## Rebuild: Full stack with AI, voice (CPU) (--no-cache)
 	@echo "$(BLUE)🔧 Rebuilding Alexandria Stack...$(NC)"
@@ -371,7 +441,8 @@ help-split: ## Show help for split deployment
 	@echo ""
 	@echo "$(YELLOW)Primary Profiles:$(NC)"
 	@echo "  $(GREEN)oip-only$(NC)              - Daemon only (no AI)"
-	@echo "  $(GREEN)alexandria$(NC)            - Full stack (CPU)"
+	@echo "  $(GREEN)onion-press-server$(NC)    - OIP + WordPress + TOR publishing"
+	@echo "  $(GREEN)alexandria$(NC)            - Full stack (CPU) - includes onion-press"
 	@echo "  $(GREEN)alexandria-gpu$(NC)        - Full stack (GPU)"
 	@echo "  $(GREEN)alexandria-macMseries$(NC) - Full stack (Apple Silicon)"
 	@echo ""
@@ -397,12 +468,18 @@ help-split: ## Show help for split deployment
 	@echo "$(YELLOW)Service Commands:$(NC)"
 	@echo "  $(GREEN)logs-daemon$(NC)       - View daemon logs"
 	@echo "  $(GREEN)logs-alexandria$(NC)   - View alexandria logs"
+	@echo "  $(GREEN)logs-onion-press$(NC)  - View onion-press logs"
+	@echo "  $(GREEN)logs-wordpress$(NC)    - View WordPress logs"
+	@echo "  $(GREEN)logs-tor$(NC)          - View TOR daemon logs"
 	@echo "  $(GREEN)restart-daemon$(NC)    - Restart daemon"
 	@echo "  $(GREEN)restart-alexandria$(NC) - Restart alexandria"
+	@echo "  $(GREEN)restart-onion-press$(NC) - Restart onion-press"
+	@echo "  $(GREEN)tor-status$(NC)        - Check TOR status and .onion address"
 	@echo ""
 	@echo "$(YELLOW)Testing:$(NC)"
 	@echo "  $(GREEN)test-daemon$(NC)       - Test daemon endpoints"
 	@echo "  $(GREEN)test-alexandria$(NC)   - Test alexandria endpoints"
+	@echo "  $(GREEN)test-onion-press$(NC)  - Test onion-press endpoints"
 	@echo "  $(GREEN)test-integration$(NC)  - Test service integration"
 	@echo ""
 	@echo "$(YELLOW)Usage:$(NC)"
