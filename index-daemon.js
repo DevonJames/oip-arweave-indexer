@@ -484,7 +484,8 @@ if (ONION_PRESS_ENABLED) {
                 limit: Math.min(parseInt(limit) || 20, 100),
                 page: parseInt(page) || 1,
                 sortBy,
-                resolveDepth: parseInt(resolveDepth) || 0
+                resolveDepth: parseInt(resolveDepth) || 0,
+                noDuplicates: noDuplicates === 'true' || noDuplicates === true
             };
             
             if (recordType) params.recordType = recordType;
