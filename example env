@@ -236,7 +236,9 @@ COMPOSE_PROJECT_NAME=oip-arweave-indexer
 
 # Service Port Configuration (for running multiple OIP stacks)
 # Main OIP Daemon API port (already configured above as PORT)
-# Alexandria Service API port
+# Alexandria Service configuration
+# Set to true when using alexandria profiles (enables proxy from daemon to alexandria for AI/voice routes)
+ALEXANDRIA_ENABLED=true
 ALEXANDRIA_PORT=3006
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_TRANSPORT_PORT=9300

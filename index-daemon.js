@@ -434,26 +434,92 @@ app.get('/api/mnemonic', (req, res, next) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Alexandria Service Stub Routes (for oip-only deployments)
+// Alexandria Service Proxy Routes
 // ═══════════════════════════════════════════════════════════════════════════════
-const alexandriaStub = (req, res) => {
-    res.status(503).json({
-        error: 'Alexandria service not available',
-        message: 'This endpoint requires the alexandria profile. Current deployment: oip-only',
-        hint: 'Deploy with: make alexandria',
-        endpoint: req.originalUrl
-    });
+// When running in full alexandria profile, proxy AI/voice requests to Alexandria service
+// When running in oip-only mode, return 503
+
+const ALEXANDRIA_URL = process.env.ALEXANDRIA_URL || 'http://alexandria-service:3006';
+const ALEXANDRIA_ENABLED = process.env.ALEXANDRIA_ENABLED !== 'false';
+
+const alexandriaProxy = async (req, res) => {
+    if (!ALEXANDRIA_ENABLED) {
+        return res.status(503).json({
+            error: 'Alexandria service not available',
+            message: 'This endpoint requires the alexandria profile. Current deployment: oip-only',
+            hint: 'Deploy with: make alexandria',
+            endpoint: req.originalUrl
+        });
+    }
+
+    try {
+        const targetUrl = `${ALEXANDRIA_URL}${req.originalUrl}`;
+        
+        // Forward the request to Alexandria
+        const axiosConfig = {
+            method: req.method,
+            url: targetUrl,
+            headers: {
+                ...req.headers,
+                host: new URL(ALEXANDRIA_URL).host,
+            },
+            timeout: 300000, // 5 minute timeout for voice/AI operations
+            responseType: 'stream',
+            validateStatus: () => true, // Don't throw on any status
+        };
+
+        // Add body for POST/PUT/PATCH
+        if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+            axiosConfig.data = req.body;
+            // For multipart/form-data, we need to pipe the raw request
+            if (req.headers['content-type']?.includes('multipart/form-data')) {
+                axiosConfig.data = req;
+                axiosConfig.headers['content-type'] = req.headers['content-type'];
+            }
+        }
+
+        const response = await axios(axiosConfig);
+
+        // Forward status and headers
+        res.status(response.status);
+        Object.entries(response.headers).forEach(([key, value]) => {
+            if (key.toLowerCase() !== 'transfer-encoding') {
+                res.setHeader(key, value);
+            }
+        });
+
+        // Pipe the response
+        response.data.pipe(res);
+
+    } catch (error) {
+        console.error(`[Alexandria Proxy] Error proxying to ${req.originalUrl}:`, error.message);
+        
+        if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+            return res.status(503).json({
+                error: 'Alexandria service unavailable',
+                message: 'Could not connect to Alexandria service',
+                endpoint: req.originalUrl
+            });
+        }
+        
+        res.status(502).json({
+            error: 'Proxy error',
+            message: error.message,
+            endpoint: req.originalUrl
+        });
+    }
 };
 
-app.use('/api/alfred', alexandriaStub);
-app.use('/api/voice', alexandriaStub);
-app.use('/api/scrape', alexandriaStub);
-app.use('/api/generate', alexandriaStub);
-app.use('/api/photo', alexandriaStub);
-app.use('/api/recipes', alexandriaStub);
-app.use('/api/narration', alexandriaStub);
-app.use('/api/workout', alexandriaStub);
-app.use('/api/notes', alexandriaStub);
+// Proxy all Alexandria routes
+app.use('/api/alfred', alexandriaProxy);
+app.use('/api/voice', alexandriaProxy);
+app.use('/api/scrape', alexandriaProxy);
+app.use('/api/generate', alexandriaProxy);
+app.use('/api/photo', alexandriaProxy);
+app.use('/api/recipes', alexandriaProxy);
+app.use('/api/narration', alexandriaProxy);
+app.use('/api/workout', alexandriaProxy);
+app.use('/api/notes', alexandriaProxy);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Onion Press Routes (browse handled locally, other APIs proxy to onion-press-service)
