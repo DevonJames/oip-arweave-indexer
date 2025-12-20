@@ -45,7 +45,8 @@ async function getRecords(params, req = null) {
 const router = express.Router();
 
 // Configure multer for file uploads
-const uploadDir = path.join(__dirname, '../data/temp/notes');
+// Note: __dirname is routes/alexandria/, so we need ../../ to reach project root
+const uploadDir = path.join(__dirname, '../../data/temp/notes');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
