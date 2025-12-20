@@ -2617,12 +2617,7 @@ async function getRecords(queryParams) {
         // Get metadata (for backward compatibility with old code)
         // Note: We still need these for response metadata
         const result = await getRecordsInDB(false); // Use cache for metadata only
-        
-        // CRITICAL MEMORY LEAK FIX: Create a shallow copy of the records array
-        // Previously, recordsInDB was the SAME reference as recordsCache.records
-        // During resolution, new records were pushed to this array, permanently growing the cache
-        // By creating a copy, resolution pushes go to this temporary array which is GC'd after the request
-        let recordsInDB = [...result.records]; // Used only for resolution - COPY, not reference!
+        let recordsInDB = result.records; // Used only for resolution
         let qtyRecordsInDB = result.qtyRecordsInDB;
         let maxArweaveBlockInDB = result.finalMaxRecordArweaveBlock;
 
