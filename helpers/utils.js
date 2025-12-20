@@ -282,13 +282,12 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                         if (refRecord) {
                             console.log(`✅ [Resolution] Successfully fetched record from ES: ${refRecord.data?.basic?.name || properties[key]}`);
                             
-                            // CRITICAL FIX: Limit recordsInDB size to prevent memory leak
-                            // recordsInDB starts with 5000 records and grows unbounded!
-                            if (recordsInDB.length < 7500) {
-                                // Add to recordsInDB for future resolutions in this batch
+                            // Add to recordsInDB for future resolutions in this batch
+                            // NOTE: recordsInDB is now a PER-REQUEST copy (not the global cache)
+                            // so pushing here only affects this request and is GC'd after response
+                            // Still limit to prevent memory issues within a single request
+                            if (recordsInDB.length < 10000) {
                                 recordsInDB.push(refRecord);
-                            } else if (recordsInDB.length === 7500) {
-                                console.warn(`⚠️  [Resolution Cache] Hit 7500 record limit, not caching more (preventing memory leak)`);
                             }
                         }
                     } catch (error) {
