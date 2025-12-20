@@ -16,6 +16,45 @@ const router = express.Router();
 // Note: __dirname is routes/daemon/, so we need ../../ to reach project root
 const MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, '../../data/media');
 
+// MEMORY OPTIMIZATION: Simple LRU cache for manifest files
+// Prevents repeated disk reads for frequently accessed media
+const manifestCache = new Map();
+const MANIFEST_CACHE_MAX_SIZE = 1000;  // Max cached manifests
+const MANIFEST_CACHE_TTL = 300000;     // 5 minutes TTL
+
+function getCachedManifest(mediaId, manifestPath) {
+  const cached = manifestCache.get(mediaId);
+  if (cached && Date.now() - cached.timestamp < MANIFEST_CACHE_TTL) {
+    return cached.data;
+  }
+  
+  // Read from disk
+  if (!fs.existsSync(manifestPath)) {
+    return null;
+  }
+  
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    
+    // Evict oldest entries if cache is full
+    if (manifestCache.size >= MANIFEST_CACHE_MAX_SIZE) {
+      const oldestKey = manifestCache.keys().next().value;
+      manifestCache.delete(oldestKey);
+    }
+    
+    // Cache the manifest
+    manifestCache.set(mediaId, { data: manifest, timestamp: Date.now() });
+    return manifest;
+  } catch (error) {
+    console.warn('⚠️ Failed to load manifest:', error.message);
+    return null;
+  }
+}
+
+function invalidateManifestCache(mediaId) {
+  manifestCache.delete(mediaId);
+}
+
 // Function to ensure media directory exists (called when needed)
 function ensureMediaDir() {
   if (!fs.existsSync(MEDIA_DIR)) {
@@ -202,15 +241,8 @@ router.get('/:mediaId', optionalAuth, async (req, res) => {
       return res.status(404).json({ error: 'Media not found' });
     }
 
-    // Load manifest for access control
-    let manifest = null;
-    if (fs.existsSync(manifestPath)) {
-      try {
-        manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-      } catch (error) {
-        console.warn('⚠️ Failed to load manifest:', error.message);
-      }
-    }
+    // Load manifest for access control (with caching to reduce disk I/O)
+    const manifest = getCachedManifest(mediaId, manifestPath);
 
     // Check access control
     if (manifest) {
@@ -235,6 +267,22 @@ router.get('/:mediaId', optionalAuth, async (req, res) => {
     const stats = fs.statSync(filePath);
     const fileSize = stats.size;
     const mimeType = manifest?.mimeType || 'application/octet-stream';
+
+    // CACHE OPTIMIZATION: Media files are content-addressed by SHA256 hash
+    // The same mediaId will ALWAYS return the same content, making aggressive caching safe
+    const etag = `"${mediaId}"`;
+    
+    // Handle conditional requests (If-None-Match)
+    if (req.headers['if-none-match'] === etag) {
+      return res.status(304).end();  // Not Modified - no body sent, saves bandwidth
+    }
+    
+    // Set caching headers for all responses
+    res.set({
+      'Cache-Control': 'public, max-age=31536000, immutable',  // 1 year cache (content-addressed = immutable)
+      'ETag': etag,
+      'Last-Modified': stats.mtime.toUTCString()
+    });
 
     // Handle range requests for video streaming
     const range = req.headers.range;
@@ -565,6 +613,7 @@ router.post('/ipfs-upload', authenticateToken, async (req, res) => {
     // Update manifest with IPFS hash
     manifest.ipfsHash = ipfsHash;
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    invalidateManifestCache(mediaId);  // Clear cache after update
 
     res.json({
       success: true,
@@ -636,6 +685,7 @@ router.post('/web-setup', authenticateToken, async (req, res) => {
     // Update manifest with web URL
     manifest.webUrl = webUrl;
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    invalidateManifestCache(mediaId);  // Clear cache after update
 
     res.json({
       success: true,
@@ -695,6 +745,7 @@ router.post('/arweave-upload', authenticateToken, async (req, res) => {
     // Update manifest with Arweave transaction ID
     manifest.arweaveTransactionId = arweaveResult.transactionId;
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    invalidateManifestCache(mediaId);  // Clear cache after update
 
     res.json({
       success: true,
