@@ -4164,9 +4164,10 @@ function clearRecordsCache() {
     if (recordsCache) {
         const recordCount = recordsCache.records?.length || 0;
         console.log(`🧹 [Cache] Clearing records cache (${recordCount} records, ${Math.round((Date.now() - cacheTimestamp)/1000)}s old)`);
-        recordsCache = null;
-        cacheTimestamp = 0;
     }
+    recordsCache = null;
+    cacheTimestamp = 0;
+    keepDBCycleCount = 0; // Reset cycle count when cache is cleared
 }
 
 /**
@@ -4971,13 +4972,7 @@ const getRecordsInDB = async (forceRefresh = false) => {
 
 };
 
-// Function to clear the records cache (useful for memory management)
-const clearRecordsCache = () => {
-    recordsCache = null;
-    cacheTimestamp = 0;
-    keepDBCycleCount = 0; // Reset cycle count when cache is cleared
-    console.log(getFileInfo(), getLineNumber(), 'Records cache cleared');
-};
+// NOTE: clearRecordsCache is defined earlier in this file (around line 4163)
 
 const findCreatorsByHandle = async (handle) => {
     try {
