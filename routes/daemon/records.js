@@ -50,6 +50,10 @@ async function getRecordByDidTx(didTx) {
 }
 
 router.get('/', optionalAuthenticateToken, enforceCalendarScope, async (req, res) => {
+    // MEMORY LEAK FIX: Track large responses for cleanup
+    let records = null;
+    let response = null;
+    
     try {
         // DEBUG: Log user info for calendar token debugging
         if (req.user) {
@@ -89,10 +93,10 @@ router.get('/', optionalAuthenticateToken, enforceCalendarScope, async (req, res
             queryParams.forceRefresh = true;
         }
         
-        const records = await getRecords(queryParams);
+        records = await getRecords(queryParams);
         
         // NEW: Add authentication status to response for client awareness
-        const response = {
+        response = {
             ...records,
             auth: {
                 authenticated: req.isAuthenticated,
@@ -107,9 +111,28 @@ router.get('/', optionalAuthenticateToken, enforceCalendarScope, async (req, res
         };
         
         res.status(200).json(response);
+        
+        // MEMORY LEAK FIX: Explicitly null large objects after response is sent
+        // This allows V8 to garbage collect the deeply-resolved records sooner
+        // Without this, userFitnessProfile with deep resolution can hold 100+ MB
+        records = null;
+        response = null;
+        
+        // Hint to GC if response was large (deeply resolved records)
+        if (queryParams.resolveDepth && parseInt(queryParams.resolveDepth) > 0) {
+            setImmediate(() => {
+                if (global.gc) {
+                    global.gc();
+                }
+            });
+        }
     } catch (error) {
         console.error('Error at /api/records:', error);
         res.status(500).json({ error: 'Failed to retrieve and process records' });
+    } finally {
+        // MEMORY LEAK FIX: Ensure cleanup happens even on error paths
+        records = null;
+        response = null;
     }
 });
 

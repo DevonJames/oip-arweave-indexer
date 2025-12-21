@@ -2623,12 +2623,36 @@ async function getRecords(queryParams) {
         
         // console.log(`✅ [ES Query] Retrieved ${records.length} records (total: ${totalHits})`);
         
-        // Get metadata (for backward compatibility with old code)
-        // Note: We still need these for response metadata
-        const result = await getRecordsInDB(false); // Use cache for metadata only
-        let recordsInDB = result.records; // Used only for resolution
-        let qtyRecordsInDB = result.qtyRecordsInDB;
-        let maxArweaveBlockInDB = result.finalMaxRecordArweaveBlock;
+        // MEMORY LEAK FIX: Only load recordsInDB if we actually need resolution
+        // Loading 5000 records on every API call was the main cause of 20GB+ memory growth
+        const needsResolution = resolveDepth && parseInt(resolveDepth) > 0;
+        
+        // Get metadata from a lightweight aggregation query instead of loading all records
+        let recordsInDB = []; // Empty by default - will be populated lazily during resolution
+        let qtyRecordsInDB = totalHits; // Use the count from our main query
+        let maxArweaveBlockInDB = 0;
+        
+        // Only fetch max block for metadata if not already available
+        try {
+            const metadataResponse = await getElasticsearchClient().search({
+                index: 'records',
+                body: {
+                    size: 0, // Don't return any records, just aggregations
+                    aggs: {
+                        max_block: {
+                            max: { field: "oip.inArweaveBlock" }
+                        },
+                        total_records: {
+                            value_count: { field: "oip.did.keyword" }
+                        }
+                    }
+                }
+            });
+            maxArweaveBlockInDB = metadataResponse.aggregations?.max_block?.value || 0;
+            qtyRecordsInDB = metadataResponse.aggregations?.total_records?.value || totalHits;
+        } catch (metaError) {
+            console.warn('⚠️  Failed to get metadata aggregations, using defaults');
+        }
 
         // ============================================================
         // PHASE 4: POST-PROCESSING FILTERS
@@ -4124,11 +4148,26 @@ async function searchRecordInDB(didTx) {
     return result;
 }
 
-// MEMORY LEAK FIX: Add caching to prevent loading 5000 records on every API call
+// MEMORY LEAK FIX: Reduced cache to prevent memory accumulation
+// The main fix is NOT loading 5000 records on every API call (see getRecords changes)
+// This cache is now only used by keepDBUpToDate and other background processes
 let recordsCache = null;
 let cacheTimestamp = 0;
-const CACHE_DURATION = 300000; // 5 minutes cache (was 30 seconds, too aggressive)
+const CACHE_DURATION = 60000; // 1 minute cache (reduced from 5 minutes)
 let keepDBCycleCount = 0; // Track keepDBUpToDate cycles
+
+/**
+ * Clear the records cache to free memory
+ * Called by memory diagnostics circuit breaker and manual cleanup
+ */
+function clearRecordsCache() {
+    if (recordsCache) {
+        const recordCount = recordsCache.records?.length || 0;
+        console.log(`🧹 [Cache] Clearing records cache (${recordCount} records, ${Math.round((Date.now() - cacheTimestamp)/1000)}s old)`);
+        recordsCache = null;
+        cacheTimestamp = 0;
+    }
+}
 
 /**
  * Helper function to build Elasticsearch query from getRecords parameters

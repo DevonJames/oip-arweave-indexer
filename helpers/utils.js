@@ -276,21 +276,12 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                 
                 // If not found in recordsInDB, fetch from Elasticsearch
                 if (!refRecord) {
-                    console.log(`🔍 [Resolution] Record not in cache, fetching from ES: ${properties[key]}`);
+                    // Removed verbose logging - too noisy for production
                     try {
                         refRecord = await searchRecordInDB(properties[key]);
-                        if (refRecord) {
-                            console.log(`✅ [Resolution] Successfully fetched record from ES: ${refRecord.data?.basic?.name || properties[key]}`);
-                            
-                            // CRITICAL FIX: Limit recordsInDB size to prevent memory leak
-                            // recordsInDB starts with 5000 records and grows unbounded!
-                            if (recordsInDB.length < 7500) {
-                                // Add to recordsInDB for future resolutions in this batch
-                                recordsInDB.push(refRecord);
-                            } else if (recordsInDB.length === 7500) {
-                                console.warn(`⚠️  [Resolution Cache] Hit 7500 record limit, not caching more (preventing memory leak)`);
-                            }
-                        }
+                        // MEMORY LEAK FIX: Don't add to recordsInDB anymore
+                        // Each resolution now fetches on-demand instead of caching
+                        // This prevents unbounded growth of the recordsInDB array
                     } catch (error) {
                         console.error(`❌ [Resolution] Error fetching record from ES:`, error.message);
                     }
@@ -313,11 +304,8 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                         
                         properties[key] = resolvedRef;
                     }
-                } else {
-                    // DEBUG: Log when a referenced record is not found
-                    console.log(`⚠️  [Resolution] Could not find referenced record: ${properties[key]} in field ${category}.${key}`);
-                    console.log(`   Record not found in recordsInDB (${recordsInDB.length} records) nor in Elasticsearch`);
                 }
+                // Silently skip if record not found - this is normal for orphaned references
             } else if (Array.isArray(properties[key])) {
                 for (let i = 0; i < properties[key].length; i++) {
                     if (typeof properties[key][i] === 'string' && properties[key][i].startsWith('did:')) {
@@ -327,19 +315,10 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                         
                         // If not found in recordsInDB, fetch from Elasticsearch
                         if (!refRecord) {
-                            console.log(`🔍 [Resolution] Record not in cache, fetching from ES: ${properties[key][i]}`);
                             try {
                                 refRecord = await searchRecordInDB(properties[key][i]);
-                                if (refRecord) {
-                                    console.log(`✅ [Resolution] Successfully fetched record from ES: ${refRecord.data?.basic?.name || properties[key][i]}`);
-                                    
-                                    // CRITICAL FIX: Limit recordsInDB size to prevent memory leak
-                                    if (recordsInDB.length < 7500) {
-                                        // Add to recordsInDB for future resolutions in this batch
-                                        recordsInDB.push(refRecord);
-                                    }
-                                    // Don't log warning for arrays (too spammy)
-                                }
+                                // MEMORY LEAK FIX: Don't add to recordsInDB anymore
+                                // Each resolution now fetches on-demand instead of caching
                             } catch (error) {
                                 console.error(`❌ [Resolution] Error fetching record from ES:`, error.message);
                             }
@@ -362,11 +341,8 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                                 
                                 properties[key][i] = resolvedRef;
                             }
-                        } else {
-                            // DEBUG: Log when a referenced record is not found
-                            console.log(`⚠️  [Resolution] Could not find referenced record: ${properties[key][i]} in field ${category}.${key}[${i}]`);
-                            console.log(`   Record not found in recordsInDB (${recordsInDB.length} records) nor in Elasticsearch`);
                         }
+                        // Silently skip if record not found - this is normal for orphaned references
                     }
                 }
             }
