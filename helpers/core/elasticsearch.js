@@ -4866,7 +4866,7 @@ const getRecordsInDB = async (forceRefresh = false) => {
                 query: {
                     match_all: {}
                 },
-                size: 5000 // make this a variable to be passed in
+                size: 10000 // Increased from 5000 for larger datasets
             }
         });
         const records = searchResponse.hits.hits.map(hit => hit._source);
