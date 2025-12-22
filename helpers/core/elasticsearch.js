@@ -2624,7 +2624,7 @@ async function getRecords(queryParams) {
         // console.log(`✅ [ES Query] Retrieved ${records.length} records (total: ${totalHits})`);
         
         // Get all records in DB for resolution lookups
-        const { recordsInDB, qtyRecordsInDB, maxArweaveBlockInDB } = await getRecordsInDB(false);
+        const { records: recordsInDB, qtyRecordsInDB, finalMaxRecordArweaveBlock: maxArweaveBlockInDB } = await getRecordsInDB(false);
 
         // ============================================================
         // PHASE 4: POST-PROCESSING FILTERS
