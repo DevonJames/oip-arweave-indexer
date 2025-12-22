@@ -293,9 +293,14 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                         const name = refRecord.data?.basic?.name || properties[key]; // fallback to DID if no name found
                         properties[key] = name;
                     } else {
+                        // CRITICAL: Deep copy refRecord before resolving!
+                        // refRecord is from the global cache - modifying it pollutes the cache
+                        // and causes unbounded memory growth as resolved data accumulates
+                        const refRecordCopy = JSON.parse(JSON.stringify(refRecord));
+                        
                         // Create a new visited set for this branch to track the resolution chain
                         const branchVisited = new Set(visited);
-                        let resolvedRef = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary, branchVisited, resolveFieldNames, currentDepth + 1);
+                        let resolvedRef = await resolveRecords(refRecordCopy, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary, branchVisited, resolveFieldNames, currentDepth + 1);
                         
                         // Apply recipe summary if this is a recipe record and summarizeRecipe is enabled
                         if (summarizeRecipe && addRecipeNutritionalSummary && resolvedRef.oip?.recordType === 'recipe' && resolvedRef.data?.recipe) {
@@ -329,9 +334,13 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                                 const name = refRecord.data?.basic?.name || properties[key][i]; // fallback to DID if no name found
                                 properties[key][i] = name;
                             } else {
+                                // CRITICAL: Deep copy refRecord before resolving!
+                                // refRecord is from the global cache - modifying it pollutes the cache
+                                const refRecordCopy = JSON.parse(JSON.stringify(refRecord));
+                                
                                 // Create a new visited set for this branch to track the resolution chain
                                 const branchVisited = new Set(visited);
-                                let resolvedRef = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary, branchVisited, resolveFieldNames, currentDepth + 1);
+                                let resolvedRef = await resolveRecords(refRecordCopy, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary, branchVisited, resolveFieldNames, currentDepth + 1);
                                 
                                 // Apply recipe summary if this is a recipe record and summarizeRecipe is enabled
                                 if (summarizeRecipe && addRecipeNutritionalSummary && resolvedRef.oip?.recordType === 'recipe' && resolvedRef.data?.recipe) {
