@@ -5,8 +5,8 @@
 
 ## ✅ **IMPLEMENTATION STATUS: COMPLETE**
 
-> **Last Updated:** December 2024
-> **Status:** File reorganization and service separation complete. Ready for build & test.
+> **Last Updated:** December 21, 2024
+> **Status:** File reorganization and service separation complete. Alexandria proxy implemented. Ready for production.
 
 ### What Was Implemented
 
@@ -14,7 +14,7 @@
 |-----------|--------|-------|
 | `Dockerfile.oip-daemon` | ✅ Complete | Optimized dependencies, memory leak fixes integrated |
 | `Dockerfile.alexandria` | ✅ Complete | AI/voice dependencies, puppeteer support |
-| `index-daemon.js` | ✅ Complete | Memory-safe entry point with all daemon routes |
+| `index-daemon.js` | ✅ Complete | Memory-safe entry point with all daemon routes + Alexandria proxy |
 | `index-alexandria.js` | ✅ Complete | oipClient integration, all Alexandria routes |
 | `helpers/oipClient.js` | ✅ Complete | Full HTTP client with all needed methods |
 | `routes/daemon/*` | ✅ Complete | All daemon routes reorganized |
@@ -25,6 +25,7 @@
 | `Makefile.split` | ✅ Complete | New profile targets |
 | Import path fixes | ✅ Complete | All imports audited and corrected |
 | oipClient refactoring | ✅ Complete | Alexandria routes use oipClient for data ops |
+| Alexandria proxy | ✅ Complete | Daemon proxies AI/voice routes to Alexandria when enabled |
 
 ### Changes From Original Plan
 
@@ -34,6 +35,7 @@
 | `resolveRecipeIngredients` in recipes.js | Extracted to `helpers/core/recipe-resolver.js` | Shared helper needed by both daemon publish and Alexandria recipes |
 | `/api/test-rag` in daemon api.js | Moved to `routes/alexandria/alfred.js` | AI functionality belongs in Alexandria |
 | Basic oipClient | Enhanced with `indexRecord()`, `getCreatorByAddress()`, and `request()` methods | Additional daemon endpoints needed for Alexandria operations |
+| Separate API URLs for daemon/alexandria | Daemon proxies Alexandria routes when `ALEXANDRIA_ENABLED=true` | Single API URL for clients - ngrok points to daemon which proxies AI/voice to Alexandria |
 
 ### New Daemon Endpoints Added (Not in Original Plan)
 
@@ -64,12 +66,13 @@ GET  /api/records/creator/:did    # Look up creator by DID address (for Alexandr
 
 ### Remaining Tasks (Pre-Deployment)
 
-| Task | Priority | Notes |
-|------|----------|-------|
-| Build Docker images | 🔴 Required | `docker build -f Dockerfile.oip-daemon -t oip-daemon .` |
-| Test oip-only profile | 🔴 Required | `make -f Makefile.split oip-only` |
-| Test alexandria profile | 🔴 Required | `make -f Makefile.split alexandria` |
-| Verify all endpoints work | 🔴 Required | Run integration tests |
+| Task | Priority | Status |
+|------|----------|--------|
+| Build Docker images | 🔴 Required | ✅ Complete - images build successfully |
+| Test oip-only profile | 🔴 Required | ✅ Complete |
+| Test alexandria profile | 🔴 Required | ✅ Complete |
+| Verify all endpoints work | 🔴 Required | ✅ Complete - Alexandria proxy working |
+| Set `ALEXANDRIA_ENABLED=true` in .env | 🔴 Required | ⚠️ User must add to .env for alexandria profiles |
 | Update original docker-compose.yml | 🟡 Optional | Can replace with docker-compose-split.yml |
 | Update original Makefile | 🟡 Optional | Can replace with Makefile.split |
 
@@ -115,25 +118,44 @@ The following memory management best practices were integrated into the new entr
 ## 🏗️ **Architecture Overview**
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
+                                    ┌─────────────┐
+                                    │   Client    │
+                                    │ Application │
+                                    └──────┬──────┘
+                                           │
+                                           ▼
+                                    ┌─────────────┐
+                                    │   ngrok     │ ─── Single External URL
+                                    └──────┬──────┘
+                                           │
+┌──────────────────────────────────────────┼──────────────────────────────────┐
 │                              Docker Compose                                  │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│                                          │                                   │
+│  ┌───────────────────────────────────────┼─────────────────────────────────┐│
 │  │                        oip-daemon-service                                ││
 │  │                           (port 3005)                                    ││
+│  │                                       │                                  ││
+│  │  ROUTES:                              │                                  ││
+│  │  /api/records ─────────────────────► HANDLED DIRECTLY                    ││
+│  │  /api/publish ─────────────────────► HANDLED DIRECTLY                    ││
+│  │  /api/media ───────────────────────► HANDLED DIRECTLY                    ││
+│  │  /api/templates ───────────────────► HANDLED DIRECTLY                    ││
 │  │                                                                          ││
-│  │  CARD CATALOG:              SHELVES:              ACCESS CONTROL:        ││
-│  │  ├─ Arweave index           ├─ Media upload       ├─ Organizations       ││
-│  │  ├─ GUN index               ├─ BitTorrent seed    ├─ Member management   ││
-│  │  ├─ Templates               ├─ IPFS storage       ├─ Encryption          ││
-│  │  ├─ DID resolution          ├─ HTTP streaming     └─ Domain policies     ││
-│  │  ├─ Record CRUD             └─ Arweave storage                           ││
-│  │  ├─ dref resolution                                                      ││
-│  │  └─ User auth (HD wallets)                                               ││
-│  └────────────────────────────────────┬────────────────────────────────────┘│
-│                                       │                                      │
-│                                       │ HTTP API calls                       │
-│                                       ▼                                      │
+│  │  /api/alfred ──────────────────────► PROXIED TO ALEXANDRIA ─────┐        ││
+│  │  /api/voice ───────────────────────► PROXIED TO ALEXANDRIA ─────┤        ││
+│  │  /api/recipes ─────────────────────► PROXIED TO ALEXANDRIA ─────┤        ││
+│  │  (when ALEXANDRIA_ENABLED=true)                                 │        ││
+│  │                                                                 │        ││
+│  │  CARD CATALOG:              SHELVES:              ACCESS:       │        ││
+│  │  ├─ Arweave index           ├─ Media upload       ├─ Orgs       │        ││
+│  │  ├─ GUN index               ├─ BitTorrent seed    ├─ Members    │        ││
+│  │  ├─ Templates               ├─ IPFS storage       └─ Encrypt    │        ││
+│  │  └─ DID resolution          └─ HTTP streaming                   │        ││
+│  └─────────────────────────────────────────────────────────────────┼───────┘│
+│                                                                    │         │
+│                                       oipClient HTTP API calls     │         │
+│                                       ◄────────────────────────────┼─────────│
+│                                                                    ▼         │
 │  ┌─────────────────────────────────────────────────────────────────────────┐│
 │  │                        alexandria-service                                ││
 │  │                           (port 3006)                                    ││
@@ -146,8 +168,7 @@ The following memory management best practices were integrated into the new entr
 │  │                                                                          ││
 │  │  ACQUISITION:               SPECIALIZED FEATURES:                        ││
 │  │  ├─ Web scraping            ├─ Recipe processing                         ││
-│  │  └─ URL parsing             ├─ Workout processing                        ││
-│  │                             └─ Nutritional lookup                        ││
+│  │  └─ URL parsing             └─ Workout processing                        ││
 │  └─────────────────────────────────────────────────────────────────────────┘│
 │                                                                              │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐ │
@@ -790,6 +811,91 @@ async function handleRAGQuery(req, res) {
   });
 }
 ```
+
+### **Alexandria Proxy (Single API URL)** ✅ IMPLEMENTED
+
+To provide a single external API URL for clients, the daemon includes a proxy that forwards AI/voice requests to Alexandria. This allows ngrok to point only at the daemon while still serving all Alexandria functionality.
+
+**How it works:**
+
+```
+Client Request → ngrok → oip-daemon-service:3005
+                              │
+                              ├─ /api/records, /api/publish, /api/media → handled directly
+                              │
+                              └─ /api/alfred, /api/voice, etc. → proxied to alexandria-service:3006
+```
+
+**Implementation in `index-daemon.js`:**
+
+```javascript
+const ALEXANDRIA_URL = process.env.ALEXANDRIA_URL || 'http://alexandria-service:3006';
+const ALEXANDRIA_ENABLED = process.env.ALEXANDRIA_ENABLED !== 'false';
+
+const alexandriaProxy = async (req, res) => {
+    if (!ALEXANDRIA_ENABLED) {
+        return res.status(503).json({
+            error: 'Alexandria service not available',
+            message: 'This endpoint requires the alexandria profile. Current deployment: oip-only',
+            hint: 'Deploy with: make alexandria',
+            endpoint: req.originalUrl
+        });
+    }
+
+    try {
+        const targetUrl = `${ALEXANDRIA_URL}${req.originalUrl}`;
+        
+        // Forward the request to Alexandria with streaming support
+        const axiosConfig = {
+            method: req.method,
+            url: targetUrl,
+            headers: { ...req.headers, host: new URL(ALEXANDRIA_URL).host },
+            timeout: 300000, // 5 minute timeout for voice/AI operations
+            responseType: 'stream',
+            validateStatus: () => true,
+        };
+
+        if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+            axiosConfig.data = req.body;
+        }
+
+        const response = await axios(axiosConfig);
+        res.status(response.status);
+        response.data.pipe(res);
+    } catch (error) {
+        // Handle connection errors gracefully
+        res.status(503).json({ error: 'Alexandria service unavailable' });
+    }
+};
+
+// Proxy all Alexandria routes
+app.use('/api/alfred', alexandriaProxy);
+app.use('/api/voice', alexandriaProxy);
+app.use('/api/scrape', alexandriaProxy);
+app.use('/api/generate', alexandriaProxy);
+app.use('/api/photo', alexandriaProxy);
+app.use('/api/recipes', alexandriaProxy);
+app.use('/api/narration', alexandriaProxy);
+app.use('/api/workout', alexandriaProxy);
+app.use('/api/notes', alexandriaProxy);
+```
+
+**Environment variables (docker-compose-split.yml):**
+
+```yaml
+oip-daemon-service:
+  environment:
+    # ... other vars ...
+    - ALEXANDRIA_ENABLED=${ALEXANDRIA_ENABLED:-false}
+    - ALEXANDRIA_URL=http://alexandria-service:${ALEXANDRIA_PORT:-3006}
+```
+
+**Key features:**
+- Streaming response support for voice/TTS
+- 5-minute timeout for long AI operations
+- Forwards all headers including Authorization
+- Graceful error handling when Alexandria is unavailable
+- Multipart/form-data support for file uploads
 
 ---
 
@@ -1662,7 +1768,13 @@ ALEXANDRIA_PORT=3006
 
 # Internal service URL (Docker network)
 OIP_DAEMON_URL=http://oip-daemon-service:3005
+
+# Alexandria proxy (REQUIRED for alexandria profiles)
+# When true, daemon proxies /api/alfred, /api/voice, etc. to Alexandria
+ALEXANDRIA_ENABLED=true
 ```
+
+**Important**: For all `alexandria*` profiles, you MUST set `ALEXANDRIA_ENABLED=true` in your `.env` file. Without this, AI/voice endpoints will return 503 errors.
 
 ### **Data Migration**
 
@@ -1670,10 +1782,22 @@ No data migration required - both services share the same Elasticsearch instance
 
 ### **External API Access**
 
-- **Port 3005** (`oip-daemon-service`): Core OIP operations, media streaming
-- **Port 3006** (`alexandria-service`): AI chat, voice, content generation
+With the Alexandria proxy enabled, you only need **one external URL**:
 
-For single-endpoint access, use ngrok pointed at port 3005 (daemon), and have Alexandria's AI features accessed directly or proxied through your frontend.
+- **Port 3005** (`oip-daemon-service`): ALL endpoints - daemon routes directly, AI/voice proxied to Alexandria
+
+The daemon automatically proxies these routes to Alexandria when `ALEXANDRIA_ENABLED=true`:
+- `/api/alfred/*` - AI assistant
+- `/api/voice/*` - Voice interface (STT/TTS)
+- `/api/scrape/*` - Web scraping
+- `/api/generate/*` - Content generation
+- `/api/photo/*` - Photo analysis
+- `/api/recipes/*` - Recipe processing
+- `/api/narration/*` - Audio narration
+- `/api/workout/*` - Workout processing
+- `/api/notes/*` - Notes processing
+
+**For oip-only profile**: These routes return 503 with a helpful message indicating Alexandria is required.
 
 ### **Summary: What Changed**
 
@@ -1683,3 +1807,4 @@ For single-endpoint access, use ngrok pointed at port 3005 (daemon), and have Al
 4. **New Profiles**: `alexandria-decentralized-macMseries`, `alexandria-noSTT-decentralized`
 5. **Removed Profiles**: `minimal-with-scrape`, `standard-monolithic`, `gpu`, `oip-gpu-only`, `chatterbox-gpu`
 6. **Renamed**: `backend-only` → `alexandria-noSTT` (clearer name)
+7. **Single API URL**: Daemon proxies AI/voice routes to Alexandria when `ALEXANDRIA_ENABLED=true`

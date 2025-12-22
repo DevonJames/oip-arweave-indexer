@@ -2623,36 +2623,8 @@ async function getRecords(queryParams) {
         
         // console.log(`✅ [ES Query] Retrieved ${records.length} records (total: ${totalHits})`);
         
-        // MEMORY LEAK FIX: Only load recordsInDB if we actually need resolution
-        // Loading 5000 records on every API call was the main cause of 20GB+ memory growth
-        const needsResolution = resolveDepth && parseInt(resolveDepth) > 0;
-        
-        // Get metadata from a lightweight aggregation query instead of loading all records
-        let recordsInDB = []; // Empty by default - will be populated lazily during resolution
-        let qtyRecordsInDB = totalHits; // Use the count from our main query
-        let maxArweaveBlockInDB = 0;
-        
-        // Only fetch max block for metadata if not already available
-        try {
-            const metadataResponse = await getElasticsearchClient().search({
-                index: 'records',
-                body: {
-                    size: 0, // Don't return any records, just aggregations
-                    aggs: {
-                        max_block: {
-                            max: { field: "oip.inArweaveBlock" }
-                        },
-                        total_records: {
-                            value_count: { field: "oip.did.keyword" }
-                        }
-                    }
-                }
-            });
-            maxArweaveBlockInDB = metadataResponse.aggregations?.max_block?.value || 0;
-            qtyRecordsInDB = metadataResponse.aggregations?.total_records?.value || totalHits;
-        } catch (metaError) {
-            console.warn('⚠️  Failed to get metadata aggregations, using defaults');
-        }
+        // Get all records in DB for resolution lookups
+        const { recordsInDB, qtyRecordsInDB, maxArweaveBlockInDB } = await getRecordsInDB(false);
 
         // ============================================================
         // PHASE 4: POST-PROCESSING FILTERS

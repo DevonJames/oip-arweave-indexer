@@ -2,18 +2,64 @@
 
 ## Executive Summary
 
-**Onion Press Server** is a new OIP profile that provides anonymous publishing capabilities using WordPress as the authoring interface, TOR for anonymity, and OIP for persistent decentralized storage. It sits between the `oip-only` and `alexandria` profiles in the stack hierarchy.
+**Onion Press Server** is a new OIP profile that provides anonymous publishing capabilities using WordPress as the authoring interface, TOR for anonymity, and OIP for persistent decentralized storage.
 
 **Profile Hierarchy:**
 ```
-oip-only < onion-press-server < alexandria
+oip-only < onion-press-server < alexandria-decentralized
 ```
+
+> **Note:** As of December 2025, onion-press is included only in `onion-press-server` and `alexandria-decentralized-*` profiles. Basic `alexandria` profiles do NOT include onion-press to keep them lightweight.
 
 **Core Components:**
 - WordPress container with LO Publisher plugin for authoring
-- TOR daemon for onion service (each instance gets its own .onion address)
+- Integrated TOR daemon (runs inside onion-press-service container)
 - Enhanced browsing interface with admin settings
 - Multi-destination publishing (Arweave, GUN, Internet Archive)
+
+---
+
+## Implementation Status
+
+### ✅ Completed
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `Dockerfile.onion-press` | ✅ Done | Includes TOR daemon |
+| `index-onion-press.js` | ✅ Done | Entry point with Express server |
+| `package-onion-press.json` | ✅ Done | Dependencies |
+| `scripts/docker-entrypoint-onion-press.sh` | ✅ Done | Starts TOR then Node |
+| `tor-daemon/torrc` | ✅ Done | TOR config (integrated) |
+| `helpers/onion-press/torClient.js` | ✅ Done | SOCKS5 proxy client |
+| `helpers/onion-press/settingsManager.js` | ✅ Done | Settings persistence |
+| `helpers/onion-press/multiDestinationPublisher.js` | ✅ Done | Multi-dest logic |
+| `routes/onion-press/publish.js` | ✅ Done | Publishing API |
+| `routes/onion-press/admin.js` | ✅ Done | Admin settings API |
+| `routes/onion-press/browse.js` | ✅ Done | Browse proxy to OIP daemon |
+| `routes/onion-press/tor.js` | ✅ Done | TOR status API |
+| `public/onion-press/*` | ✅ Done | Browsing/admin interface |
+| Docker Compose integration | ✅ Done | Profiles configured |
+| Makefile.split targets | ✅ Done | Deploy commands |
+| Environment variables | ✅ Done | In example env |
+| TOR Hidden Service Guide | ✅ Done | `docs/TOR_HIDDEN_SERVICE_GUIDE.md` |
+| OIP Daemon browse proxy | ✅ Done | `/onion-press/` routes in daemon |
+
+### 🚧 Partially Implemented
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| WordPress LO Publisher plugin | 🚧 Skeleton | Basic structure exists, needs full field mapping |
+| Field mapping UI | 🚧 Basic | Gutenberg sidebar placeholder |
+
+### ❌ Not Yet Implemented
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Organization template `gateway_onion_address` field | ❌ Pending | Needed for IA publishing |
+| Internet Archive organization record | ❌ Pending | IA needs to publish their .onion |
+| Full WordPress → OIP field mapping | ❌ Pending | Plugin needs completion |
+| Publishing status persistence | ❌ Pending | Currently in-memory only |
+| End-to-end integration tests | ❌ Pending | Manual testing done |
 
 ---
 
@@ -102,34 +148,39 @@ oip-only < onion-press-server < alexandria
 
 ## Profile Definition
 
-### Profile Hierarchy
+### Profile Hierarchy (Actual Implementation)
 
 | Profile | Includes | Use Case |
 |---------|----------|----------|
 | `oip-only` | Core OIP infrastructure | Pure indexing, no publishing UI |
 | `onion-press-server` | `oip-only` + WordPress + TOR + Publishing/Browsing UI | Anonymous publishing platform |
-| `alexandria` | `onion-press-server` + AI/Voice/Content Generation | Full-featured AI assistant |
+| `alexandria` | `oip-only` + AI/Voice services | Lightweight AI assistant (NO onion-press) |
+| `alexandria-decentralized` | `alexandria` + `onion-press-server` + AR.IO gateway | Full decentralized stack |
 
-### Profile Service Matrix
+> **Design Decision:** Basic `alexandria` profiles are kept lightweight without WordPress/TOR overhead. Only `alexandria-decentralized-*` variants include the full onion-press stack.
+
+### Profile Service Matrix (Actual)
 
 ```
-                          oip-    onion-press-  alexandria
-Service                   only    server        
-───────────────────────────────────────────────────────────
-elasticsearch              ✓         ✓              ✓
-kibana                     ✓         ✓              ✓
-oip-daemon-service         ✓         ✓              ✓
-gun-relay                  ✓         ✓              ✓
-ipfs                       ✓         ✓              ✓
-ngrok                      ✓         ✓              ✓
-onion-press-service        ✗         ✓              ✓
-wordpress                  ✗         ✓              ✓
-tor-daemon                 ✗         ✓              ✓
-alexandria-service         ✗         ✗              ✓
-ollama                     ✗         ✗              ✓
-tts-service                ✗         ✗              ✓
-stt-service                ✗         ✗              ✓
+                          oip-    onion-press  alexandria  alexandria-
+Service                   only    -server                  decentralized
+────────────────────────────────────────────────────────────────────────
+elasticsearch              ✓         ✓            ✓             ✓
+kibana                     ✓         ✓            ✓             ✓
+oip-daemon-service         ✓         ✓            ✓             ✓
+gun-relay                  ✓         ✗            ✓             ✓
+ipfs                       ✓         ✓            ✓             ✓
+onion-press-service        ✗         ✓            ✗             ✓
+wordpress                  ✗         ✓            ✗             ✓
+wordpress-db               ✗         ✓            ✗             ✓
+alexandria-service         ✗         ✗            ✓             ✓
+ollama                     ✗         ✗            ✓             ✓
+tts-service                ✗         ✗            ✓             ✓
+stt-service                ✗         ✗            ✓             ✓
+ario-gateway               ✗         ✗            ✗             ✓
 ```
+
+> **Note:** TOR daemon is integrated INTO `onion-press-service` container (not a separate service).
 
 ---
 
@@ -166,16 +217,24 @@ stt-service                ✗         ✗              ✓
 - LO Publisher plugin
 - MariaDB/MySQL database
 
-### 3. TOR Daemon Container
+### 3. Integrated TOR Daemon
 
 **Purpose:** Provides both onion service (inbound) and TOR client (outbound)
 
-**Image:** Custom or `dperson/torproxy` variant
+**Location:** Runs INSIDE `onion-press-service` container (not separate)
 
 **Capabilities:**
-- Onion service for this instance (generates .onion address)
-- SOCKS5 proxy for outbound TOR connections
+- Onion service for this instance (generates unique .onion address)
+- SOCKS5 proxy on `127.0.0.1:9050` for outbound TOR connections
 - Automatic .onion address generation on first run
+- Address persists across restarts via Docker volumes
+
+**Why Integrated:**
+- Hidden service needs to route to `127.0.0.1:3007` (same container)
+- Simpler architecture - no cross-container DNS resolution issues
+- Single container manages both TOR and the Node.js app
+
+**Documentation:** See `docs/TOR_HIDDEN_SERVICE_GUIDE.md` for detailed usage
 
 ---
 
@@ -490,66 +549,75 @@ Settings are stored in a local configuration file and apply to the Docker contai
 
 ## TOR Integration
 
-### TOR Daemon Configuration
+### Architecture (Actual Implementation)
 
-Each Onion Press Server instance runs a TOR daemon that provides:
+TOR runs **inside** the `onion-press-service` container, started by the entrypoint script before the Node.js app. This provides:
 
-1. **Onion Service (Inbound):** Generates a unique `.onion` address for receiving anonymous submissions
+1. **Onion Service (Inbound):** Unique `.onion` address for receiving anonymous submissions
 2. **SOCKS5 Proxy (Outbound):** For publishing to Internet Archive's .onion gateway
-
-### Docker Container
-
-```dockerfile
-# Dockerfile.tor-daemon
-FROM alpine:latest
-
-RUN apk add --no-cache tor
-
-# Copy torrc configuration
-COPY torrc /etc/tor/torrc
-
-# Create directories for hidden service
-RUN mkdir -p /var/lib/tor/hidden_service && \
-    chown -R tor:tor /var/lib/tor
-
-USER tor
-
-EXPOSE 9050 9051
-
-CMD ["tor", "-f", "/etc/tor/torrc"]
-```
 
 ### TOR Configuration (torrc)
 
-```
-# /etc/tor/torrc
+Located at `tor-daemon/torrc`, copied into container at build:
 
-# SOCKS proxy for outbound connections
-SocksPort 0.0.0.0:9050
+```
+# TOR runs in same container as onion-press-service
+
+# SOCKS proxy for outbound connections (localhost only)
+SocksPort 127.0.0.1:9050
 
 # Control port for status queries
-ControlPort 9051
+ControlPort 127.0.0.1:9051
 
-# Hidden service for this instance
+# Hidden service - routes to Node.js app in same container
 HiddenServiceDir /var/lib/tor/hidden_service/
-HiddenServicePort 80 onion-press-service:3007
+HiddenServicePort 80 127.0.0.1:3007
 
 # Data directory
-DataDirectory /var/lib/tor
+DataDirectory /var/lib/tor/data
+
+# Only accept SOCKS from localhost
+SocksPolicy accept 127.0.0.1
+SocksPolicy reject *
+
+# Run as tor user
+User tor
 ```
 
-### .onion Address Generation
+### Entrypoint Flow
 
-On first startup, TOR generates a unique `.onion` address stored in `/var/lib/tor/hidden_service/hostname`. The onion-press-service reads this address and exposes it via API:
+The `docker-entrypoint-onion-press.sh` script:
+
+1. Cleans up stale TOR lock files
+2. Sets correct permissions on TOR directories
+3. Starts TOR daemon in background
+4. Waits for TOR to bootstrap (~30-60 seconds)
+5. Reads and exports `.onion` address
+6. Starts Node.js application
+
+### .onion Address
+
+- Generated on first startup
+- Persisted in `tor-hidden-service` Docker volume
+- Available via API and environment variable:
 
 ```javascript
 // GET /api/tor/status
 {
     "connected": true,
-    "onionAddress": "abcd1234efgh5678ijkl9012mnop3456.onion",
+    "onionAddress": "pczapevxiipkq5shr47k3fc7m6myh2uahiea3cunn6f62tr32yddgbqd.onion",
+    "socksHost": "127.0.0.1",
     "socksPort": 9050
 }
 ```
+
+### Full Documentation
+
+See `docs/TOR_HIDDEN_SERVICE_GUIDE.md` for:
+- Finding your .onion address
+- Backing up hidden service keys
+- Troubleshooting TOR issues
+- Security considerations
 
 ---
 
@@ -710,7 +778,7 @@ TOR_CONTROL_PORT=9051            # Control port for status
 
 ## Docker Configuration
 
-### docker-compose-split.yml Additions
+### docker-compose-split.yml (Actual Implementation)
 
 ```yaml
 services:
@@ -723,34 +791,37 @@ services:
       context: .
       dockerfile: Dockerfile.onion-press
     ports:
-      - "${ONION_PRESS_PORT:-3007}:3007"
+      - "${ONION_PRESS_PORT:-3007}:${ONION_PRESS_PORT:-3007}"
     environment:
-      - OIP_DAEMON_URL=http://oip-daemon-service:3005
+      - NODE_ENV=production
+      - PORT=${ONION_PRESS_PORT:-3007}
+      - OIP_DAEMON_URL=http://oip-daemon-service:${OIP_DAEMON_PORT:-3005}
       - PUBLISH_TO_ARWEAVE=${PUBLISH_TO_ARWEAVE:-true}
       - PUBLISH_TO_GUN=${PUBLISH_TO_GUN:-true}
       - PUBLISH_TO_INTERNETARCHIVE=${PUBLISH_TO_INTERNETARCHIVE:-false}
       - GUN_EXTERNAL_PEERS=${GUN_EXTERNAL_PEERS:-}
       - GUN_SYNC_INTERVAL=${GUN_SYNC_INTERVAL:-30000}
       - GUN_SYNC_TRUSTED_NODES=${GUN_SYNC_TRUSTED_NODES:-}
-      - TOR_PROXY_HOST=tor-daemon
+      - TOR_PROXY_HOST=127.0.0.1      # TOR runs in same container
       - TOR_PROXY_PORT=9050
       - JWT_SECRET=${JWT_SECRET}
+      - IA_ORGANIZATION_HANDLE=${IA_ORGANIZATION_HANDLE:-internetarchive}
     depends_on:
-      - oip-daemon-service
-      - tor-daemon
+      oip-daemon-service:
+        condition: service_healthy
     volumes:
       - ./data/onion-press:/usr/src/app/data
-      - ./public/onion-press:/usr/src/app/public
+      - ./public/onion-press:/usr/src/app/public/onion-press
+      - tor-hidden-service:/var/lib/tor/hidden_service   # Persist .onion address
+      - tor-data:/var/lib/tor/data
     networks:
       - oip-network
     profiles:
       - onion-press-server
-      - alexandria
-      - alexandria-gpu
-      - alexandria-macMseries
       - alexandria-decentralized
       - alexandria-decentralized-gpu
       - alexandria-decentralized-macMseries
+      - alexandria-noSTT-decentralized
 
   wordpress:
     image: wordpress:latest
@@ -765,17 +836,15 @@ services:
       - wordpress-db
     volumes:
       - wordpress-data:/var/www/html
-      - ./wordpress-plugin:/var/www/html/wp-content/plugins/lo-publisher
+      - ./wordpress-plugin/lo-publisher:/var/www/html/wp-content/plugins/lo-publisher:ro
     networks:
       - oip-network
     profiles:
       - onion-press-server
-      - alexandria
-      - alexandria-gpu
-      - alexandria-macMseries
       - alexandria-decentralized
       - alexandria-decentralized-gpu
       - alexandria-decentralized-macMseries
+      - alexandria-noSTT-decentralized
 
   wordpress-db:
     image: mariadb:latest
@@ -790,39 +859,21 @@ services:
       - oip-network
     profiles:
       - onion-press-server
-      - alexandria
-      - alexandria-gpu
-      - alexandria-macMseries
       - alexandria-decentralized
       - alexandria-decentralized-gpu
       - alexandria-decentralized-macMseries
-
-  tor-daemon:
-    build:
-      context: ./tor-daemon
-      dockerfile: Dockerfile
-    volumes:
-      - tor-hidden-service:/var/lib/tor/hidden_service
-    ports:
-      - "${TOR_SOCKS_PORT:-9050}:9050"
-    networks:
-      - oip-network
-    profiles:
-      - onion-press-server
-      - alexandria
-      - alexandria-gpu
-      - alexandria-macMseries
-      - alexandria-decentralized
-      - alexandria-decentralized-gpu
-      - alexandria-decentralized-macMseries
+      - alexandria-noSTT-decentralized
 
 volumes:
   wordpress-data:
   wordpress-db-data:
-  tor-hidden-service:
+  tor-hidden-service:    # Persists .onion address keys
+  tor-data:              # TOR runtime data
 ```
 
-### Makefile.split Additions
+> **Note:** There is NO separate `tor-daemon` service. TOR runs integrated inside `onion-press-service`.
+
+### Makefile.split Commands (Actual)
 
 ```makefile
 # ════════════════════════════════════════════════════════════════
@@ -830,214 +881,221 @@ volumes:
 # ════════════════════════════════════════════════════════════════
 
 onion-press-server:            ## Deploy: OIP + WordPress + TOR anonymous publishing
-	@make up PROFILE=onion-press-server
+	@$(MAKE) up PROFILE=onion-press-server
 	@echo "🧅 Onion Press Server starting..."
-	@echo "   WordPress: http://localhost:${WORDPRESS_PORT:-8080}"
-	@echo "   Browsing:  http://localhost:${ONION_PRESS_PORT:-3007}"
-	@echo "   OIP API:   http://localhost:${OIP_DAEMON_PORT:-3005}"
 
-# ════════════════════════════════════════════════════════════════
-# ONION PRESS SERVICE-SPECIFIC OPERATIONS
-# ════════════════════════════════════════════════════════════════
+rebuild-onion-press-server:    ## Rebuild and deploy onion-press-server
+	docker-compose -f $(COMPOSE_FILE) --profile onion-press-server up -d --build
 
 logs-onion-press:              ## Show onion-press-service logs
-	docker-compose logs -f onion-press-service
+	docker-compose -f $(COMPOSE_FILE) logs -f onion-press-service
 
 logs-wordpress:                ## Show WordPress logs
-	docker-compose logs -f wordpress
+	docker-compose -f $(COMPOSE_FILE) logs -f wordpress
 
-logs-tor:                      ## Show TOR daemon logs
-	docker-compose logs -f tor-daemon
+logs-tor:                      ## Show TOR logs (integrated in onion-press-service)
+	docker-compose -f $(COMPOSE_FILE) logs -f onion-press-service | grep -E "(TOR|tor|onion|bootstrap)"
 
 restart-onion-press:           ## Restart onion-press-service
-	docker-compose restart onion-press-service
+	docker-compose -f $(COMPOSE_FILE) restart onion-press-service
 
 shell-onion-press:             ## Shell into onion-press-service
-	docker-compose exec onion-press-service /bin/sh
+	docker-compose -f $(COMPOSE_FILE) exec onion-press-service /bin/sh
 
-tor-status:                    ## Check TOR status and show .onion address
-	@echo "TOR Status:"
-	@docker-compose exec tor-daemon cat /var/lib/tor/hidden_service/hostname 2>/dev/null || echo "TOR not running or hidden service not ready"
+test-onion-press:              ## Test onion-press-service health
+	@curl -sf http://localhost:$${ONION_PRESS_PORT:-3007}/health && echo "✅ Onion Press healthy" || echo "❌ Onion Press not responding"
 ```
 
 ---
 
 ## Implementation Phases
 
-### Phase 1: Core Infrastructure (Week 1-2)
+### Phase 1: Core Infrastructure ✅ COMPLETE
 
 **Deliverables:**
-- [ ] `Dockerfile.onion-press` - Service container
-- [ ] `index-onion-press.js` - Entry point with Express server
-- [ ] `helpers/onionPressClient.js` - HTTP client for OIP daemon
-- [ ] `helpers/torClient.js` - TOR-proxied HTTP client
-- [ ] Docker Compose service definitions
-- [ ] Makefile targets
+- [x] `Dockerfile.onion-press` - Service container with integrated TOR
+- [x] `index-onion-press.js` - Entry point with Express server
+- [x] `helpers/onion-press/torClient.js` - TOR-proxied HTTP client
+- [x] `helpers/onion-press/settingsManager.js` - Settings persistence
+- [x] Docker Compose service definitions
+- [x] Makefile targets
 
-**Files to Create:**
+**Files Created:**
 ```
 Dockerfile.onion-press
 index-onion-press.js
-helpers/torClient.js
+package-onion-press.json
+scripts/docker-entrypoint-onion-press.sh
+helpers/onion-press/torClient.js
+helpers/onion-press/settingsManager.js
+helpers/onion-press/multiDestinationPublisher.js
 routes/onion-press/publish.js
 routes/onion-press/admin.js
+routes/onion-press/browse.js
 routes/onion-press/tor.js
-tor-daemon/
-├── Dockerfile
-└── torrc
+tor-daemon/torrc                    # TOR config (integrated into container)
 ```
 
-### Phase 2: Publishing System (Week 2-3)
+### Phase 2: Publishing System ✅ COMPLETE
 
 **Deliverables:**
-- [ ] Multi-destination publishing logic
-- [ ] Arweave publishing (via OIP daemon)
-- [ ] GUN publishing (via OIP daemon)
-- [ ] TOR-based Internet Archive publishing
-- [ ] Publishing status tracking
-- [ ] API endpoints for WordPress plugin
+- [x] Multi-destination publishing logic
+- [x] Arweave publishing (via OIP daemon)
+- [x] GUN publishing (via OIP daemon)
+- [x] TOR-based publishing infrastructure
+- [x] API endpoints for WordPress plugin
 
-**API Endpoints:**
+**API Endpoints (Implemented):**
 ```
 POST /api/publish              # Submit record for multi-destination publishing
-GET  /api/publish/:id/status   # Check publishing status
-GET  /api/destinations         # Get available publishing destinations
+GET  /api/publish/destinations # Get available publishing destinations
 POST /api/admin/settings       # Update publishing settings (admin only)
 GET  /api/admin/settings       # Get current settings (admin only)
 GET  /api/tor/status           # TOR daemon status and .onion address
+GET  /api/tor/test             # Test TOR connectivity
+GET  /api/browse/records       # Browse records (proxies to OIP daemon)
+GET  /api/browse/types         # Get record types
+GET  /api/browse/templates     # Get templates
 ```
 
-### Phase 3: WordPress Plugin (Week 3-5)
+**Pending:**
+- [ ] Internet Archive publishing (requires IA to publish organization record with `gateway_onion_address`)
+- [ ] Publishing status persistence (currently in-memory)
 
-**Deliverables:**
-- [ ] LO Publisher plugin structure
-- [ ] Gutenberg sidebar panel
-- [ ] Field mapping engine
-- [ ] Template selection UI
-- [ ] Record preview functionality
-- [ ] Publishing submission
-- [ ] Status tracking UI
-- [ ] Plugin settings page
+### Phase 3: WordPress Plugin 🚧 PARTIAL
 
-**Plugin Structure:**
+**Completed:**
+- [x] Basic plugin structure
+- [x] Main plugin file (`lo-publisher.php`)
+- [x] Gutenberg sidebar placeholder
+- [x] Admin settings page skeleton
+- [x] CSS/JS asset files
+
+**Pending:**
+- [ ] Full field mapping engine
+- [ ] Template schema fetching from OIP
+- [ ] Record preview before publishing
+- [ ] Publishing status UI in editor
+- [ ] Custom post type support (recipe, exercise)
+
+**Current Plugin Structure:**
 ```
 wordpress-plugin/lo-publisher/
-├── lo-publisher.php           # Main plugin file
-├── includes/
-│   ├── class-field-mapper.php
-│   ├── class-record-assembler.php
-│   ├── class-oip-client.php
-│   └── class-admin-settings.php
+├── lo-publisher.php           # Main plugin file ✅
 ├── assets/
 │   ├── js/
-│   │   ├── gutenberg-sidebar.js
-│   │   └── admin-settings.js
+│   │   ├── gutenberg-sidebar.js  # Basic ✅
+│   │   └── admin-settings.js     # Basic ✅
 │   └── css/
-│       ├── gutenberg-sidebar.css
-│       └── admin-settings.css
-├── templates/
-│   └── settings-page.php
-└── readme.txt
+│       ├── gutenberg-sidebar.css ✅
+│       └── admin-settings.css    ✅
+└── readme.txt                    ✅
 ```
 
-### Phase 4: Browsing Interface (Week 5-6)
+### Phase 4: Browsing Interface ✅ COMPLETE
 
 **Deliverables:**
-- [ ] Enhanced reference client
-- [ ] Template-based filtering
-- [ ] Publishing status indicators
-- [ ] Admin tab (hidden for non-admins)
-- [ ] Settings interface
-- [ ] TOR status display
-- [ ] Multi-source view
+- [x] Enhanced browsing interface
+- [x] Record type filtering
+- [x] Publishing source indicators (Arweave/GUN badges)
+- [x] Admin tab (visible only to logged-in admins)
+- [x] Settings interface
+- [x] TOR status display
+- [x] Record detail modal with raw data view
 
-**Files to Modify/Create:**
+**Files Created:**
 ```
 public/onion-press/
-├── index.html                 # Enhanced browsing interface
-├── admin.html                 # Admin settings (or tab in index.html)
+├── index.html                 # Browsing interface ✅
 ├── css/
-│   └── onion-press.css
+│   └── onion-press.css        # Dark theme styling ✅
 └── js/
-    ├── browse.js
-    ├── admin.js
-    └── api.js
+    ├── browse.js              # Record browsing logic ✅
+    ├── admin.js               # Admin settings UI ✅
+    └── api.js                 # API client ✅
 ```
 
-### Phase 5: Integration & Testing (Week 6-7)
+### Phase 5: Integration & Testing 🚧 PARTIAL
 
-**Deliverables:**
-- [ ] End-to-end publishing flow testing
-- [ ] TOR connectivity testing
-- [ ] Multi-destination publishing verification
-- [ ] Admin settings persistence testing
-- [ ] WordPress plugin testing
-- [ ] Profile hierarchy verification
-- [ ] Documentation
+**Completed:**
+- [x] TOR connectivity verification
+- [x] Profile hierarchy (onion-press in decentralized profiles only)
+- [x] OIP daemon proxy routes (`/onion-press/` path)
+- [x] TOR Hidden Service Guide documentation
 
-**Tests:**
-```
-test/
-├── onion-press/
-│   ├── publishing.test.js
-│   ├── tor-client.test.js
-│   ├── admin-settings.test.js
-│   └── browsing-interface.test.js
-```
+**Pending:**
+- [ ] End-to-end WordPress → OIP publishing test
+- [ ] Internet Archive publishing test (blocked on IA setup)
+- [ ] Automated integration tests
+- [ ] Load testing
 
 ---
 
 ## File Structure
 
-### New Files
+### Files Created (Actual)
 
 ```
 oip-arweave-indexer/
-├── Dockerfile.onion-press           # Onion Press service container
-├── index-onion-press.js             # Entry point
-├── package-onion-press.json         # Dependencies
+├── Dockerfile.onion-press           # ✅ Service container (includes TOR)
+├── index-onion-press.js             # ✅ Entry point
+├── package-onion-press.json         # ✅ Dependencies
 │
 ├── routes/
-│   └── onion-press/                 # New route directory
-│       ├── publish.js               # Publishing endpoints
-│       ├── admin.js                 # Admin settings endpoints
-│       ├── browse.js                # Browsing API endpoints
-│       └── tor.js                   # TOR status endpoints
+│   └── onion-press/                 # ✅ Route directory
+│       ├── publish.js               # ✅ Publishing endpoints
+│       ├── admin.js                 # ✅ Admin settings endpoints
+│       ├── browse.js                # ✅ Browsing API (proxies to OIP daemon)
+│       └── tor.js                   # ✅ TOR status endpoints
 │
 ├── helpers/
-│   └── onion-press/                 # New helpers directory
-│       ├── multiDestinationPublisher.js
-│       ├── torClient.js
-│       └── settingsManager.js
+│   └── onion-press/                 # ✅ Helpers directory
+│       ├── multiDestinationPublisher.js  # ✅ Multi-dest logic
+│       ├── torClient.js             # ✅ SOCKS5 proxy client
+│       └── settingsManager.js       # ✅ Settings persistence
 │
 ├── public/
-│   └── onion-press/                 # New static files
-│       ├── index.html               # Browsing interface
+│   └── onion-press/                 # ✅ Static files (served by OIP daemon too)
+│       ├── index.html               # ✅ Browsing interface
 │       ├── css/
-│       │   └── onion-press.css
+│       │   └── onion-press.css      # ✅ Dark theme
 │       └── js/
-│           ├── browse.js
-│           ├── admin.js
-│           └── api.js
+│           ├── browse.js            # ✅ Record browsing
+│           ├── admin.js             # ✅ Admin settings UI
+│           └── api.js               # ✅ API client
 │
-├── tor-daemon/                      # TOR daemon container
-│   ├── Dockerfile
-│   └── torrc
+├── tor-daemon/                      # ✅ TOR config (NO separate Dockerfile)
+│   └── torrc                        # ✅ Copied into onion-press container
 │
-├── wordpress-plugin/                # LO Publisher plugin
+├── wordpress-plugin/                # 🚧 LO Publisher plugin (partial)
 │   └── lo-publisher/
-│       ├── lo-publisher.php
-│       ├── includes/
+│       ├── lo-publisher.php         # ✅ Main file
 │       ├── assets/
-│       └── templates/
+│       │   ├── js/
+│       │   │   ├── gutenberg-sidebar.js   # 🚧 Basic
+│       │   │   └── admin-settings.js      # 🚧 Basic
+│       │   └── css/
+│       │       ├── gutenberg-sidebar.css  # ✅
+│       │       └── admin-settings.css     # ✅
+│       └── readme.txt               # ✅
 │
 ├── scripts/
-│   └── docker-entrypoint-onion-press.sh
+│   └── docker-entrypoint-onion-press.sh  # ✅ Starts TOR then Node
 │
 └── docs/
+    ├── TOR_HIDDEN_SERVICE_GUIDE.md  # ✅ TOR usage documentation
     └── toBuild/
         └── onion-press-server-implementation-plan.md  # This document
 ```
+
+### OIP Daemon Integration
+
+The OIP daemon (`index-daemon.js`) also includes onion-press routes:
+- `/onion-press/` - Serves static files from `public/onion-press/`
+- `/onion-press/api/browse/*` - Handled locally (queries Elasticsearch directly)
+- `/onion-press/api/publish/*`, `/onion-press/api/admin/*`, `/onion-press/api/tor/*` - Proxied to onion-press-service
+
+This allows accessing Onion Press at `https://yourdomain.com/onion-press/` even when running basic alexandria profile (browse-only mode).
 
 ---
 
@@ -1234,8 +1292,33 @@ Get TOR daemon status and .onion address.
 
 ---
 
-**Document Status:** Draft  
+## Next Steps
+
+### Immediate (to complete MVP)
+1. **Complete WordPress plugin** - Full field mapping from WP posts to OIP templates
+2. **Test end-to-end flow** - WordPress → LO Publisher → onion-press-service → OIP daemon → Arweave/GUN
+
+### Blocked (waiting on external)
+3. **Internet Archive integration** - Requires IA to:
+   - Run an OIP node with TOR hidden service
+   - Publish organization record with `gateway_onion_address` field
+
+### Future Enhancements
+4. **Publishing status persistence** - Store submission status in database
+5. **Custom post types** - Recipe/Exercise WordPress post types with pre-mapped fields
+6. **Automated tests** - Integration test suite
+
+---
+
+**Document Status:** Implementation In Progress  
 **Created:** December 18, 2025  
+**Last Updated:** December 21, 2025  
 **Author:** Implementation Planning  
-**Next Steps:** Review and begin Phase 1 implementation
+
+**Implementation Status:**
+- ✅ Phase 1: Core Infrastructure - COMPLETE
+- ✅ Phase 2: Publishing System - COMPLETE (except IA)
+- 🚧 Phase 3: WordPress Plugin - PARTIAL
+- ✅ Phase 4: Browsing Interface - COMPLETE
+- 🚧 Phase 5: Integration Testing - PARTIAL
 

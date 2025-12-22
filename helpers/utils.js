@@ -276,12 +276,12 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                 
                 // If not found in recordsInDB, fetch from Elasticsearch
                 if (!refRecord) {
-                    // Removed verbose logging - too noisy for production
                     try {
                         refRecord = await searchRecordInDB(properties[key]);
-                        // MEMORY LEAK FIX: Don't add to recordsInDB anymore
-                        // Each resolution now fetches on-demand instead of caching
-                        // This prevents unbounded growth of the recordsInDB array
+                        // NOTE: Do NOT add to recordsInDB here!
+                        // recordsInDB is a reference to the GLOBAL cache (recordsCache)
+                        // Adding resolved records to it causes unbounded memory growth
+                        // because deeply-resolved objects accumulate in the cache
                     } catch (error) {
                         console.error(`❌ [Resolution] Error fetching record from ES:`, error.message);
                     }
@@ -317,8 +317,7 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                         if (!refRecord) {
                             try {
                                 refRecord = await searchRecordInDB(properties[key][i]);
-                                // MEMORY LEAK FIX: Don't add to recordsInDB anymore
-                                // Each resolution now fetches on-demand instead of caching
+                                // NOTE: Do NOT add to recordsInDB - it's a global cache reference
                             } catch (error) {
                                 console.error(`❌ [Resolution] Error fetching record from ES:`, error.message);
                             }

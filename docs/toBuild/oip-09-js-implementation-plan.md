@@ -20,9 +20,9 @@ This document provides the JavaScript implementation plan for OIP v0.9.0, portin
 
 ## Implementation Status
 
-> **Last Updated:** December 17, 2024
+> **Last Updated:** December 21, 2024
 
-### Overall Progress: ✅ Core Implementation Complete
+### Overall Progress: ✅ Core Implementation Complete + Production Hardening
 
 | Phase | Status | Files Created | Notes |
 |-------|--------|---------------|-------|
@@ -30,9 +30,10 @@ This document provides the JavaScript implementation plan for OIP v0.9.0, portin
 | **Phase 2**: Sign/Verify | ✅ Complete | `helpers/core/oip-signing.js`, `helpers/core/oip-verification.js` | — |
 | **Phase 3**: Templates | ✅ Complete | `config/templates-v09.js` | — |
 | **Phase 4**: Client SDK | ✅ Complete | `sdk/oip-client-sdk.js`, `sdk/oip-client-sdk.cjs`, `sdk/oip-client-sdk.d.ts`, `sdk/package.json` | ESM + CommonJS + TypeScript types |
-| **Phase 5**: Indexer Integration | ✅ Complete | `helpers/core/gateway-registry.js`, `helpers/core/sync-verification.js`, `config/elasticsearch-mappings-v09.js` | — |
+| **Phase 5**: Indexer Integration | ✅ Complete | `helpers/core/gateway-registry.js`, `helpers/core/sync-verification.js`, `config/elasticsearch-mappings-v09.js` | Gateway registry fully integrated |
 | **Phase 6**: API Endpoints | ✅ Complete | `routes/daemon/did.js` | Wired into `index-daemon.js` |
 | **Phase 7**: Migration | ✅ Complete | — | Integrated into oip-verification.js |
+| **Post-Implementation**: Production Hardening | ✅ Complete | Various fixes | Backward compatibility, caching, CORS |
 
 ### Remaining Work
 
@@ -41,12 +42,28 @@ The following tasks remain before v0.9 is fully operational:
 | Task | Priority | Description |
 |------|----------|-------------|
 | **Wire `verifyBeforeIndex()` into sync** | 🔴 Critical | Call `verifyBeforeIndex()` in `helpers/core/elasticsearch.js` `keepDBUpToDate` function before indexing records |
-| **Wire gateway registry into arweave.js** | 🔴 Critical | Update `helpers/core/arweave.js` to use `getGatewayUrls()` for failover |
 | **First v0.9 creator bootstrap** | 🔴 Critical | Hardcode the first v0.9 creator registration (like v0.8's bootstrap creator) |
 | **Publish v0.9 template records** | 🟡 High | Use bootstrap creator to publish actual template records, then update `TEMPLATE_DIDS` |
 | **Unit tests** | 🟡 High | Test key derivation, signing, verification |
 | **Integration tests** | 🟢 Medium | Full sign → publish → sync → verify cycle |
 | **npm publish SDK** | 🟢 Medium | Publish `@oip/client-sdk` to npm |
+
+### Completed During Production Deployment
+
+| Task | Status | Notes |
+|------|--------|-------|
+| **Wire gateway registry into arweave.js** | ✅ Complete | `helpers/core/arweave.js` now uses `getGatewayUrls()` and `getGraphQLEndpoints()` for failover |
+| **Wire gateway registry into elasticsearch.js** | ✅ Complete | `helpers/core/elasticsearch.js` uses gateway registry for all Arweave network requests |
+| **Block height caching** | ✅ Complete | `getCurrentBlockHeight()` cached with 2-minute TTL to avoid API rate limits |
+| **Indexing progress calculation** | ✅ Complete | Fixed progress reporting in `keepDBUpToDate` and `/api/records` endpoint |
+| **Elasticsearch `_id` fielddata fix** | ✅ Complete | Removed `value_count` aggregation on `_id` in `getOrganizationsInDB` |
+| **API backward compatibility** | ✅ Complete | Added aliases for `/api/register`, `/api/login`, etc. in `index-daemon.js` |
+| **Media caching** | ✅ Complete | Added HTTP caching headers + in-memory manifest cache in `routes/daemon/media.js` |
+| **GUN endpoint fix** | ✅ Complete | Fixed URL construction in `helpers/gun.js` for HTTP API |
+| **Date sorting fix** | ✅ Complete | Added `'date'` to `postProcessSorts` in elasticsearch.js |
+| **CORS configuration** | ✅ Complete | Added `alexandria.io`, `oip.fitnessally.io` origins + `ALLOWED_ORIGINS` env var support |
+| **Media directory path fix** | ✅ Complete | Corrected `MEDIA_DIR` path in `routes/daemon/media.js` |
+| **Notes upload directory fix** | ✅ Complete | Corrected upload path in `routes/alexandria/notes.js` |
 
 ### Changes During Implementation
 
@@ -54,6 +71,10 @@ The following tasks remain before v0.9 is fully operational:
 2. **TypeScript definitions**: Added `oip-client-sdk.d.ts` for TypeScript support
 3. **SDK package.json**: Created standalone `sdk/package.json` for independent npm publishing with peer dependencies
 4. **DID routes wired**: Added `didRoutes` to `index-daemon.js` at `/api/did`
+5. **Gateway registry robustness**: Added multiple AR.IO API endpoints with fallback, reduced log spam for failed dynamic fetches
+6. **Block height caching**: Implemented `getCachedBlockHeight()` and `refreshBlockHeightIfStale()` in `helpers/core/arweave.js`
+7. **Media caching documentation**: Created `docs/feature_documentation/MEDIA_CACHING.md`
+8. **Alfred's Notes renamed**: `alfred-notes.html` → `alfreds-notes.html` with updated titles and dynamic API URL detection
 
 ---
 
@@ -1243,7 +1264,7 @@ export { OIPIdentity, canonicalJson, base64urlEncode };
 ### 5.0 Gateway Failover Architecture
 
 > **Status:** ✅ COMPLETE — File created: `helpers/core/gateway-registry.js`
-> **⚠️ Remaining:** Update `helpers/core/arweave.js` to use `getGatewayUrls()` for failover
+> ✅ **Integrated:** `helpers/core/arweave.js` and `helpers/core/elasticsearch.js` now use gateway failover
 
 #### Overview
 
@@ -2006,16 +2027,20 @@ async function handleLegacyRecord(record, blockHeight) {
 
 | Phase | Estimated | Actual | Status | Dependencies |
 |-------|-----------|--------|--------|--------------|
-| **Phase 1**: Core Crypto | 1 week | ✅ Complete | Done | None |
-| **Phase 2**: Sign/Verify | 1 week | ✅ Complete | Done | Phase 1 |
-| **Phase 3**: Templates | 3 days | ✅ Complete | Done | None |
-| **Phase 4**: Client SDK | 1 week | ✅ Complete | Done | Phase 1-2 |
-| **Phase 5**: Indexer | 1 week | ✅ Complete | Done (wiring pending) | Phase 2-3 |
-| **Phase 6**: API | 3 days | ✅ Complete | Done | Phase 5 |
-| **Phase 7**: Migration | 3 days | ✅ Complete | Done | Phase 5-6 |
+| **Phase 1**: Core Crypto | 1 week | Dec 17, 2024 | ✅ Done | None |
+| **Phase 2**: Sign/Verify | 1 week | Dec 17, 2024 | ✅ Done | Phase 1 |
+| **Phase 3**: Templates | 3 days | Dec 17, 2024 | ✅ Done | None |
+| **Phase 4**: Client SDK | 1 week | Dec 17, 2024 | ✅ Done | Phase 1-2 |
+| **Phase 5**: Indexer | 1 week | Dec 17-21, 2024 | ✅ Done | Phase 2-3 |
+| **Phase 6**: API | 3 days | Dec 17, 2024 | ✅ Done | Phase 5 |
+| **Phase 7**: Migration | 3 days | Dec 17, 2024 | ✅ Done | Phase 5-6 |
+| **Production Hardening** | — | Dec 19-21, 2024 | ✅ Done | Phase 1-7 |
 
 **Original Estimate:** ~5-6 weeks
-**Actual:** Core implementation complete December 17, 2024
+**Actual:** 
+- Core implementation complete: December 17, 2024
+- Gateway integration + production fixes: December 19-21, 2024
+- Total: ~5 days (accelerated timeline)
 
 ---
 
@@ -2025,27 +2050,42 @@ async function handleLegacyRecord(record, blockHeight) {
 oip-arweave-indexer/
 ├── helpers/
 │   └── core/
+│       ├── arweave.js              # ✅ MODIFIED: Gateway failover + block height caching
+│       ├── elasticsearch.js        # ✅ MODIFIED: Gateway registry, date sorting, progress calc
 │       ├── gateway-registry.js     # ✅ Multi-gateway failover (Phase 5.0)
 │       ├── oip-crypto.js           # ✅ HD key derivation (Phase 1)
 │       ├── oip-signing.js          # ✅ Signing service (Phase 2)
 │       ├── oip-verification.js     # ✅ Verification service (Phase 2)
 │       └── sync-verification.js    # ✅ Indexer integration (Phase 5)
+│   └── gun.js                       # ✅ MODIFIED: Fixed HTTP API URL construction
 ├── config/
 │   ├── templates-v09.js            # ✅ Hardcoded v0.9 templates (Phase 3)
 │   └── elasticsearch-mappings-v09.js # ✅ ES mappings for DID records (Phase 5)
 ├── routes/
-│   └── daemon/
-│       └── did.js                   # ✅ DID resolution endpoints (Phase 6)
+│   ├── daemon/
+│   │   ├── did.js                  # ✅ DID resolution endpoints (Phase 6)
+│   │   ├── media.js                # ✅ MODIFIED: Caching headers + manifest cache
+│   │   └── user.js                 # ✅ MODIFIED: handleAlias for backward compat
+│   └── alexandria/
+│       └── notes.js                # ✅ MODIFIED: Fixed upload directory path
 ├── sdk/
 │   ├── oip-client-sdk.js           # ✅ Browser SDK - ESM (Phase 4)
 │   ├── oip-client-sdk.cjs          # ✅ Browser SDK - CommonJS (Phase 4)
 │   ├── oip-client-sdk.d.ts         # ✅ TypeScript definitions (Phase 4)
 │   └── package.json                # ✅ npm package config (Phase 4)
-├── index-daemon.js                  # ✅ Updated with DID routes
+├── public/
+│   └── alfreds-notes.html          # ✅ RENAMED: alfred-notes.html → alfreds-notes.html
+├── index-daemon.js                  # ✅ Updated: DID routes + backward compat aliases + CORS
+├── index-alexandria.js              # ✅ Updated: Static file serving + TTS port fix
+├── index.js                         # ✅ Updated: Backward compatibility aliases (monolithic)
 ├── package.json                     # ✅ Updated with crypto dependencies
+├── Dockerfile.alexandria            # ✅ Updated: Added public/ directory COPY
+├── docker-compose-split.yml         # ✅ Updated: Volume mounts for public/ and data/media
 └── docs/
-    └── toBuild/
-        └── oip-09-js-implementation-plan.md
+    ├── toBuild/
+    │   └── oip-09-js-implementation-plan.md
+    └── feature_documentation/
+        └── MEDIA_CACHING.md        # ✅ NEW: Documentation for media caching
 ```
 
 ### New Dependencies Added to `package.json`
@@ -2115,56 +2155,124 @@ oip-arweave-indexer/
    // Continue with indexing...
    ```
 
-2. **Wire gateway registry into arweave.js**
-   
-   Update `helpers/core/arweave.js` to use the gateway registry for failover:
-   
-   ```javascript
-   const { getGatewayUrls } = require('./gateway-registry');
-   
-   async function getTransaction(txId) {
-       const gateways = await getGatewayUrls();
-       for (const gateway of gateways) {
-           try {
-               // ... existing fetch logic with this gateway
-           } catch (error) {
-               console.warn(`Gateway ${gateway} failed, trying next...`);
-           }
-       }
-       throw new Error(`All gateways failed for tx ${txId}`);
-   }
-   ```
-
-3. **Bootstrap first v0.9 creator**
+2. **Bootstrap first v0.9 creator**
    
    Hardcode the first v0.9 creator registration (mnemonic → DID document) similar to how the first v0.8 creator was bootstrapped.
 
 ### Short-term
 
-4. **Publish v0.9 template records** using the bootstrap creator, then update `TEMPLATE_DIDS` in `config/templates-v09.js` with actual txIds
+3. **Publish v0.9 template records** using the bootstrap creator, then update `TEMPLATE_DIDS` in `config/templates-v09.js` with actual txIds
 
-5. **Write unit tests** for:
+4. **Write unit tests** for:
    - Key derivation paths
    - Payload digest computation
    - Signature verification round-trip
    - Version detection
 
-6. **Publish SDK to npm** as `@oip/client-sdk`
+5. **Publish SDK to npm** as `@oip/client-sdk`
 
 ### Medium-term
 
-7. **Integration tests** for full sign → publish → sync → verify cycle
-8. **Gateway health monitoring** dashboard
-9. **Client SDK documentation** and examples
+6. **Integration tests** for full sign → publish → sync → verify cycle
+7. **Gateway health monitoring** dashboard
+8. **Client SDK documentation** and examples
+
+### ✅ Completed (Post-Implementation Production Hardening)
+
+The following were completed during production deployment:
+
+- ✅ **Wire gateway registry into arweave.js** - `getTransaction()`, `getCurrentBlockHeight()`, `getBlockHeightFromTxId()` all use gateway failover
+- ✅ **Wire gateway registry into elasticsearch.js** - `searchArweaveForNewTransactions()` uses async gateway endpoints
+- ✅ **Block height caching** - Implemented `getCachedBlockHeight()` with 2-minute TTL
+- ✅ **Indexing progress fix** - `keepDBUpToDate` and `/api/records` now report accurate progress
+- ✅ **API backward compatibility** - Added route aliases for legacy endpoint paths
+- ✅ **Media serving optimizations** - HTTP caching headers + in-memory manifest cache
+- ✅ **CORS configuration** - Added production origins and `ALLOWED_ORIGINS` env var support
+- ✅ **Path corrections** - Fixed relative paths in `routes/daemon/media.js` and `routes/alexandria/notes.js`
+- ✅ **GUN HTTP API fix** - Corrected URL construction for GUN relay HTTP endpoints
+- ✅ **Date sorting** - Added client-side sorting for `date` field in elasticsearch queries
+
+---
+
+---
+
+## Integration with Service Split Architecture
+
+The OIP v0.9 implementation was deployed alongside the oip-daemon-service / alexandria-service split. The following architectural considerations apply:
+
+### Service Responsibilities
+
+| Service | v0.9 Role |
+|---------|-----------|
+| **oip-daemon-service** | DID resolution (`/api/did`), signature verification at sync, gateway failover |
+| **alexandria-service** | Client SDK can be used in AI/voice workflows for user-signed content |
+
+### Shared Infrastructure
+
+Both services share:
+- Elasticsearch (indexes DID documents and verification methods)
+- Gateway registry (both can fetch from Arweave)
+- Block height caching (shared via `helpers/core/arweave.js`)
+
+### API Endpoints by Service
+
+**oip-daemon-service (port 3005):**
+- `GET /api/did/:did` - DID resolution
+- `POST /api/did/verify` - Signature verification
+- All existing record/publish endpoints now support v0.9 records
+
+**alexandria-service (port 3017):**
+- Uses oipClient to proxy DID operations to daemon
+- Notes, recipes, workouts can be signed with client SDK
+
+### Backward Compatibility
+
+Legacy v0.8 API paths continue to work:
+- `/api/register` → `/api/user/register`
+- `/api/login` → `/api/user/login`
+- `/api/joinWaitlist` → `/api/user/joinWaitlist`
+
+All existing v0.8 records continue to be indexed and served without modification.
+
+---
+
+## Production Deployment Notes
+
+### Environment Variables Added
+
+```bash
+# Gateway configuration
+GATEWAY_CACHE_TTL=3600000           # 1 hour (dynamic gateway list cache)
+USE_LOCAL_ARIO_GATEWAY=false        # Enable local AR.IO gateway priority
+LOCAL_ARIO_GATEWAY_ADDRESS=localhost:4000
+
+# CORS (comma-separated additional origins)
+ALLOWED_ORIGINS=https://myapp.com,https://otherapp.com
+```
+
+### Monitoring Recommendations
+
+1. **Gateway health**: Monitor `[Gateway Registry]` log entries for failover events
+2. **Block height cache**: Watch for `refreshBlockHeightIfStale` calls
+3. **Verification failures**: Log entries starting with `[SyncVerification] ❌`
+4. **Media cache hits**: Enable debug logging to see cache hit rates
+
+### Known Limitations
+
+1. **Legacy verification passthrough**: v0.8 records use `verifyLegacy()` which passes through (no signature re-verification)
+2. **Dynamic gateway API**: AR.IO `api.arns.app` occasionally returns 404; hardcoded gateways ensure availability
+3. **Block height precision**: Cached value may be up to 2 minutes stale; acceptable for progress reporting
 
 ---
 
 ## References
 
 - [OIP v0.9.0 Implementation Plan (C# Reference)](./oip-09-implementation-plan.md)
+- [OIP Daemon & Alexandria Service Split Plan](./oip-daemon-and-alexandria-service-split-plan.md)
 - [W3C DID Core](https://www.w3.org/TR/did-core/)
 - [SLIP-0043](https://github.com/satoshilabs/slips/blob/master/slip-0043.md)
 - [BIP-32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)
 - [@scure/bip32](https://github.com/paulmillr/scure-bip32)
 - [@noble/curves](https://github.com/paulmillr/noble-curves)
+- [AR.IO Network](https://ar.io/) - Gateway registry and failover
 
