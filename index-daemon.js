@@ -791,6 +791,117 @@ app.get('/health', (req, res) => {
     });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// DEBUG ENDPOINT - Shows exactly what's consuming memory
+// ═══════════════════════════════════════════════════════════════════════════════
+app.get('/debug/memory', async (req, res) => {
+    try {
+        const v8 = require('v8');
+        
+        // Force GC first to see what's actually retained (not just garbage)
+        if (global.gc) {
+            global.gc();
+            console.log('🧹 Forced GC before memory snapshot');
+        }
+        
+        const heapStats = v8.getHeapStatistics();
+        const memUsage = process.memoryUsage();
+        
+        // Get cache info from elasticsearch module
+        let cacheInfo = {};
+        try {
+            const { getRecordsInDB, getTemplatesInDB, getCreatorsInDB } = require('./helpers/core/elasticsearch');
+            
+            // Get cache sizes without refreshing
+            const recordsCache = await getRecordsInDB(false);
+            const templatesCache = await getTemplatesInDB();
+            const creatorsCache = await getCreatorsInDB();
+            
+            cacheInfo = {
+                recordsCache: {
+                    count: recordsCache?.records?.length || 0,
+                    estimatedSizeMB: recordsCache?.records ? 
+                        Math.round(JSON.stringify(recordsCache.records).length / 1024 / 1024 * 10) / 10 : 0
+                },
+                templatesCache: {
+                    count: templatesCache?.templatesInDB?.length || 0
+                },
+                creatorsCache: {
+                    count: creatorsCache?.creatorsInDB?.length || 0
+                }
+            };
+        } catch (e) {
+            cacheInfo = { error: e.message };
+        }
+        
+        // Get heap space breakdown
+        const heapSpaces = v8.getHeapSpaceStatistics();
+        const heapBreakdown = heapSpaces.map(space => ({
+            name: space.space_name,
+            sizeMB: Math.round(space.space_size / 1024 / 1024),
+            usedMB: Math.round(space.space_used_size / 1024 / 1024),
+            availableMB: Math.round(space.space_available_size / 1024 / 1024)
+        }));
+        
+        const result = {
+            timestamp: new Date().toISOString(),
+            uptime: Math.round(process.uptime()),
+            memory: {
+                rss: Math.round(memUsage.rss / 1024 / 1024) + ' MB',
+                heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + ' MB',
+                heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + ' MB',
+                external: Math.round(memUsage.external / 1024 / 1024) + ' MB',
+                arrayBuffers: Math.round(memUsage.arrayBuffers / 1024 / 1024) + ' MB'
+            },
+            heapStats: {
+                totalHeapSize: Math.round(heapStats.total_heap_size / 1024 / 1024) + ' MB',
+                usedHeapSize: Math.round(heapStats.used_heap_size / 1024 / 1024) + ' MB',
+                heapSizeLimit: Math.round(heapStats.heap_size_limit / 1024 / 1024) + ' MB',
+                mallocedMemory: Math.round(heapStats.malloced_memory / 1024 / 1024) + ' MB',
+                peakMallocedMemory: Math.round(heapStats.peak_malloced_memory / 1024 / 1024) + ' MB',
+                numberOfNativeContexts: heapStats.number_of_native_contexts,
+                numberOfDetachedContexts: heapStats.number_of_detached_contexts
+            },
+            heapSpaces: heapBreakdown,
+            caches: cacheInfo,
+            gcAvailable: typeof global.gc === 'function'
+        };
+        
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message, stack: error.stack });
+    }
+});
+
+// Trigger a heap snapshot (save to file for Chrome DevTools analysis)
+app.get('/debug/heap-snapshot', async (req, res) => {
+    try {
+        const v8 = require('v8');
+        const fs = require('fs').promises;
+        const path = require('path');
+        
+        // Force GC first
+        if (global.gc) global.gc();
+        
+        const snapshotDir = path.join(__dirname, 'logs', 'heap-dumps');
+        await fs.mkdir(snapshotDir, { recursive: true });
+        
+        const filename = `heap-${Date.now()}.heapsnapshot`;
+        const filepath = path.join(snapshotDir, filename);
+        
+        v8.writeHeapSnapshot(filepath);
+        
+        res.json({
+            success: true,
+            message: 'Heap snapshot saved',
+            path: filepath,
+            instructions: 'Download this file and open it in Chrome DevTools -> Memory tab'
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Make io available to routes
 app.set('io', io);
 
