@@ -4125,7 +4125,7 @@ async function searchRecordInDB(didTx) {
 // This cache is now only used by keepDBUpToDate and other background processes
 let recordsCache = null;
 let cacheTimestamp = 0;
-const CACHE_DURATION = 60000; // 1 minute cache (reduced from 5 minutes)
+const CACHE_DURATION = 300000; // 5 minute cache - prevents cache churn during long-running requests
 let keepDBCycleCount = 0; // Track keepDBUpToDate cycles
 
 /**

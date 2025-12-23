@@ -295,8 +295,8 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                     } else {
                         // CRITICAL: Deep copy refRecord before resolving!
                         // refRecord is from the global cache - modifying it pollutes the cache
-                        // and causes unbounded memory growth as resolved data accumulates
-                        const refRecordCopy = JSON.parse(JSON.stringify(refRecord));
+                        // Use structuredClone (more memory-efficient than JSON.parse/stringify)
+                        const refRecordCopy = structuredClone(refRecord);
                         
                         // Create a new visited set for this branch to track the resolution chain
                         const branchVisited = new Set(visited);
@@ -335,8 +335,8 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                                 properties[key][i] = name;
                             } else {
                                 // CRITICAL: Deep copy refRecord before resolving!
-                                // refRecord is from the global cache - modifying it pollutes the cache
-                                const refRecordCopy = JSON.parse(JSON.stringify(refRecord));
+                                // Use structuredClone (more memory-efficient than JSON.parse/stringify)
+                                const refRecordCopy = structuredClone(refRecord);
                                 
                                 // Create a new visited set for this branch to track the resolution chain
                                 const branchVisited = new Set(visited);
