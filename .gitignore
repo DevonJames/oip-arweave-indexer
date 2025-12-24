@@ -26,3 +26,4 @@ mac-client/logs/
 *.log
 examples/
 docs/archive/
+heap-dumps/
