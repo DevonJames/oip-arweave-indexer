@@ -1786,6 +1786,17 @@
             display: flex;
         }
 
+        /* Job Progress Panel - inherits from recording-panel */
+        #jobProgressPanel {
+            min-width: 280px;
+            padding: 18px 24px;
+        }
+
+        #jobProgressPanel .recording-timer {
+            font-size: 10px;
+            animation: none;
+        }
+
         .recording-timer {
             font-family: "Press Start 2P", system-ui;
             font-size: 11px;
@@ -1961,6 +1972,17 @@
                                     </label>
                                 </div>
                                 
+                                <div class="form-group" style="margin-top: 16px;">
+                                    <label class="form-label">Meeting Duration</label>
+                                    <div class="home-mode-toggle" style="width: 100%; margin-top: 8px;">
+                                        <button class="mode-toggle-btn active" data-duration="short" onclick="alfredApp.switchDurationMode('short', 'upload')" style="flex: 1;">⚡ Short (&lt;60 min)</button>
+                                        <button class="mode-toggle-btn" data-duration="long" onclick="alfredApp.switchDurationMode('long', 'upload')" style="flex: 1;">🕐 Long (60+ min)</button>
+                                    </div>
+                                    <div class="setting-description" style="margin-top: 6px; font-size: 11px;">
+                                        Long meetings use async processing to avoid timeouts (recommended for 60+ minute recordings)
+                                    </div>
+                                </div>
+                                
                                 <button class="primary-button" onclick="alfredApp.uploadAudioFile()" style="width: 100%; margin-top: 8px;">
                                     📤 Upload & Process
                                 </button>
@@ -2007,6 +2029,18 @@
                                 </div>
                                 <div class="template-name">Interview / Lecture</div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Meeting Duration Toggle (for recording mode) -->
+                    <div class="template-selector" id="recordDurationSection">
+                        <h3 class="template-title">Meeting Duration</h3>
+                        <div class="home-mode-toggle" style="width: 100%; max-width: 400px; margin: 0 auto;">
+                            <button class="mode-toggle-btn active" data-duration="short" onclick="alfredApp.switchDurationMode('short', 'record')" style="flex: 1;">⚡ Short (&lt;60 min)</button>
+                            <button class="mode-toggle-btn" data-duration="long" onclick="alfredApp.switchDurationMode('long', 'record')" style="flex: 1;">🕐 Long (60+ min)</button>
+                        </div>
+                        <div class="setting-description" style="margin-top: 8px; text-align: center; font-size: 11px; color: var(--text-tertiary);">
+                            Use "Long" for meetings over 60 minutes to avoid processing timeouts
                         </div>
                     </div>
 
@@ -2404,6 +2438,9 @@
                 selectedNoteForChat: null, // The note DID when in 'selected' mode
                 conversationHistory: [],
                 homeMode: 'record', // 'record' or 'upload'
+                durationMode: 'short', // 'short' or 'long' - for async processing of long meetings
+                currentJobId: null, // For tracking async job progress
+                jobPollingInterval: null, // Interval for polling job status
                 selectedAudioFile: null,
                 currentAudio: null, // Currently playing audio element
                 currentAudioButton: null, // Button for currently playing audio
@@ -2755,6 +2792,169 @@
                 }
             },
 
+            // Job Polling for Long Meeting Processing
+            startJobPolling(jobId) {
+                console.log('🔄 Starting job polling for:', jobId);
+                
+                // Show job progress panel
+                this.showJobProgressPanel(jobId);
+                
+                // Poll every 5 seconds
+                this.state.jobPollingInterval = setInterval(async () => {
+                    await this.pollJobStatus(jobId);
+                }, 5000);
+                
+                // Also poll immediately
+                this.pollJobStatus(jobId);
+            },
+
+            stopJobPolling() {
+                if (this.state.jobPollingInterval) {
+                    clearInterval(this.state.jobPollingInterval);
+                    this.state.jobPollingInterval = null;
+                }
+                this.state.currentJobId = null;
+                this.hideJobProgressPanel();
+            },
+
+            async pollJobStatus(jobId) {
+                try {
+                    const response = await fetch(`${this.state.settings.apiBaseUrl}/api/notes/jobs/${jobId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${this.state.jwtToken}`
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success && data.job) {
+                        const job = data.job;
+                        console.log(`📊 Job ${jobId.substring(0, 8)}... status:`, job.status, job.progress ? `(${job.progress}%)` : '');
+                        
+                        // Update progress UI
+                        this.updateJobProgress(job);
+                        
+                        // Handle completion
+                        if (job.status === 'complete') {
+                            this.stopJobPolling();
+                            this.showToast('✅ Long meeting processed successfully!', 'success');
+                            this.clearAudioFile();
+                            this.switchHomeMode('record');
+                            this.loadNotes();
+                        } else if (job.status === 'failed') {
+                            this.stopJobPolling();
+                            this.showToast(`❌ Processing failed: ${job.error || 'Unknown error'}`, 'error');
+                        } else if (job.status === 'cancelled') {
+                            this.stopJobPolling();
+                            this.showToast('⚠️ Job was cancelled', 'error');
+                        }
+                    } else {
+                        console.error('Failed to get job status:', data.error);
+                    }
+                } catch (error) {
+                    console.error('Error polling job status:', error);
+                }
+            },
+
+            showJobProgressPanel(jobId) {
+                // Create job progress panel if it doesn't exist
+                let panel = document.getElementById('jobProgressPanel');
+                if (!panel) {
+                    panel = document.createElement('div');
+                    panel.id = 'jobProgressPanel';
+                    panel.className = 'recording-panel active';
+                    panel.style.cssText = 'border-color: rgba(95, 252, 249, 0.6); background: var(--bg-panel);';
+                    panel.innerHTML = `
+                        <div class="recording-timer" id="jobProgressStatus" style="color: var(--accent-cyan);">PROCESSING</div>
+                        <div class="recording-status" id="jobProgressStep">Starting...</div>
+                        <div style="width: 200px; height: 6px; background: var(--bg-chip); border-radius: 3px; margin: 8px 0; overflow: hidden;">
+                            <div id="jobProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-cyan), var(--primary-blue)); transition: width 0.5s ease;"></div>
+                        </div>
+                        <div id="jobProgressPercent" style="font-size: 11px; color: var(--text-secondary);">0%</div>
+                        <button class="stop-recording-btn" onclick="alfredApp.cancelCurrentJob()" style="background: var(--text-tertiary); margin-top: 8px;">✕ Cancel</button>
+                    `;
+                    document.body.appendChild(panel);
+                } else {
+                    panel.classList.add('active');
+                }
+            },
+
+            hideJobProgressPanel() {
+                const panel = document.getElementById('jobProgressPanel');
+                if (panel) {
+                    panel.classList.remove('active');
+                }
+            },
+
+            updateJobProgress(job) {
+                const statusEl = document.getElementById('jobProgressStatus');
+                const stepEl = document.getElementById('jobProgressStep');
+                const barEl = document.getElementById('jobProgressBar');
+                const percentEl = document.getElementById('jobProgressPercent');
+                
+                if (!statusEl) return;
+                
+                // Update status text
+                const statusLabels = {
+                    'queued': '⏳ QUEUED',
+                    'uploading': '📤 UPLOADING',
+                    'transcribing': '🎙️ TRANSCRIBING',
+                    'chunking': '✂️ CHUNKING',
+                    'summarizing': '📝 SUMMARIZING',
+                    'creating_records': '💾 CREATING RECORDS',
+                    'complete': '✅ COMPLETE',
+                    'failed': '❌ FAILED',
+                    'cancelled': '⚠️ CANCELLED'
+                };
+                
+                statusEl.textContent = statusLabels[job.status] || job.status.toUpperCase();
+                
+                // Update step description
+                const stepDescriptions = {
+                    'queued': 'Waiting in queue...',
+                    'uploading': 'Uploading audio file...',
+                    'transcribing': 'Transcribing audio (this may take a while for long meetings)...',
+                    'chunking': 'Creating searchable chunks...',
+                    'summarizing': 'Generating summary and analysis...',
+                    'creating_records': 'Saving records to database...',
+                    'complete': 'Processing complete!',
+                    'failed': job.error || 'An error occurred',
+                    'cancelled': 'Processing was cancelled'
+                };
+                
+                stepEl.textContent = stepDescriptions[job.status] || 'Processing...';
+                
+                // Update progress bar
+                const progress = job.progress || 0;
+                if (barEl) barEl.style.width = `${progress}%`;
+                if (percentEl) percentEl.textContent = `${progress}%`;
+            },
+
+            async cancelCurrentJob() {
+                if (!this.state.currentJobId) return;
+                
+                try {
+                    const response = await fetch(`${this.state.settings.apiBaseUrl}/api/notes/jobs/${this.state.currentJobId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${this.state.jwtToken}`
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.stopJobPolling();
+                        this.showToast('Job cancelled', 'success');
+                    } else {
+                        this.showToast('Failed to cancel job: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Error cancelling job:', error);
+                    this.showToast('Failed to cancel job', 'error');
+                }
+            },
+
             // Recording
             async toggleRecording() {
                 if (this.state.isRecording) {
@@ -2851,6 +3051,25 @@
                 console.log('🔄 Switched to', mode, 'mode');
             },
 
+            switchDurationMode(duration, context = 'record') {
+                this.state.durationMode = duration;
+                
+                // Update toggle buttons in the appropriate context
+                const selector = context === 'upload' 
+                    ? '#uploadFormFields .mode-toggle-btn[data-duration]'
+                    : '#recordDurationSection .mode-toggle-btn[data-duration]';
+                
+                document.querySelectorAll(selector).forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.duration === duration);
+                });
+                
+                console.log('🕐 Duration mode:', duration, `(${duration === 'long' ? 'async processing' : 'sync processing'})`);
+                
+                if (duration === 'long') {
+                    this.showToast('Long meeting mode: Uses async processing for recordings over 60 minutes', 'success');
+                }
+            },
+
             // Audio File Upload
             handleAudioFileSelect(event) {
                 const file = event.target.files[0];
@@ -2865,12 +3084,16 @@
                 
                 this.state.selectedAudioFile = file;
                 
+                // Try to detect audio duration from file
+                this.detectAudioDuration(file);
+                
                 // Update UI to show file selected
                 const uploadArea = document.getElementById('uploadArea');
                 uploadArea.innerHTML = `
                     <img src="icons/noun-microphone-7208171.svg" alt="Audio" style="width: 48px; height: 48px; opacity: 0.7; margin-bottom: 12px;">
                     <div class="upload-text" style="color: var(--accent-cyan);">✓ ${file.name}</div>
                     <div class="upload-formats">${(file.size / (1024 * 1024)).toFixed(2)} MB</div>
+                    <div id="audioDurationInfo" style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">Detecting duration...</div>
                     <div style="margin-top: 12px; font-size: 12px; color: var(--text-tertiary); cursor: pointer;" onclick="alfredApp.clearAudioFile()">Click to select a different file</div>
                 `;
                 
@@ -2884,6 +3107,55 @@
                 document.getElementById('uploadEndTime').value = endTime.toISOString().slice(0, 16);
                 
                 console.log('📁 File selected:', file.name, file.type, file.size);
+            },
+
+            detectAudioDuration(file) {
+                const audio = new Audio();
+                const objectUrl = URL.createObjectURL(file);
+                
+                audio.addEventListener('loadedmetadata', () => {
+                    const durationSeconds = audio.duration;
+                    const durationMinutes = Math.round(durationSeconds / 60);
+                    
+                    console.log(`🕐 Audio duration detected: ${durationMinutes} minutes (${durationSeconds.toFixed(0)}s)`);
+                    
+                    // Update duration info display
+                    const durationInfo = document.getElementById('audioDurationInfo');
+                    if (durationInfo) {
+                        const hours = Math.floor(durationMinutes / 60);
+                        const mins = durationMinutes % 60;
+                        const durationText = hours > 0 ? `${hours}h ${mins}m` : `${mins} minutes`;
+                        durationInfo.textContent = `Duration: ${durationText}`;
+                    }
+                    
+                    // Auto-select long meeting mode if duration > 45 minutes
+                    if (durationMinutes >= 45 && this.state.durationMode !== 'long') {
+                        this.switchDurationMode('long', 'upload');
+                        this.showToast(`⏰ Long meeting detected (${durationMinutes} min). Switched to async processing mode for reliability.`, 'info');
+                    }
+                    
+                    // Update the end time based on actual duration
+                    const startTimeEl = document.getElementById('uploadStartTime');
+                    const endTimeEl = document.getElementById('uploadEndTime');
+                    if (startTimeEl && endTimeEl && startTimeEl.value) {
+                        const startDate = new Date(startTimeEl.value);
+                        const endDate = new Date(startDate.getTime() + (durationSeconds * 1000));
+                        endTimeEl.value = endDate.toISOString().slice(0, 16);
+                    }
+                    
+                    URL.revokeObjectURL(objectUrl);
+                });
+                
+                audio.addEventListener('error', () => {
+                    console.warn('⚠️ Could not detect audio duration');
+                    const durationInfo = document.getElementById('audioDurationInfo');
+                    if (durationInfo) {
+                        durationInfo.textContent = 'Duration: Unable to detect';
+                    }
+                    URL.revokeObjectURL(objectUrl);
+                });
+                
+                audio.src = objectUrl;
             },
 
             clearAudioFile() {
@@ -2916,7 +3188,6 @@
                 
                 try {
                     console.log('📤 Uploading audio file...');
-                    this.showToast('Uploading and processing audio...', 'info');
                     
                     // Get form values
                     const startTime = document.getElementById('uploadStartTime').value;
@@ -2961,8 +3232,21 @@
                         ));
                     }
                     
+                    // Determine endpoint based on duration mode
+                    const isLongMeeting = this.state.durationMode === 'long';
+                    const endpoint = isLongMeeting 
+                        ? `${this.state.settings.apiBaseUrl}/api/notes/from-audio-async`
+                        : `${this.state.settings.apiBaseUrl}/api/notes/from-audio`;
+                    
+                    if (isLongMeeting) {
+                        this.showToast('Starting async processing for long meeting...', 'info');
+                        console.log('🕐 Using async endpoint for long meeting');
+                    } else {
+                        this.showToast('Uploading and processing audio...', 'info');
+                    }
+                    
                     // Upload to backend
-                    const response = await fetch(`${this.state.settings.apiBaseUrl}/api/notes/from-audio`, {
+                    const response = await fetch(endpoint, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${this.state.jwtToken}`
@@ -2973,10 +3257,17 @@
                     const data = await response.json();
 
                     if (data.success) {
-                        this.showToast('Note created successfully!', 'success');
-                        this.clearAudioFile();
-                        this.switchHomeMode('record'); // Switch back to record mode
-                        this.loadNotes(); // Refresh notes list
+                        if (isLongMeeting && data.jobId) {
+                            // Start polling for job status
+                            this.state.currentJobId = data.jobId;
+                            this.showToast(`Job started! ID: ${data.jobId.substring(0, 8)}... Polling for status...`, 'success');
+                            this.startJobPolling(data.jobId);
+                        } else {
+                            this.showToast('Note created successfully!', 'success');
+                            this.clearAudioFile();
+                            this.switchHomeMode('record'); // Switch back to record mode
+                            this.loadNotes(); // Refresh notes list
+                        }
                     } else {
                         this.showToast('Failed to create note: ' + (data.error || 'Unknown error'), 'error');
                     }
@@ -3027,8 +3318,18 @@
                     }
                 }
 
+                // Determine endpoint based on duration mode
+                const isLongMeeting = this.state.durationMode === 'long';
+                const endpoint = isLongMeeting 
+                    ? `${this.state.settings.apiBaseUrl}/api/notes/from-audio-async`
+                    : `${this.state.settings.apiBaseUrl}/api/notes/from-audio`;
+
+                if (isLongMeeting) {
+                    console.log('🕐 Using async endpoint for long meeting recording');
+                }
+
                 try {
-                    const response = await fetch(`${this.state.settings.apiBaseUrl}/api/notes/from-audio`, {
+                    const response = await fetch(endpoint, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${this.state.jwtToken}`
@@ -3039,8 +3340,15 @@
                     const data = await response.json();
 
                     if (data.success) {
-                        this.showToast('Note created successfully!', 'success');
-                        this.loadNotes();
+                        if (isLongMeeting && data.jobId) {
+                            // Start polling for job status
+                            this.state.currentJobId = data.jobId;
+                            this.showToast(`Long meeting processing started! Job ID: ${data.jobId.substring(0, 8)}...`, 'success');
+                            this.startJobPolling(data.jobId);
+                        } else {
+                            this.showToast('Note created successfully!', 'success');
+                            this.loadNotes();
+                        }
                     } else {
                         this.showToast('Failed to create note: ' + (data.error || 'Unknown error'), 'error');
                     }
