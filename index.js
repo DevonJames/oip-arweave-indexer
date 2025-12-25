@@ -208,6 +208,21 @@ if (process.env.GUN_SYNC_ENABLED !== 'false') {
 
 const app = express();
 const server = http.createServer(app);
+
+// HTTP Server Timeout Configuration
+// Extended timeouts to support long-running operations like 4+ hour meeting processing
+// These can be overridden via environment variables
+const HTTP_TIMEOUT_MS = parseInt(process.env.HTTP_SERVER_TIMEOUT_MS) || 30 * 60 * 1000; // 30 minutes default
+const HTTP_KEEPALIVE_TIMEOUT_MS = parseInt(process.env.HTTP_KEEPALIVE_TIMEOUT_MS) || 35 * 60 * 1000; // 35 minutes
+const HTTP_HEADERS_TIMEOUT_MS = parseInt(process.env.HTTP_HEADERS_TIMEOUT_MS) || 35 * 60 * 1000; // 35 minutes
+
+server.timeout = HTTP_TIMEOUT_MS;
+server.keepAliveTimeout = HTTP_KEEPALIVE_TIMEOUT_MS;
+server.headersTimeout = HTTP_HEADERS_TIMEOUT_MS;
+
+console.log(`⏱️  HTTP Server Timeouts: request=${HTTP_TIMEOUT_MS/60000}min, keepAlive=${HTTP_KEEPALIVE_TIMEOUT_MS/60000}min`);
+console.log(`   For long meetings (60+ min), use the async endpoint: /api/notes/from-audio-async`);
+
 const io = socketIo(server, {
   cors: {
     origin: '*',

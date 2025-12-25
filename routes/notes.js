@@ -1,6 +1,10 @@
 /**
  * Notes API Routes
  * Handles Alfred Meeting Notes endpoints for audio ingestion, retrieval, and management
+ * 
+ * Supports two ingestion modes:
+ * 1. Synchronous (/from-audio) - For shorter meetings (< 60 minutes)
+ * 2. Asynchronous (/from-audio-async) - For longer meetings (60+ minutes, up to 4+ hours)
  */
 const express = require('express');
 const multer = require('multer');
@@ -13,6 +17,7 @@ const { getSTTService } = require('../services/sttService');
 const { getSummarizationService } = require('../services/summarizationService');
 const { getChunkingService } = require('../services/chunkingService');
 const { getNotesRecordsService } = require('../services/notesRecordsService');
+const { getNotesJobService, JobStatus } = require('../services/notesJobService');
 
 const router = express.Router();
 
@@ -837,6 +842,585 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
             success: false,
             error: 'Audio note ingestion failed',
             details: error.message
+        });
+    }
+});
+
+// ========================================
+// ASYNC PROCESSING FOR LONG MEETINGS
+// ========================================
+
+/**
+ * Background processing function for async jobs
+ * This runs independently of the HTTP request
+ * @private
+ */
+async function processNoteJobAsync(jobId) {
+    const jobService = getNotesJobService();
+    const job = jobService.getJob(jobId);
+    
+    if (!job) {
+        console.error(`❌ [Job ${jobId}] Job not found for processing`);
+        return;
+    }
+    
+    let tempFilePath = job.tempFilePath;
+    
+    try {
+        const { params } = job;
+        const userPublicKey = job.userPublicKey;
+        const token = job.token;
+        
+        // ========================================
+        // STEP 1: Transcription (if needed)
+        // ========================================
+        let transcriptionResult;
+        
+        if (params.transcript) {
+            // Use provided transcript
+            jobService.updateJob(jobId, {
+                status: JobStatus.TRANSCRIBING,
+                progress: 20,
+                currentStep: 'Using provided transcript'
+            });
+            
+            transcriptionResult = {
+                text: params.transcript,
+                language: 'en',
+                segments: []
+            };
+        } else {
+            // Run STT
+            jobService.updateJob(jobId, {
+                status: JobStatus.TRANSCRIBING,
+                progress: 5,
+                currentStep: 'Starting transcription (this may take a while for long recordings)'
+            });
+            
+            const sttService = getSTTService();
+            
+            // Resolve transcription engine if specified
+            let transcriptionEngineRecord = null;
+            if (params.transcription_engine_id) {
+                try {
+                    const engineResults = await getRecords({
+                        recordType: 'transcriptionEngine',
+                        fieldName: 'transcriptionEngine.engine_id',
+                        fieldSearch: params.transcription_engine_id,
+                        fieldMatchMode: 'exact',
+                        limit: 1
+                    });
+                    if (engineResults.records && engineResults.records.length > 0) {
+                        transcriptionEngineRecord = engineResults.records[0];
+                    }
+                } catch (error) {
+                    console.warn(`[Job ${jobId}] Engine lookup failed:`, error.message);
+                }
+            }
+            
+            transcriptionResult = await sttService.transcribe(tempFilePath, transcriptionEngineRecord);
+            
+            jobService.updateJob(jobId, {
+                progress: 40,
+                currentStep: `Transcription complete (${transcriptionResult.text.length} chars)`,
+                transcription: transcriptionResult
+            });
+        }
+        
+        // ========================================
+        // STEP 2: Compute Note Hash
+        // ========================================
+        const notesRecordsService = getNotesRecordsService();
+        const noteHash = notesRecordsService.computeNoteHash(transcriptionResult.text);
+        
+        jobService.updateJob(jobId, {
+            progress: 45,
+            currentStep: 'Computed note hash',
+            noteHash: noteHash
+        });
+        
+        // ========================================
+        // STEP 3: Chunk Transcript
+        // ========================================
+        jobService.updateJob(jobId, {
+            status: JobStatus.CHUNKING,
+            progress: 50,
+            currentStep: 'Chunking transcript'
+        });
+        
+        const chunkingService = getChunkingService();
+        const chunks = chunkingService.chunk({
+            segments: transcriptionResult.segments,
+            strategy: params.chunking_strategy || 'BY_TIME_30S',
+            fullText: transcriptionResult.text
+        });
+        
+        jobService.updateJob(jobId, {
+            progress: 55,
+            currentStep: `Created ${chunks.length} chunks`,
+            chunks: chunks
+        });
+        
+        // ========================================
+        // STEP 4: Create Transcript Text Record
+        // ========================================
+        let transcriptTextDid = null;
+        try {
+            const transcriptRecord = await notesRecordsService.createTranscriptTextRecord(
+                noteHash,
+                transcriptionResult.text,
+                transcriptionResult.language,
+                userPublicKey,
+                token
+            );
+            transcriptTextDid = transcriptRecord.did;
+        } catch (error) {
+            console.warn(`[Job ${jobId}] Transcript record creation failed:`, error.message);
+        }
+        
+        // ========================================
+        // STEP 5: Generate Summary
+        // ========================================
+        jobService.updateJob(jobId, {
+            status: JobStatus.SUMMARIZING,
+            progress: 60,
+            currentStep: 'Generating summary (may take several minutes for long meetings)'
+        });
+        
+        const summarizationService = getSummarizationService();
+        let summary;
+        
+        // Parse participant arrays
+        let participantNames = [];
+        let participantRolesArray = [];
+        if (params.participant_display_names) {
+            try {
+                participantNames = JSON.parse(params.participant_display_names);
+            } catch (e) {
+                participantNames = [params.participant_display_names];
+            }
+        }
+        if (params.participant_roles) {
+            try {
+                participantRolesArray = JSON.parse(params.participant_roles);
+            } catch (e) {
+                participantRolesArray = [params.participant_roles];
+            }
+        }
+        
+        try {
+            summary = await summarizationService.summarize({
+                text: transcriptionResult.text,
+                note_type: params.note_type,
+                participants: participantNames,
+                calendar: params.calendar_event_id ? {
+                    calendar_event_id: params.calendar_event_id,
+                    calendar_start_time: params.calendar_start_time,
+                    calendar_end_time: params.calendar_end_time
+                } : null,
+                model: params.model || 'parallel'
+            });
+        } catch (error) {
+            console.warn(`[Job ${jobId}] Summarization failed:`, error.message);
+            summary = {
+                key_points: [],
+                decisions: [],
+                action_items: [],
+                open_questions: [],
+                sentiment_overall: 'NEUTRAL',
+                topics: [],
+                keywords: [],
+                tags: []
+            };
+        }
+        
+        jobService.updateJob(jobId, {
+            progress: 75,
+            currentStep: 'Summary generated',
+            summary: summary
+        });
+        
+        // ========================================
+        // STEP 6: Create Note Record
+        // ========================================
+        jobService.updateJob(jobId, {
+            status: JobStatus.CREATING_RECORDS,
+            progress: 80,
+            currentStep: 'Creating note record'
+        });
+        
+        const actionItemTexts = summary.action_items.map(item => item.text || '');
+        const actionItemAssignees = summary.action_items.map(item => item.assignee || 'unassigned');
+        const actionItemDueDates = summary.action_items.map(item => item.due_text || 'no date');
+        const noteTags = summary.tags || [];
+        
+        const notePayload = {
+            title: router._generateNoteTitle(params.note_type, participantNames, transcriptionResult.text),
+            description: 'Alfred Notes capture (async processing)',
+            language: transcriptionResult.language,
+            tags: noteTags,
+            note_type: params.note_type,
+            created_at: params.start_time,
+            ended_at: params.end_time,
+            device_type: params.device_type,
+            capture_location: params.capture_location,
+            transcription_engine_did: null,
+            transcription_status: 'COMPLETE',
+            transcript_did: transcriptTextDid,
+            audio_ref: null,
+            audio_meta: null,
+            summary_key_points: summary.key_points,
+            summary_decisions: summary.decisions,
+            summary_action_item_texts: actionItemTexts,
+            summary_action_item_assignees: actionItemAssignees,
+            summary_action_item_due_texts: actionItemDueDates,
+            summary_open_questions: summary.open_questions,
+            sentiment_overall: summary.sentiment_overall,
+            topics_auto: summary.topics,
+            keywords_auto: summary.keywords,
+            participant_display_names: participantNames,
+            participant_roles: participantRolesArray,
+            calendar_event_id: params.calendar_event_id,
+            calendar_start_time: params.calendar_start_time,
+            calendar_end_time: params.calendar_end_time,
+            chunking_strategy: params.chunking_strategy || 'BY_TIME_30S',
+            chunk_count: chunks.length,
+            chunk_ids: []
+        };
+        
+        let noteRecordDid = null;
+        const noteRecord = await notesRecordsService.createNoteRecord(
+            noteHash,
+            notePayload,
+            userPublicKey,
+            token
+        );
+        noteRecordDid = noteRecord.did;
+        
+        // ========================================
+        // STEP 7: Create Chunk Records
+        // ========================================
+        jobService.updateJob(jobId, {
+            progress: 85,
+            currentStep: `Creating ${chunks.length} chunk records`
+        });
+        
+        const captureDate = new Date(params.start_time).getTime();
+        const chunkResults = await notesRecordsService.createAllNoteChunks(
+            noteHash,
+            chunks,
+            params.note_type,
+            captureDate,
+            userPublicKey,
+            token,
+            noteRecordDid
+        );
+        
+        const chunkDids = chunkResults.map(chunk => chunk.did);
+        
+        // Update note with chunk IDs
+        try {
+            await notesRecordsService.updateNoteChunkIds(
+                noteHash,
+                notePayload,
+                chunkDids,
+                userPublicKey,
+                token
+            );
+        } catch (error) {
+            console.warn(`[Job ${jobId}] Failed to update note with chunk IDs:`, error.message);
+        }
+        
+        // ========================================
+        // STEP 8: Cleanup & Complete
+        // ========================================
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+            fs.unlinkSync(tempFilePath);
+        }
+        
+        jobService.completeJob(jobId, {
+            noteHash: noteHash,
+            noteDid: noteRecordDid,
+            transcriptionStatus: 'COMPLETE',
+            chunkCount: chunks.length,
+            summary: {
+                keyPoints: summary.key_points.length,
+                decisions: summary.decisions.length,
+                actionItems: summary.action_items.length,
+                openQuestions: summary.open_questions.length
+            }
+        });
+        
+    } catch (error) {
+        console.error(`❌ [Job ${jobId}] Processing failed:`, error);
+        
+        // Cleanup temp file on error
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+            try {
+                fs.unlinkSync(tempFilePath);
+            } catch (cleanupError) {
+                console.warn(`[Job ${jobId}] Failed to cleanup temp file:`, cleanupError.message);
+            }
+        }
+        
+        jobService.failJob(jobId, error);
+    }
+}
+
+/**
+ * POST /api/notes/from-audio-async
+ * Async version of audio note ingestion for long meetings (60+ minutes)
+ * Returns immediately with a job ID for status polling
+ * 
+ * Recommended for meetings > 60 minutes or when processing time may exceed HTTP timeout
+ */
+router.post('/from-audio-async', authenticateToken, upload.single('audio'), async (req, res) => {
+    let tempFilePath = null;
+    
+    try {
+        console.log('🎙️ [POST /api/notes/from-audio-async] Starting async audio note ingestion');
+        
+        // Validate request (same as sync endpoint)
+        const hasAudioFile = !!req.file;
+        const hasTranscript = !!req.body.transcript;
+        
+        if (!hasAudioFile && !hasTranscript) {
+            return res.status(400).json({
+                success: false,
+                error: 'Either audio file or transcript must be provided'
+            });
+        }
+        
+        const {
+            start_time,
+            end_time,
+            note_type,
+            device_type
+        } = req.body;
+        
+        // Validate required fields
+        if (!start_time || !end_time || !note_type || !device_type) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: start_time, end_time, note_type, device_type'
+            });
+        }
+        
+        // Validate note_type and device_type
+        const validNoteTypes = ['MEETING', 'ONE_ON_ONE', 'STANDUP', 'IDEA', 'REFLECTION', 'INTERVIEW', 'OTHER'];
+        const validDeviceTypes = ['IPHONE', 'MAC', 'WATCH', 'OTHER'];
+        
+        if (!validNoteTypes.includes(note_type)) {
+            return res.status(400).json({
+                success: false,
+                error: `Invalid note_type. Must be one of: ${validNoteTypes.join(', ')}`
+            });
+        }
+        
+        if (!validDeviceTypes.includes(device_type)) {
+            return res.status(400).json({
+                success: false,
+                error: `Invalid device_type. Must be one of: ${validDeviceTypes.join(', ')}`
+            });
+        }
+        
+        // Calculate duration
+        const startDate = new Date(start_time);
+        const endDate = new Date(end_time);
+        if (startDate >= endDate) {
+            return res.status(400).json({
+                success: false,
+                error: 'start_time must be before end_time'
+            });
+        }
+        const durationSec = Math.round((endDate - startDate) / 1000);
+        
+        if (hasAudioFile) {
+            tempFilePath = req.file.path;
+        }
+        
+        const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
+        const token = req.headers.authorization.split(' ')[1];
+        
+        if (!userPublicKey) {
+            return res.status(401).json({
+                success: false,
+                error: 'User public key not available'
+            });
+        }
+        
+        // Create job
+        const jobService = getNotesJobService();
+        const jobId = jobService.createJob({
+            userId: req.user.id || req.user.email,
+            userPublicKey: userPublicKey,
+            userEmail: req.user.email,
+            audioFilename: hasAudioFile ? req.file.originalname : null,
+            audioSize: hasAudioFile ? req.file.size : 0,
+            durationSec: durationSec,
+            tempFilePath: tempFilePath,
+            token: token,
+            ...req.body
+        });
+        
+        // Start processing in background (don't await)
+        setImmediate(() => {
+            processNoteJobAsync(jobId).catch(error => {
+                console.error(`❌ [Job ${jobId}] Unhandled error in background processing:`, error);
+            });
+        });
+        
+        // Return immediately with job ID
+        const durationMins = Math.round(durationSec / 60);
+        const estimatedProcessingMins = Math.round(durationSec * 1.5 / 60); // Rough estimate
+        
+        console.log(`📋 [POST /api/notes/from-audio-async] Job ${jobId} created for ${durationMins}min recording`);
+        
+        res.status(202).json({
+            success: true,
+            jobId: jobId,
+            message: `Processing started for ${durationMins} minute recording`,
+            estimatedProcessingTime: `${estimatedProcessingMins}-${estimatedProcessingMins * 2} minutes`,
+            statusUrl: `/api/notes/jobs/${jobId}`
+        });
+        
+    } catch (error) {
+        console.error('❌ [POST /api/notes/from-audio-async] Error creating job:', error);
+        
+        // Cleanup temp file on error
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+            try {
+                fs.unlinkSync(tempFilePath);
+            } catch (cleanupError) {
+                console.warn('⚠️ Failed to cleanup temp file:', cleanupError.message);
+            }
+        }
+        
+        res.status(500).json({
+            success: false,
+            error: 'Failed to start async processing',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/notes/jobs/:jobId
+ * Get status of an async processing job
+ */
+router.get('/jobs/:jobId', authenticateToken, async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const jobService = getNotesJobService();
+        
+        const status = jobService.getJobStatus(jobId);
+        
+        if (!status) {
+            return res.status(404).json({
+                success: false,
+                error: 'Job not found'
+            });
+        }
+        
+        // Verify user owns this job
+        const job = jobService.getJob(jobId);
+        const userId = req.user.id || req.user.email;
+        if (job.userId !== userId) {
+            return res.status(403).json({
+                success: false,
+                error: 'Not authorized to view this job'
+            });
+        }
+        
+        res.status(200).json({
+            success: true,
+            ...status
+        });
+        
+    } catch (error) {
+        console.error('❌ [GET /api/notes/jobs/:jobId] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get job status'
+        });
+    }
+});
+
+/**
+ * GET /api/notes/jobs
+ * List user's processing jobs
+ */
+router.get('/jobs', authenticateToken, async (req, res) => {
+    try {
+        const { limit = 10, status } = req.query;
+        const jobService = getNotesJobService();
+        const userId = req.user.id || req.user.email;
+        
+        const jobs = jobService.listUserJobs(userId, {
+            limit: parseInt(limit),
+            status: status || null
+        });
+        
+        res.status(200).json({
+            success: true,
+            jobs: jobs,
+            stats: jobService.getStats()
+        });
+        
+    } catch (error) {
+        console.error('❌ [GET /api/notes/jobs] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to list jobs'
+        });
+    }
+});
+
+/**
+ * DELETE /api/notes/jobs/:jobId
+ * Cancel a processing job
+ */
+router.delete('/jobs/:jobId', authenticateToken, async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const jobService = getNotesJobService();
+        
+        // Verify user owns this job
+        const job = jobService.getJob(jobId);
+        if (!job) {
+            return res.status(404).json({
+                success: false,
+                error: 'Job not found'
+            });
+        }
+        
+        const userId = req.user.id || req.user.email;
+        if (job.userId !== userId) {
+            return res.status(403).json({
+                success: false,
+                error: 'Not authorized to cancel this job'
+            });
+        }
+        
+        const cancelled = jobService.cancelJob(jobId);
+        
+        if (cancelled) {
+            res.status(200).json({
+                success: true,
+                message: 'Job cancelled'
+            });
+        } else {
+            res.status(400).json({
+                success: false,
+                error: 'Job cannot be cancelled (already complete or failed)'
+            });
+        }
+        
+    } catch (error) {
+        console.error('❌ [DELETE /api/notes/jobs/:jobId] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to cancel job'
         });
     }
 });

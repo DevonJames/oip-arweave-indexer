@@ -1,6 +1,8 @@
 /**
  * Speech-to-Text Service
  * Handles transcription of audio files using configured transcription engines
+ * 
+ * Supports long meetings (up to 4+ hours) with configurable timeouts
  */
 const axios = require('axios');
 const FormData = require('form-data');
@@ -8,6 +10,10 @@ const fs = require('fs');
 const { Readable } = require('stream');
 
 const STT_SERVICE_URL = process.env.STT_SERVICE_URL || 'http://localhost:8003';
+
+// Default max duration: 5 hours (18000 seconds) to support very long meetings
+// Can be overridden via STT_MAX_DURATION_SECONDS environment variable
+const DEFAULT_MAX_DURATION_SECONDS = parseInt(process.env.STT_MAX_DURATION_SECONDS) || 18000;
 
 class STTService {
     constructor() {
@@ -50,7 +56,9 @@ class STTService {
                 kind: 'LOCAL',
                 provider: 'whisper',
                 model: 'base',
-                language: null
+                language: null,
+                maxDuration: DEFAULT_MAX_DURATION_SECONDS, // 5 hours default for long meetings
+                streamingSupported: false
             };
         }
 
@@ -61,24 +69,34 @@ class STTService {
             provider: engineData.provider || 'whisper',
             model: engineData.model_name || 'base',
             language: engineData.default_language || null,
-            maxDuration: engineData.max_duration_seconds || 7200, // 2 hours default
+            // Use engine's max duration, or default to 5 hours for long meetings
+            maxDuration: engineData.max_duration_seconds || DEFAULT_MAX_DURATION_SECONDS,
             streamingSupported: engineData.streaming_supported || false
         };
     }
 
     /**
      * Transcribe using local/self-hosted Whisper service
+     * Supports long meetings (4+ hours) with extended timeouts
      * @private
      */
     async _transcribeWithLocalWhisper(audioFile, engineConfig) {
         try {
             const formData = new FormData();
+            let fileSize = 0;
             
             // Handle file path or buffer
             if (typeof audioFile === 'string') {
-                // File path
+                // File path - get file size for logging
+                try {
+                    const stats = fs.statSync(audioFile);
+                    fileSize = stats.size;
+                } catch (e) {
+                    // Ignore stat errors
+                }
                 formData.append('file', fs.createReadStream(audioFile));
             } else if (Buffer.isBuffer(audioFile)) {
+                fileSize = audioFile.length;
                 // Buffer - convert to stream
                 const bufferStream = new Readable();
                 bufferStream.push(audioFile);
@@ -97,22 +115,48 @@ class STTService {
             }
             formData.append('task', 'transcribe');
             
-            console.log(`🔊 [STT Service] Calling Whisper at ${this.sttServiceUrl}/transcribe_file`);
+            // Calculate timeout: base on maxDuration + generous buffer for processing
+            // For long meetings, transcription can take 1-2x realtime
+            const timeoutMs = (engineConfig.maxDuration * 1000) + 300000; // maxDuration + 5 min buffer
+            const timeoutMins = Math.round(timeoutMs / 60000);
+            const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(1);
+            
+            console.log(`🔊 [STT Service] Starting transcription:`);
+            console.log(`   URL: ${this.sttServiceUrl}/transcribe_file`);
+            console.log(`   File size: ${fileSizeMB}MB`);
+            console.log(`   Max duration: ${engineConfig.maxDuration}s (${Math.round(engineConfig.maxDuration/60)}min)`);
+            console.log(`   Timeout: ${timeoutMins} minutes`);
+            console.log(`   ⏳ This may take a while for long recordings...`);
+            
+            const startTime = Date.now();
             
             const response = await axios.post(
                 `${this.sttServiceUrl}/transcribe_file`,
                 formData,
                 {
                     headers: formData.getHeaders(),
-                    timeout: engineConfig.maxDuration * 1000 + 30000, // Add 30s buffer
+                    timeout: timeoutMs,
                     maxContentLength: Infinity,
                     maxBodyLength: Infinity
                 }
             );
+            
+            const elapsedSec = Math.round((Date.now() - startTime) / 1000);
+            const elapsedMins = Math.floor(elapsedSec / 60);
+            const elapsedSecsRemainder = elapsedSec % 60;
+            
+            console.log(`✅ [STT Service] Transcription complete in ${elapsedMins}m ${elapsedSecsRemainder}s`);
 
             // Normalize response format
             return this._normalizeTranscriptionResponse(response.data);
         } catch (error) {
+            // Provide more helpful error message for timeouts
+            if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+                const maxDurationMins = Math.round(engineConfig.maxDuration / 60);
+                console.error(`❌ [STT Service] Transcription timed out (max: ${maxDurationMins} minutes)`);
+                console.error(`   For very long meetings, consider using the async endpoint: /api/notes/from-audio-async`);
+                throw new Error(`Transcription timed out. For meetings longer than ${maxDurationMins} minutes, use the async processing endpoint.`);
+            }
             console.error('❌ [STT Service] Whisper transcription failed:', error.message);
             throw error;
         }
