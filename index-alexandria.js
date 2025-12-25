@@ -179,6 +179,9 @@ const corsOptions = {
             'http://localhost:3006',
             `http://localhost:${process.env.PORT || 3006}`,
             'https://api.oip.onl',
+            'https://alexandria.io',
+            'https://www.alexandria.io',
+            'https://api.alexandria.io',
         ];
         
         if (process.env.NODE_ENV === 'development' && origin.includes('localhost')) {

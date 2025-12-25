@@ -24,11 +24,29 @@ Your JWT token should include:
 - `email` - User's email
 - `publicKey` - User's HD wallet public key (for OIP record ownership)
 
-## API Endpoint
+---
+
+## API Endpoints Overview
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/notes/from-audio` | POST | Sync audio ingestion (< 60 min meetings) |
+| `/api/notes/from-audio-async` | POST | Async audio ingestion (60+ min meetings) |
+| `/api/notes/jobs/:jobId` | GET | Poll async job status |
+| `/api/notes/jobs` | GET | List user's processing jobs |
+| `/api/notes/jobs/:jobId` | DELETE | Cancel a processing job |
+| `/api/notes/:noteHash` | GET | Get single note with all data |
+| `/api/notes/:noteHash/regenerate-summary` | POST | Regenerate summary for note |
+| `/api/notes` | GET | List and search notes |
+| `/api/notes/converse` | POST | RAG conversation about notes |
+
+---
+
+## Synchronous Audio Ingestion
 
 ### POST `/api/notes/from-audio`
 
-Upload an audio recording and create a complete note with AI processing.
+Upload an audio recording and create a complete note with AI processing. **Best for meetings under 60 minutes.**
 
 **Base URL:** `https://api.oip.onl/api/notes/from-audio`
 
@@ -42,12 +60,12 @@ Upload an audio recording and create a complete note with AI processing.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `audio` | File | Audio file (formats: .m4a, .wav, .mp3, .webm, .ogg) - **Optional if `transcript` provided** |
+| `audio` | File | Audio file (formats: .m4a, .wav, .mp3, .webm, .ogg, .flac) - **Optional if `transcript` provided** |
 | `transcript` | String | Pre-existing transcript text - **Optional if `audio` provided** |
 | `start_time` | String (ISO 8601) | Recording start timestamp (e.g., "2025-11-20T10:00:00Z") |
 | `end_time` | String (ISO 8601) | Recording end timestamp |
-| `note_type` | String | Type of note: "meeting", "lecture", "interview", "voice_memo", "other" |
-| `device_type` | String | Device used: "mobile", "web", "desktop" |
+| `note_type` | String | Type of note: "MEETING", "ONE_ON_ONE", "STANDUP", "IDEA", "REFLECTION", "INTERVIEW", "OTHER" |
+| `device_type` | String | Device used: "IPHONE", "MAC", "WATCH", "OTHER" |
 
 **Note**: Either `audio` OR `transcript` must be provided:
 - If `audio` is provided: Audio will be uploaded, transcribed, and processed
@@ -64,8 +82,8 @@ Upload an audio recording and create a complete note with AI processing.
 | `addToBitTorrent` | Boolean | `false` | Seed audio via BitTorrent |
 | `addToIPFS` | Boolean | `false` | Upload audio to IPFS |
 | `addToArweave` | Boolean | `false` | Upload audio to Arweave (permanent storage) |
-| `participant_names` | String (CSV) | `[]` | Comma-separated participant names (e.g., "John Smith,Jane Doe") |
-| `participant_roles` | String (CSV) | `[]` | Comma-separated roles (e.g., "CEO,CTO") - same order as names |
+| `participant_display_names` | JSON Array | `[]` | JSON array of participant names (e.g., `["John Smith","Jane Doe"]`) |
+| `participant_roles` | JSON Array | `[]` | JSON array of roles (e.g., `["CEO","CTO"]`) - same order as names |
 | `calendar_event_id` | String | `null` | Calendar event ID if linked |
 | `calendar_start_time` | String (ISO 8601) | `null` | Calendar event start time |
 | `calendar_end_time` | String (ISO 8601) | `null` | Calendar event end time |
@@ -74,11 +92,16 @@ Upload an audio recording and create a complete note with AI processing.
 
 ### Available LLM Models
 
-- `llama3.2:3b` - Fast, good quality (default)
-- `llama3.2:1b` - Fastest, lower quality
-- `llama3.1:8b` - Slower, best quality
-- `gemma2:2b` - Alternative lightweight model
-- `parallel` - Race multiple models, use fastest response
+| Model | Description |
+|-------|-------------|
+| `llama3.2:3b` | Fast, good quality (default) |
+| `llama3.2:1b` | Fastest, lower quality |
+| `llama3.1:8b` | Slower, best quality |
+| `gemma2:2b` | Alternative lightweight model |
+| `gpt-4o` | OpenAI GPT-4o (requires API key) |
+| `gpt-4o-mini` | OpenAI faster model (requires API key) |
+| `grok-beta` | xAI Grok model (requires API key) |
+| `parallel` | Race multiple models, use fastest response |
 
 ---
 
@@ -162,6 +185,184 @@ console.log('Note created:', result.noteDid);
 - 💰 **Lower costs** - No transcription API usage
 - 🔒 **Privacy** - No need to upload audio file if you already have the transcript
 - 🔄 **Flexibility** - Useful for importing notes from other sources
+
+---
+
+## Async Processing for Long Meetings (60+ Minutes)
+
+For meetings longer than 60 minutes, use the async endpoint to avoid HTTP timeout issues.
+
+### POST `/api/notes/from-audio-async`
+
+Start async processing and receive a job ID for status polling.
+
+**Same parameters as `/from-audio`**
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Processing job started",
+  "jobId": "job_1703520000000_abc123xyz",
+  "estimatedDuration": "Long meetings may take 30-60+ minutes to process"
+}
+```
+
+### GET `/api/notes/jobs/:jobId`
+
+Poll for job status and progress.
+
+```javascript
+async function pollJobStatus(jobId, jwtToken) {
+  const response = await fetch(`https://api.oip.onl/api/notes/jobs/${jobId}`, {
+    headers: {
+      'Authorization': `Bearer ${jwtToken}`
+    }
+  });
+  return await response.json();
+}
+```
+
+**Response (Processing):**
+
+```json
+{
+  "success": true,
+  "job": {
+    "jobId": "job_1703520000000_abc123xyz",
+    "status": "transcribing",
+    "progress": 45,
+    "currentStep": "Transcribing audio (this may take a while for long meetings)...",
+    "createdAt": "2025-12-25T10:00:00.000Z",
+    "updatedAt": "2025-12-25T10:15:00.000Z",
+    "audioFilename": "meeting-recording.m4a",
+    "durationSec": 7200,
+    "result": null,
+    "error": null
+  }
+}
+```
+
+**Response (Complete):**
+
+```json
+{
+  "success": true,
+  "job": {
+    "jobId": "job_1703520000000_abc123xyz",
+    "status": "complete",
+    "progress": 100,
+    "currentStep": "Processing complete",
+    "result": {
+      "noteHash": "a3f8c9d2e1b4567890abcdef1234567890...",
+      "noteDid": "did:gun:034d41b0c8bd:a3f8c9d2e1b4567890...",
+      "chunkCount": 240,
+      "summary": {
+        "keyPoints": 15,
+        "decisions": 5,
+        "actionItems": 8,
+        "openQuestions": 3
+      }
+    }
+  }
+}
+```
+
+**Job Statuses:**
+
+| Status | Description |
+|--------|-------------|
+| `queued` | Job created, waiting to start |
+| `uploading` | Uploading audio file |
+| `transcribing` | Transcribing audio (longest step for long meetings) |
+| `chunking` | Creating searchable chunks |
+| `summarizing` | Generating summary and analysis |
+| `creating_records` | Saving records to database |
+| `complete` | Processing finished successfully |
+| `failed` | Processing failed (check `error` field) |
+| `cancelled` | Job was cancelled by user |
+
+### GET `/api/notes/jobs`
+
+List user's processing jobs.
+
+```javascript
+async function listMyJobs(jwtToken, limit = 10, status = null) {
+  const params = new URLSearchParams({ limit });
+  if (status) params.append('status', status);
+  
+  const response = await fetch(`https://api.oip.onl/api/notes/jobs?${params}`, {
+    headers: {
+      'Authorization': `Bearer ${jwtToken}`
+    }
+  });
+  return await response.json();
+}
+```
+
+### DELETE `/api/notes/jobs/:jobId`
+
+Cancel a processing job (only works for queued or in-progress jobs).
+
+```javascript
+async function cancelJob(jobId, jwtToken) {
+  const response = await fetch(`https://api.oip.onl/api/notes/jobs/${jobId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${jwtToken}`
+    }
+  });
+  return await response.json();
+}
+```
+
+### Complete Async Processing Example
+
+```javascript
+async function processLongMeeting(audioFile, jwtToken) {
+  // 1. Start async processing
+  const formData = new FormData();
+  formData.append('audio', audioFile);
+  formData.append('start_time', new Date().toISOString());
+  formData.append('end_time', new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString());
+  formData.append('note_type', 'MEETING');
+  formData.append('device_type', 'MAC');
+  formData.append('model', 'parallel');
+  
+  const startResponse = await fetch('https://api.oip.onl/api/notes/from-audio-async', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${jwtToken}` },
+    body: formData
+  });
+  
+  const { jobId } = await startResponse.json();
+  console.log('Job started:', jobId);
+  
+  // 2. Poll for completion
+  let job;
+  do {
+    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+    
+    const statusResponse = await fetch(`https://api.oip.onl/api/notes/jobs/${jobId}`, {
+      headers: { 'Authorization': `Bearer ${jwtToken}` }
+    });
+    const data = await statusResponse.json();
+    job = data.job;
+    
+    console.log(`Status: ${job.status} (${job.progress}%) - ${job.currentStep}`);
+    
+  } while (job.status !== 'complete' && job.status !== 'failed' && job.status !== 'cancelled');
+  
+  // 3. Handle result
+  if (job.status === 'complete') {
+    console.log('Note created:', job.result.noteDid);
+    return job.result;
+  } else {
+    throw new Error(job.error?.message || 'Processing failed');
+  }
+}
+```
 
 ---
 
@@ -255,10 +456,10 @@ async function getNote(noteDid, jwtToken) {
       "creator": "034d41b0c8bdbf3ad65e55624b554aa01533c7d2695fe91cb8a20febc99e63e92d"
     },
     "notes": {
-      "note_type": "meeting",
+      "note_type": "MEETING",
       "created_at": 1732104000000,
       "ended_at": 1732109400000,
-      "device_type": "mobile",
+      "device_type": "IPHONE",
       "capture_location": null,
       "audio_ref": null,
       "transcription_engine": "did:gun:system:whisper_stt_v1",
@@ -503,16 +704,25 @@ class AlfredNotesClient {
     formData.append('audio', audioFile);
     formData.append('start_time', options.startTime);
     formData.append('end_time', options.endTime);
-    formData.append('note_type', options.noteType || 'meeting');
-    formData.append('device_type', options.deviceType || 'mobile');
+    formData.append('note_type', options.noteType || 'MEETING');
+    formData.append('device_type', options.deviceType || 'OTHER');
     
     // Optional
     if (options.model) formData.append('model', options.model);
     if (options.addToWebServer) formData.append('addToWebServer', 'true');
-    if (options.participantNames) formData.append('participant_names', options.participantNames);
-    if (options.participantRoles) formData.append('participant_roles', options.participantRoles);
+    if (options.participantNames) {
+      formData.append('participant_display_names', JSON.stringify(options.participantNames));
+    }
+    if (options.participantRoles) {
+      formData.append('participant_roles', JSON.stringify(options.participantRoles));
+    }
     
-    const response = await fetch(`${this.baseUrl}/api/notes/from-audio`, {
+    // Choose sync or async based on expected duration
+    const endpoint = options.async 
+      ? `${this.baseUrl}/api/notes/from-audio-async`
+      : `${this.baseUrl}/api/notes/from-audio`;
+    
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.jwtToken}`
@@ -557,25 +767,51 @@ class AlfredNotesClient {
       chunks
     };
   }
+  
+  async pollJobUntilComplete(jobId, intervalMs = 5000) {
+    while (true) {
+      const response = await fetch(`${this.baseUrl}/api/notes/jobs/${jobId}`, {
+        headers: { 'Authorization': `Bearer ${this.jwtToken}` }
+      });
+      const data = await response.json();
+      
+      if (data.job.status === 'complete') return data.job.result;
+      if (data.job.status === 'failed') throw new Error(data.job.error?.message);
+      if (data.job.status === 'cancelled') throw new Error('Job cancelled');
+      
+      await new Promise(r => setTimeout(r, intervalMs));
+    }
+  }
 }
 
 // Usage
 const client = new AlfredNotesClient('your-jwt-token');
 
-// Upload audio
+// Upload audio (sync for short meetings)
 const uploadResult = await client.uploadAudioNote(audioFile, {
   startTime: '2025-11-20T10:00:00Z',
   endTime: '2025-11-20T11:30:00Z',
-  noteType: 'meeting',
-  deviceType: 'mobile',
+  noteType: 'MEETING',
+  deviceType: 'IPHONE',
   model: 'llama3.2:3b',
   addToWebServer: true,
-  participantNames: 'John Smith,Jane Doe',
-  participantRoles: 'PM,Engineer'
+  participantNames: ['John Smith', 'Jane Doe'],
+  participantRoles: ['PM', 'Engineer']
 });
 
+// For long meetings, use async
+const asyncResult = await client.uploadAudioNote(longAudioFile, {
+  startTime: '2025-11-20T09:00:00Z',
+  endTime: '2025-11-20T13:00:00Z',
+  noteType: 'MEETING',
+  async: true // Use async endpoint
+});
+
+// Poll until complete
+const noteResult = await client.pollJobUntilComplete(asyncResult.jobId);
+
 // Get complete note with transcript and chunks
-const completeNote = await client.getCompleteNote(uploadResult.noteDid);
+const completeNote = await client.getCompleteNote(noteResult.noteDid);
 
 console.log('Note:', completeNote.note);
 console.log('Transcript:', completeNote.transcript);
@@ -647,23 +883,11 @@ async function uploadWithErrorHandling(audioFile, options) {
 
 ---
 
-## Notes
-
-1. **Processing Time:** Audio processing typically takes 10-30 seconds depending on audio length and LLM model selected
-2. **File Size Limits:** Maximum audio file size is 50MB
-3. **Supported Formats:** .m4a, .wav, .mp3, .webm, .ogg, .flac
-4. **Rate Limiting:** No specific rate limits currently, but avoid excessive concurrent uploads
-5. **Privacy:** All notes are private by default (`access_level: "private"`) and only accessible by the owner
-6. **DIDs:** All records use Decentralized Identifiers (DIDs) in the format `did:gun:{pubkey_prefix}:{localId}`
-7. **Tags:** All tags (note and chunk tags) are AI-generated based on content analysis
-
----
-
 ## RAG (Conversational AI) Endpoint
 
 ### POST `/api/notes/converse`
 
-Ask questions about a specific note using AI with full context retrieval.
+Ask questions about notes using AI with full context retrieval.
 
 **Authentication:** Required (JWT token)
 
@@ -671,14 +895,35 @@ Ask questions about a specific note using AI with full context retrieval.
 
 ```javascript
 {
-  "noteDid": "did:gun:034d41b0c8bd:a3f8c9d2...",  // Required: DID of the note to query
-  "question": "What were the main action items from this meeting?",  // Required
-  "model": "llama3.2:3b",  // Optional: LLM model (default: llama3.2:3b)
-  "conversationHistory": [],  // Optional: Previous conversation messages
-  "includeRelated": true,  // Optional: Include related notes/chunks (default: true)
-  "maxRelated": 5  // Optional: Max related items to include (default: 5)
+  // Note Context (one of these modes):
+  "noteDid": "did:gun:034d41b0c8bd:a3f8c9d2...",  // Specific note (Selected Note mode)
+  "allNotes": true,  // Search across all user's notes (All Notes mode)
+  // If both are omitted/false: Direct LLM mode (no RAG)
+  
+  // Required
+  "question": "What were the main action items from this meeting?",
+  
+  // Optional
+  "model": "llama3.2:3b",  // LLM model (default: llama3.2:3b)
+  "conversationHistory": [],  // Previous conversation messages
+  "includeRelated": true,  // Include related notes/chunks (default: true)
+  "maxRelated": 5,  // Max related items to include (default: 5)
+  
+  // Audio Response (Optional)
+  "return_audio": true,  // Return TTS audio response
+  "engine": "elevenlabs",  // TTS engine: "elevenlabs", "kokoro", "edge_tts"
+  "voice_id": "onwK4e9ZLuTAKqWW03F9",  // Voice ID for TTS
+  "speed": 1  // Speech speed multiplier
 }
 ```
+
+**Chat Modes:**
+
+| Mode | Parameters | Description |
+|------|------------|-------------|
+| **Selected Note** | `noteDid` provided | Query about a specific note |
+| **All Notes** | `allNotes: true` | Search across all user's notes |
+| **Direct LLM** | Neither provided | Pure LLM chat, no RAG |
 
 **Example Request:**
 
@@ -711,6 +956,42 @@ const result = await askAboutNote(
 console.log(result.answer);
 ```
 
+**Example with Audio Response:**
+
+```javascript
+async function askWithAudio(question, jwtToken) {
+  const response = await fetch('https://api.oip.onl/api/notes/converse', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${jwtToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      allNotes: true,
+      question: question,
+      return_audio: true,
+      engine: 'elevenlabs',
+      voice_id: 'onwK4e9ZLuTAKqWW03F9'
+    })
+  });
+  
+  const result = await response.json();
+  
+  if (result.audio_data) {
+    // Play audio response
+    const audioBlob = new Blob(
+      [Uint8Array.from(atob(result.audio_data), c => c.charCodeAt(0))],
+      { type: 'audio/mpeg' }
+    );
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audio = new Audio(audioUrl);
+    audio.play();
+  }
+  
+  return result;
+}
+```
+
 **Response Format:**
 
 ```json
@@ -721,11 +1002,12 @@ console.log(result.answer);
     "note": {
       "did": "did:gun:034d41b0c8bd:a3f8c9d2...",
       "title": "Team Standup - Nov 20",
-      "type": "meeting"
+      "type": "MEETING"
     },
     "chunks_count": 3,
     "related_content_count": 5,
-    "transcript_length": 1523
+    "transcript_length": 1523,
+    "mode": "selected_note"  // or "all_notes" or "direct_llm"
   },
   "model": "llama3.2:3b",
   "sources": [
@@ -734,7 +1016,11 @@ console.log(result.answer);
       "title": "Note chunk 0",
       "recordType": "noteChunks"
     }
-  ]
+  ],
+  // If return_audio was true:
+  "audio_data": "base64-encoded-audio...",
+  "has_audio": true,
+  "engine_used": "elevenlabs"
 }
 ```
 
@@ -774,7 +1060,20 @@ await askAboutNote(noteDid, "What other meetings discussed similar topics?", tok
 // 4. Extract information
 await askAboutNote(noteDid, "List all the action items with their assignees", token);
 
-// 5. Contextual follow-ups (with conversation history)
+// 5. Search all notes
+await fetch('https://api.oip.onl/api/notes/converse', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    allNotes: true,
+    question: "What did we discuss about the API last week?"
+  })
+});
+
+// 6. Contextual follow-ups (with conversation history)
 const response1 = await askAboutNote(noteDid, "What was discussed about the API?", token);
 const response2 = await fetch('https://api.oip.onl/api/notes/converse', {
   method: 'POST',
@@ -795,14 +1094,16 @@ const response2 = await fetch('https://api.oip.onl/api/notes/converse', {
 
 **Available LLM Models:**
 
-- `llama3.2:3b` - Fast, good quality (default)
-- `llama3.2:1b` - Fastest, lower quality
-- `llama3.1:8b` - Slower, best quality
-- `gemma2:2b` - Alternative lightweight model
-- `gpt-4o` - OpenAI (requires API key)
-- `gpt-4o-mini` - OpenAI faster model
-- `grok-beta` - xAI Grok model
-- `parallel` - Race multiple models, use fastest
+| Model | Description |
+|-------|-------------|
+| `llama3.2:3b` | Fast, good quality (default) |
+| `llama3.2:1b` | Fastest, lower quality |
+| `llama3.1:8b` | Slower, best quality |
+| `gemma2:2b` | Alternative lightweight model |
+| `gpt-4o` | OpenAI GPT-4o (requires API key) |
+| `gpt-4o-mini` | OpenAI faster model |
+| `grok-beta` | xAI Grok model |
+| `parallel` | Race multiple models, use fastest |
 
 **Error Handling:**
 
@@ -836,7 +1137,7 @@ class NoteChatSession {
     this.history = [];
   }
   
-  async ask(question) {
+  async ask(question, options = {}) {
     const response = await fetch('https://api.oip.onl/api/notes/converse', {
       method: 'POST',
       headers: {
@@ -847,7 +1148,10 @@ class NoteChatSession {
         noteDid: this.noteDid,
         question: question,
         conversationHistory: this.history,
-        includeRelated: true
+        includeRelated: true,
+        return_audio: options.withAudio || false,
+        engine: options.ttsEngine || 'elevenlabs',
+        voice_id: options.voiceId
       })
     });
     
@@ -875,7 +1179,67 @@ class NoteChatSession {
 const chat = new NoteChatSession(noteDid, jwtToken);
 const response1 = await chat.ask("What was this meeting about?");
 const response2 = await chat.ask("Who participated?");
-const response3 = await chat.ask("What were their main concerns?");
+const response3 = await chat.ask("What were their main concerns?", { withAudio: true });
+```
+
+---
+
+## Regenerate Summary
+
+### POST `/api/notes/:noteHash/regenerate-summary`
+
+Regenerate the AI summary for an existing note using a different model.
+
+```javascript
+async function regenerateSummary(noteHash, model, jwtToken) {
+  const response = await fetch(
+    `https://api.oip.onl/api/notes/${noteHash}/regenerate-summary`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ model })
+    }
+  );
+  return await response.json();
+}
+
+// Usage
+const result = await regenerateSummary('a3f8c9d2e1b4567890...', 'llama3.1:8b', jwtToken);
+```
+
+---
+
+## Notes
+
+1. **Processing Time:** Audio processing typically takes 10-30 seconds for short meetings, 30-60+ minutes for long meetings (2+ hours)
+2. **File Size Limits:** Maximum audio file size is **500MB**
+3. **Supported Formats:** .m4a, .wav, .mp3, .webm, .ogg, .flac
+4. **Rate Limiting:** No specific rate limits currently, but avoid excessive concurrent uploads
+5. **Privacy:** All notes are private by default (`access_level: "private"`) and only accessible by the owner
+6. **DIDs:** All records use Decentralized Identifiers (DIDs) in the format `did:gun:{pubkey_prefix}:{localId}`
+7. **Tags:** All tags (note and chunk tags) are AI-generated based on content analysis
+8. **Long Meetings:** For meetings > 60 minutes, use the async endpoint (`/from-audio-async`) to avoid HTTP timeouts
+
+---
+
+## Environment Variables for Long Meetings
+
+If you're self-hosting, ensure these are set for reliable long meeting processing:
+
+```bash
+# STT Max Duration (5 hours)
+STT_MAX_DURATION_SECONDS=18000
+
+# LLM Timeout (10 minutes base)
+LLM_TIMEOUT_MS=600000
+
+# HTTP Server Timeouts (30 minutes)
+HTTP_SERVER_TIMEOUT_MS=1800000
+HTTP_KEEPALIVE_TIMEOUT_MS=2100000
+HTTP_HEADERS_TIMEOUT_MS=2100000
 ```
 
 ---
@@ -885,4 +1249,4 @@ const response3 = await chat.ask("What were their main concerns?");
 For questions or issues, contact the backend team or refer to:
 - Main API Documentation: `/docs/API_RECORDS_ENDPOINT_DOCUMENTATION.md`
 - OIP Technical Overview: `/docs/OIP_TECHNICAL_OVERVIEW.md`
-
+- Long Meeting Processing: `/docs/alfred-meeting-notes/LONG_MEETING_ASYNC_PROCESSING.md`
