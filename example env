@@ -171,7 +171,7 @@ CHUNK_TAG_BATCH_DELAY_MS=1000
 
 # Voice Services Configuration
 STT_SERVICE_URL=http://stt-service:8003
-TTS_SERVICE_URL=http://tts-service:5002
+TTS_SERVICE_URL=http://tts-service:8005
 TEXT_GENERATOR_URL=http://text-generator:8081
 
 # Distributed Client Configuration
@@ -238,7 +238,8 @@ COMPOSE_PROJECT_NAME=oip-arweave-indexer
 # Main OIP Daemon API port (already configured above as PORT)
 # Alexandria Service configuration
 # Set to true when using alexandria profiles (enables proxy from daemon to alexandria for AI/voice routes)
-ALEXANDRIA_ENABLED=true
+
+
 ALEXANDRIA_PORT=3006
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_TRANSPORT_PORT=9300

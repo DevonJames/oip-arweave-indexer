@@ -59,7 +59,7 @@ const upload = multer({
 
 // Service URLs
 const STT_SERVICE_URL = process.env.STT_SERVICE_URL || 'http://localhost:8003';
-const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:5002';
+const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
 const SMART_TURN_URL = process.env.SMART_TURN_URL || 'http://localhost:8010';
 
 // Enhanced voice pipeline settings

@@ -439,7 +439,7 @@ server.listen(port, async () => {
     }
     
     // Check TTS service
-    const ttsUrl = process.env.TTS_SERVICE_URL || 'http://tts-service:5500';
+    const ttsUrl = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
     try {
         await axios.get(`${ttsUrl}/health`, { timeout: 5000 });
         console.log('✅ Connected to TTS Service');

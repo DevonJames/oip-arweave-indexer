@@ -288,7 +288,10 @@ const corsOptions = {
       'https://mini.fitnessally.io',
       'https://mobile.fitnessally.io',
       'https://rockhoppersgame.com',
-      'https://lyra.ninja'
+      'https://lyra.ninja',
+      'https://alexandria.io',       // Alexandria main site
+      'https://www.alexandria.io',   // Alexandria with www
+      'https://api.alexandria.io'    // Alexandria API subdomain
     ];
     
     // Allow any localhost origin in development

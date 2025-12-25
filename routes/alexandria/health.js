@@ -19,7 +19,7 @@ const router = express.Router();
 
 const OIP_DAEMON_URL = process.env.OIP_DAEMON_URL || 'http://oip-daemon-service:3005';
 const OLLAMA_HOST = process.env.OLLAMA_HOST || 'http://ollama:11434';
-const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://tts-service:5500';
+const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
 const STT_SERVICE_URL = process.env.STT_SERVICE_URL || 'http://stt-service:8013';
 
 /**

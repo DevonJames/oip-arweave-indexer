@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 // Service URLs from environment or defaults
-const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:5002';
+const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
 const STT_SERVICE_URL = process.env.STT_SERVICE_URL || 'http://localhost:8003';
 const TEXT_GENERATOR_URL = process.env.TEXT_GENERATOR_URL || 'http://localhost:8002';
 

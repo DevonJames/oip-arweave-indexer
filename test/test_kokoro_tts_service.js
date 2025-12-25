@@ -8,7 +8,7 @@
 const axios = require('axios');
 const fs = require('fs');
 
-const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:5002';
+const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
 
 async function testKokoroTTSService() {
     console.log('🎵 Testing Kokoro TTS Service');

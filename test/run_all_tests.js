@@ -23,7 +23,7 @@ async function runAllTests() {
         const { checkService, checkTTSVoices, testTTSSynthesis } = require('./check_services');
         
         // Check each service
-        await checkService('TTS Service', process.env.TTS_SERVICE_URL || 'http://localhost:5002');
+        await checkService('TTS Service', process.env.TTS_SERVICE_URL || 'http://tts-service:8005');
         await checkService('STT Service', process.env.STT_SERVICE_URL || 'http://localhost:8003');
         await checkService('Text Generator', process.env.TEXT_GENERATOR_URL || 'http://localhost:8002');
         

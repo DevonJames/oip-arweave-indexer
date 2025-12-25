@@ -10,7 +10,7 @@ const axios = require('axios');
 class StreamingCoordinator {
     constructor() {
         // Service URLs
-        this.TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:5002';
+        this.TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
         this.ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
         
         // Active sessions

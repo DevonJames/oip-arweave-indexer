@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:5002';
+const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
 
 async function testTTSDirectly() {
     console.log('🎤 Testing TTS Service Directly\n');
