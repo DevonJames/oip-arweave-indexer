@@ -273,7 +273,7 @@ class ALFRED {
     /**
      * Call a cloud-hosted LLM API (Grok, GPT, etc.)
      */
-    async callCloudModel(modelName, prompt, options = {}) {
+    async callCloudModel(modelName, promptOrMessages, options = {}) {
         const modelConfig = this.cloudModels[modelName];
         if (!modelConfig) {
             throw new Error(`Unknown cloud model: ${modelName}`);
@@ -308,14 +308,17 @@ class ALFRED {
 
         const finalOptions = { ...defaultOptions, ...options };
 
+        // Support both string prompts and messages arrays
+        let messages;
+        if (options.useMessages && Array.isArray(promptOrMessages)) {
+            messages = promptOrMessages;
+        } else {
+            messages = [{ role: 'user', content: promptOrMessages }];
+        }
+
         const requestBody = {
             model: modelName,
-            messages: [
-                {
-                    role: 'user',
-                    content: prompt
-                }
-            ],
+            messages: messages,
             temperature: finalOptions.temperature,
             max_tokens: finalOptions.max_tokens,
             stop: finalOptions.stop
@@ -2411,12 +2414,68 @@ Please provide a helpful, conversational answer starting with "I didn't find any
             // Bypass RAG mode: skip all Elasticsearch searches and go directly to LLM
             if (options.bypassRAG === true) {
                 console.log(`[ALFRED] 🚀 Bypass RAG mode - skipping all searches, going directly to LLM`);
-                const response = await this.generateResponse(question, '', options.model, null, options);
+                
+                // Build messages array from conversation history (includes system prompt if present)
+                const conversationHistory = options.conversationHistory || [];
+                const messages = [];
+                
+                // Check if there's a system message in conversation history
+                const hasSystemPrompt = conversationHistory.some(m => m.role === 'system');
+                
+                if (!hasSystemPrompt) {
+                    // Add default ALFRED system prompt if none provided
+                    messages.push({
+                        role: 'system',
+                        content: 'You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. Do not use emojis, asterisks, or other markdown formatting in your responses.'
+                    });
+                }
+                
+                // Add conversation history
+                for (const msg of conversationHistory) {
+                    messages.push({ role: msg.role, content: msg.content });
+                }
+                
+                // Add current question
+                messages.push({ role: 'user', content: question });
+                
+                const modelName = options.model || this.defaultModel;
+                let responseText;
+                
+                try {
+                    if (this.isCloudModel(modelName)) {
+                        // Use cloud API with messages format
+                        responseText = await this.callCloudModel(modelName, messages, {
+                            temperature: 0.7,
+                            max_tokens: 800,
+                            useMessages: true  // Signal to use messages format
+                        });
+                    } else {
+                        // For Ollama, build a prompt from messages
+                        const prompt = messages.map(m => {
+                            if (m.role === 'system') return `System: ${m.content}`;
+                            if (m.role === 'assistant') return `Assistant: ${m.content}`;
+                            return `User: ${m.content}`;
+                        }).join('\n\n') + '\n\nAssistant:';
+                        
+                        const response = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
+                            model: modelName,
+                            prompt: prompt,
+                            stream: false,
+                            options: { temperature: 0.7, max_tokens: 500 }
+                        }, { timeout: 20000 });
+                        
+                        responseText = response.data.response?.trim() || '';
+                    }
+                } catch (error) {
+                    console.error('[ALFRED] Bypass RAG LLM call failed:', error.message);
+                    responseText = "Hello! I'm ALFRED, your AI assistant designed to help with information retrieval and answering questions. How can I assist you today?";
+                }
+                
                 return {
-                    answer: response,
+                    answer: responseText,
                     sources: [],
                     context_used: false,
-                    model: options.model || this.defaultModel,
+                    model: modelName,
                     search_results_count: 0,
                     search_results: [],
                     applied_filters: { bypass_reason: 'bypassRAG option enabled' },
