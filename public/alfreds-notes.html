@@ -1217,7 +1217,7 @@
         .alfred-soundwave-overlay {
             position: absolute;
             left: 50%;
-            top: calc(33% + 75px);
+            top: calc(33% + 45px);
             transform: translate(-50%, -50%) scale(0.75);
             pointer-events: none;
             opacity: 0;
@@ -4364,17 +4364,19 @@ JSON:`;
                 const bufferLength = this.state.audioAnalyser.frequencyBinCount;
                 const dataArray = new Uint8Array(bufferLength);
                 
-                // Pre-calculate logarithmic frequency mapping to spread bass across more bars
-                // Focus on the lower ~40% of frequency spectrum where voice energy lives
-                const maxFreqBin = Math.floor(bufferLength * 0.4); // Only use lower frequencies
+                // Pre-calculate center-weighted frequency mapping
+                // Bass (most active for voice) goes to center bars, higher freqs go to edges
+                const maxFreqBin = Math.floor(bufferLength * 0.5); // Voice frequency range
                 const frequencyMap = [];
+                const centerBar = (totalBars - 1) / 2; // 7.5 for 16 bars
                 for (let i = 0; i < totalBars; i++) {
-                    // Logarithmic mapping: more bars dedicated to lower frequencies
-                    const logPosition = Math.pow(i / totalBars, 0.6); // 0.6 = spread bass more
-                    frequencyMap[i] = Math.floor(logPosition * maxFreqBin);
+                    // Distance from center (0 at center, 1 at edges)
+                    const distFromCenter = Math.abs(i - centerBar) / centerBar;
+                    // Map: center (dist=0) → low freq, edges (dist=1) → high freq
+                    frequencyMap[i] = Math.floor(distFromCenter * maxFreqBin);
                 }
                 
-                console.log('🎵 Starting Y-axis mirrored audio visualization with', totalBars, 'bars (log frequency mapping)');
+                console.log('🎵 Starting center-weighted audio visualization with', totalBars, 'bars');
                 
                 const animate = () => {
                     if (!this.state.isStreamingAudio) {
