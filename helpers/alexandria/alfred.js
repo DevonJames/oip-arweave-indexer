@@ -2408,6 +2408,24 @@ Please provide a helpful, conversational answer starting with "I didn't find any
                 };
             }
 
+            // Bypass RAG mode: skip all Elasticsearch searches and go directly to LLM
+            if (options.bypassRAG === true) {
+                console.log(`[ALFRED] 🚀 Bypass RAG mode - skipping all searches, going directly to LLM`);
+                const response = await this.generateResponse(question, '', options.model, null, options);
+                return {
+                    answer: response,
+                    sources: [],
+                    context_used: false,
+                    model: options.model || this.defaultModel,
+                    search_results_count: 0,
+                    search_results: [],
+                    applied_filters: { bypass_reason: 'bypassRAG option enabled' },
+                    extracted_subject: question,
+                    extracted_keywords: [],
+                    rationale: 'Direct LLM response without RAG search'
+                };
+            }
+
             // Check if we should use the Intelligent Question Processor (IQP)
             const shouldUseIQP = include_filter_analysis && 
                 (!searchParams.recordType && !searchParams.tags && !searchParams.creatorHandle);

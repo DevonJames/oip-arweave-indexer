@@ -1236,7 +1236,8 @@ router.post('/converse', authenticateToken, async (req, res) => {
             const alfredOptions = {
                 model: model,
                 conversationHistory: conversationHistory,
-                useFieldExtraction: false
+                useFieldExtraction: false,
+                bypassRAG: true  // Skip RAG search for direct LLM mode
             };
 
             const alfredResponse = await alfredInstance.query(question, alfredOptions);
@@ -1563,7 +1564,8 @@ Rules:
             const alfredOptions = {
                 model: model,
                 conversationHistory: conversationHistory,
-                useFieldExtraction: false
+                useFieldExtraction: false,
+                bypassRAG: true  // Skip RAG search for pure LLM mode
             };
 
             const alfredResponse = await alfredInstance.query(question, alfredOptions);
