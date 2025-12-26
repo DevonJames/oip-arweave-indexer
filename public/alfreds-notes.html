@@ -1217,7 +1217,7 @@
         .alfred-soundwave-overlay {
             position: absolute;
             left: 50%;
-            top: calc(33% + 25px);
+            top: calc(33% + 75px);
             transform: translate(-50%, -50%) scale(0.75);
             pointer-events: none;
             opacity: 0;
@@ -2119,7 +2119,7 @@
                         <div class="alfred-viz-content">
                             <div class="alfred-avatar-container">
                                 <img src="/alfred.png" alt="Alfred" class="alfred-avatar-img">
-                                <canvas id="alfredSoundwave" class="alfred-soundwave-overlay" width="60" height="24"></canvas>
+                                <canvas id="alfredSoundwave" class="alfred-soundwave-overlay" width="84" height="24"></canvas>
                             </div>
                             <div id="alfredVizStatus" class="alfred-viz-status">Ready to speak</div>
                         </div>
@@ -4358,14 +4358,23 @@ JSON:`;
                 if (panel) panel.classList.add('speaking');
                 
                 // Initialize sound wave animation with real audio data
-                // Use half as many bars since we'll mirror them
-                const barsPerSide = 8;
-                const totalBars = barsPerSide * 2;
+                // Bars are vertically centered (Y-axis mirror) but NOT horizontally mirrored
+                const totalBars = 16;
                 const barWidth = canvas.width / totalBars;
                 const bufferLength = this.state.audioAnalyser.frequencyBinCount;
                 const dataArray = new Uint8Array(bufferLength);
                 
-                console.log('🎵 Starting mirrored audio-driven visualization with', barsPerSide, 'bars per side');
+                // Pre-calculate logarithmic frequency mapping to spread bass across more bars
+                // Focus on the lower ~40% of frequency spectrum where voice energy lives
+                const maxFreqBin = Math.floor(bufferLength * 0.4); // Only use lower frequencies
+                const frequencyMap = [];
+                for (let i = 0; i < totalBars; i++) {
+                    // Logarithmic mapping: more bars dedicated to lower frequencies
+                    const logPosition = Math.pow(i / totalBars, 0.6); // 0.6 = spread bass more
+                    frequencyMap[i] = Math.floor(logPosition * maxFreqBin);
+                }
+                
+                console.log('🎵 Starting Y-axis mirrored audio visualization with', totalBars, 'bars (log frequency mapping)');
                 
                 const animate = () => {
                     if (!this.state.isStreamingAudio) {
@@ -4377,10 +4386,10 @@ JSON:`;
                     
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     
-                    // Draw bars mirrored from center outward
-                    for (let i = 0; i < barsPerSide; i++) {
-                        // Map bar index to frequency data (sample the frequency spectrum)
-                        const dataIndex = Math.floor((i / barsPerSide) * bufferLength);
+                    // Draw bars left to right, each vertically centered (Y-axis mirror only)
+                    for (let i = 0; i < totalBars; i++) {
+                        // Use pre-calculated logarithmic frequency mapping
+                        const dataIndex = frequencyMap[i];
                         const value = dataArray[dataIndex];
                         
                         // Normalize the value (0-255) to a height percentage (0-1)
@@ -4389,6 +4398,7 @@ JSON:`;
                         // Add minimum height so bars are always visible
                         const height = normalizedHeight * canvas.height * 0.8 + canvas.height * 0.15;
                         
+                        // Y-axis mirror: center the bar vertically (grows up and down from middle)
                         const y = (canvas.height - height) / 2;
                         
                         // Create gradient with intensity based on frequency (black to grey)
@@ -4404,13 +4414,9 @@ JSON:`;
                         ctx.shadowColor = '#333333';
                         ctx.shadowBlur = 3 + (normalizedHeight * 5);
                         
-                        // Draw left side (from center going left)
-                        const xLeft = (canvas.width / 2) - ((i + 1) * barWidth) + barWidth * 0.1;
-                        ctx.fillRect(xLeft, y, barWidth * 0.8, height);
-                        
-                        // Draw right side (from center going right) - mirror
-                        const xRight = (canvas.width / 2) + (i * barWidth) + barWidth * 0.1;
-                        ctx.fillRect(xRight, y, barWidth * 0.8, height);
+                        // Draw bar at position i (left to right, no X-axis mirroring)
+                        const x = i * barWidth + barWidth * 0.1;
+                        ctx.fillRect(x, y, barWidth * 0.8, height);
                         
                         // Reset shadow for next iteration
                         ctx.shadowBlur = 0;
