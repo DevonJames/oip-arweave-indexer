@@ -3507,9 +3507,13 @@ async function getRecords(queryParams) {
         }
 
         // Resolve records if resolveDepth is specified
+        // MEMORY LEAK FIX: Clone records before resolution to prevent modifying originals
+        // resolveRecords() modifies records in-place, which can pollute shared references
         let resolvedRecords = await Promise.all(records.map(async (record) => {
+            // Deep clone the record before resolution so we don't modify the original
+            const recordCopy = structuredClone(record);
             let resolvedRecord = await resolveRecords(
-                record, 
+                recordCopy, 
                 parseInt(resolveDepth), 
                 recordsInDB, 
                 resolveNamesOnly === 'true' || resolveNamesOnly === true,
@@ -3969,7 +3973,11 @@ async function getRecords(queryParams) {
             // console.log(`📄 [Pagination] Using ES native pagination: page ${pageNumber}, size ${pageSize} (no post-processing)`);
         }
 
-        return {
+        // MEMORY LEAK FIX: Prepare result and null out intermediate variables
+        // This helps V8 garbage collect the large arrays that are no longer needed
+        const totalPages = Math.ceil(records.length / pageSize);
+        
+        const result = {
             message: "Records retrieved successfully",
             latestArweaveBlockInDB: maxArweaveBlockInDB,
             indexingProgress: `${progress}%`,
@@ -3978,9 +3986,17 @@ async function getRecords(queryParams) {
             currentPage: pageNumber,
             searchResults: searchResults,
             queryParams: queryParams,
-            totalPages: Math.ceil(records.length / pageSize),
+            totalPages: totalPages,
             records: resolvedRecords
         };
+        
+        // MEMORY LEAK FIX: Explicitly release intermediate arrays
+        // The original 'records' array was cloned for resolution, so we can release it
+        records = null;
+        resolvedRecords = null;
+        // Note: recordsInDB is a reference to the global cache, don't null it here
+        
+        return result;
 
     } catch (error) {
         console.error('Error retrieving records:', error);
@@ -4866,7 +4882,7 @@ const getRecordsInDB = async (forceRefresh = false) => {
                 query: {
                     match_all: {}
                 },
-                size: 10000 // Increased from 5000 for larger datasets
+                size: 10000
             }
         });
         const records = searchResponse.hits.hits.map(hit => hit._source);
