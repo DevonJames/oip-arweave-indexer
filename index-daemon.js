@@ -1054,6 +1054,42 @@ initializeIndices()
             console.log(`✅ Memory monitor started (${memoryMonitorInterval/1000}s interval)`);
 
             // ═══════════════════════════════════════════════════════════════════
+            // Periodic Memory Cleanup (configurable, default 6 hours)
+            // Clears caches and forces GC to prevent slow memory accumulation
+            // Set MEMORY_CLEANUP_INTERVAL_HOURS=0 to disable
+            // ═══════════════════════════════════════════════════════════════════
+            const cleanupHours = parseFloat(process.env.MEMORY_CLEANUP_INTERVAL_HOURS ?? 6);
+            
+            if (cleanupHours > 0) {
+                const CLEANUP_INTERVAL = cleanupHours * 60 * 60 * 1000;
+                setInterval(() => {
+                    try {
+                        const beforeMem = process.memoryUsage();
+                        
+                        // Clear the records cache
+                        const { clearRecordsCache } = require('./helpers/core/elasticsearch');
+                        clearRecordsCache();
+                        
+                        // Force garbage collection
+                        if (global.gc) {
+                            global.gc();
+                        }
+                        
+                        const afterMem = process.memoryUsage();
+                        const freedMB = Math.round((beforeMem.heapUsed - afterMem.heapUsed) / 1024 / 1024);
+                        
+                        console.log(`🧹 [Periodic Cleanup] Cache cleared, GC run. Freed: ${freedMB}MB, Current heap: ${Math.round(afterMem.heapUsed / 1024 / 1024)}MB`);
+                    } catch (error) {
+                        console.error('❌ [Periodic Cleanup] Error:', error.message);
+                    }
+                }, CLEANUP_INTERVAL);
+                
+                console.log(`✅ Periodic memory cleanup scheduled (every ${cleanupHours} hours)`);
+            } else {
+                console.log(`ℹ️  Periodic memory cleanup disabled (MEMORY_CLEANUP_INTERVAL_HOURS=0)`);
+            }
+
+            // ═══════════════════════════════════════════════════════════════════
             // keepDBUpToDate (Arweave indexing)
             // ═══════════════════════════════════════════════════════════════════
             let remapTemplates = [];

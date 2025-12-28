@@ -238,8 +238,7 @@ COMPOSE_PROJECT_NAME=oip-arweave-indexer
 # Main OIP Daemon API port (already configured above as PORT)
 # Alexandria Service configuration
 # Set to true when using alexandria profiles (enables proxy from daemon to alexandria for AI/voice routes)
-
-
+ALEXANDRIA_ENABLED=true
 ALEXANDRIA_PORT=3006
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_TRANSPORT_PORT=9300
@@ -330,3 +329,5 @@ LLM_TIMEOUT_MS=600000
 HTTP_SERVER_TIMEOUT_MS=1800000
 HTTP_KEEPALIVE_TIMEOUT_MS=2100000
 HTTP_HEADERS_TIMEOUT_MS=2100000
+
+MEMORY_CLEANUP_INTERVAL_HOURS=6
