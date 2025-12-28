@@ -792,6 +792,11 @@ app.get('/health', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Track memory growth between samples to identify leak sources
+let lastMemorySample = null;
+let memorySamples = [];
+const MAX_SAMPLES = 20;
+
 // DEBUG ENDPOINT - Shows exactly what's consuming memory
 // ═══════════════════════════════════════════════════════════════════════════════
 app.get('/debug/memory', async (req, res) => {
@@ -807,11 +812,53 @@ app.get('/debug/memory', async (req, res) => {
         const heapStats = v8.getHeapStatistics();
         const memUsage = process.memoryUsage();
         
-        // Cache info - note: we can't inspect private caches without triggering loads
-        // So we just report that cache inspection isn't available from debug endpoint
+        // Track memory growth over time
+        const currentSample = {
+            timestamp: new Date().toISOString(),
+            heapUsedMB: Math.round(memUsage.heapUsed / 1024 / 1024),
+            rssMB: Math.round(memUsage.rss / 1024 / 1024)
+        };
+        
+        let growthInfo = null;
+        if (lastMemorySample) {
+            const timeDiffMin = (Date.now() - new Date(lastMemorySample.timestamp).getTime()) / 60000;
+            const heapGrowth = currentSample.heapUsedMB - lastMemorySample.heapUsedMB;
+            growthInfo = {
+                sinceLast: {
+                    minutes: Math.round(timeDiffMin),
+                    heapGrowthMB: heapGrowth,
+                    growthPerMinute: timeDiffMin > 0 ? (heapGrowth / timeDiffMin).toFixed(2) + ' MB/min' : 'N/A'
+                }
+            };
+        }
+        
+        // Store sample for history
+        memorySamples.push(currentSample);
+        if (memorySamples.length > MAX_SAMPLES) {
+            memorySamples.shift();
+        }
+        lastMemorySample = currentSample;
+        
+        // Calculate overall trend
+        let trendInfo = null;
+        if (memorySamples.length >= 3) {
+            const oldest = memorySamples[0];
+            const newest = memorySamples[memorySamples.length - 1];
+            const totalMinutes = (new Date(newest.timestamp) - new Date(oldest.timestamp)) / 60000;
+            const totalGrowth = newest.heapUsedMB - oldest.heapUsedMB;
+            trendInfo = {
+                sampleCount: memorySamples.length,
+                periodMinutes: Math.round(totalMinutes),
+                totalGrowthMB: totalGrowth,
+                avgGrowthPerMinute: totalMinutes > 0 ? (totalGrowth / totalMinutes).toFixed(2) + ' MB/min' : 'N/A',
+                projectedDailyGrowthGB: totalMinutes > 0 ? ((totalGrowth / totalMinutes) * 60 * 24 / 1024).toFixed(2) + ' GB/day' : 'N/A'
+            };
+        }
+        
         const cacheInfo = {
-            note: 'Private caches cannot be inspected without loading data',
-            tip: 'Use /debug/clear-cache to force cache clear and observe memory drop'
+            note: 'Use /debug/clear-cache to manually clear caches',
+            growthTracking: growthInfo,
+            trend: trendInfo
         };
         
         // Get heap space breakdown
@@ -882,6 +929,46 @@ app.get('/debug/heap-snapshot', async (req, res) => {
     }
 });
 
+// DEBUG ENDPOINT - Show potential leak sources
+app.get('/debug/leak-sources', (req, res) => {
+    try {
+        // Count modules in require cache
+        const moduleCount = Object.keys(require.cache).length;
+        
+        // Check for accumulated timers/intervals
+        const activeHandles = process._getActiveHandles?.()?.length || 'N/A';
+        const activeRequests = process._getActiveRequests?.()?.length || 'N/A';
+        
+        // Get event emitter listener counts for common emitters
+        const listenerCounts = {};
+        try {
+            if (process.listenerCount) {
+                listenerCounts.process = {
+                    uncaughtException: process.listenerCount('uncaughtException'),
+                    unhandledRejection: process.listenerCount('unhandledRejection'),
+                    warning: process.listenerCount('warning')
+                };
+            }
+        } catch (e) { /* ignore */ }
+        
+        res.json({
+            timestamp: new Date().toISOString(),
+            potentialSources: {
+                requireCacheModules: moduleCount,
+                activeHandles: activeHandles,
+                activeRequests: activeRequests,
+                eventListeners: listenerCounts
+            },
+            suggestions: [
+                moduleCount > 500 ? '⚠️ High module count - possible dynamic require() leak' : '✅ Module count normal',
+                activeHandles > 100 ? '⚠️ Many active handles - check for unclosed connections' : '✅ Active handles normal'
+            ]
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // DEBUG ENDPOINT - Clear caches to free memory
 app.get('/debug/clear-cache', (req, res) => {
     try {
@@ -910,6 +997,48 @@ app.get('/debug/clear-cache', (req, res) => {
                 heapUsedMB: Math.round(afterMem.heapUsed / 1024 / 1024),
                 rssMB: Math.round(afterMem.rss / 1024 / 1024)
             }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DEBUG ENDPOINT - Aggressive cleanup (clears more internal state)
+app.get('/debug/aggressive-cleanup', async (req, res) => {
+    try {
+        const beforeMem = process.memoryUsage();
+        
+        // 1. Clear records cache
+        const { clearRecordsCache } = require('./helpers/core/elasticsearch');
+        clearRecordsCache();
+        
+        // 2. Clear memory sample history
+        memorySamples.length = 0;
+        lastMemorySample = null;
+        
+        // 3. Force multiple GC passes
+        if (global.gc) {
+            global.gc();
+            await new Promise(r => setTimeout(r, 100));
+            global.gc();
+            await new Promise(r => setTimeout(r, 100));
+            global.gc();
+        }
+        
+        const afterMem = process.memoryUsage();
+        
+        res.json({
+            success: true,
+            message: 'Aggressive cleanup completed (3x GC passes)',
+            memoryFreed: {
+                heapMB: Math.round((beforeMem.heapUsed - afterMem.heapUsed) / 1024 / 1024),
+                rssMB: Math.round((beforeMem.rss - afterMem.rss) / 1024 / 1024)
+            },
+            currentMemory: {
+                heapUsedMB: Math.round(afterMem.heapUsed / 1024 / 1024),
+                rssMB: Math.round(afterMem.rss / 1024 / 1024)
+            },
+            note: 'If heap is still high, the leak is in retained objects not caches'
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
