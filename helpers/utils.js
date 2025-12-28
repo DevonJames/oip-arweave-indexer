@@ -239,6 +239,23 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
     const isDeepestLevel = resolveDepth === 1;
     const shouldResolveNamesOnly = resolveNamesOnly && isDeepestLevel;
 
+    // MEMORY LEAK FIX: Create a shallow copy of the record structure
+    // This prevents mutating the original ES response objects, which causes memory retention
+    // We only copy the data paths, not deep clone everything (much faster than structuredClone)
+    const result = {
+        ...record,
+        data: {}
+    };
+    for (const cat of Object.keys(record.data || {})) {
+        result.data[cat] = { ...record.data[cat] };
+        // Also shallow-copy arrays within categories
+        for (const key of Object.keys(result.data[cat])) {
+            if (Array.isArray(result.data[cat][key])) {
+                result.data[cat][key] = [...result.data[cat][key]];
+            }
+        }
+    }
+
     // Helper function to check if a field path should be resolved
     const shouldResolveField = (category, key) => {
         // If no resolveFieldNames specified, resolve all fields
@@ -261,8 +278,8 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
     };
 
     // First resolve all DIDs to names/records
-    for (const category of Object.keys(record.data)) {
-        const properties = record.data[category];
+    for (const category of Object.keys(result.data)) {
+        const properties = result.data[category];
         for (const key of Object.keys(properties)) {
             // Check if this field should be resolved based on resolveFieldNames
             if (!shouldResolveField(category, key)) {
@@ -359,8 +376,8 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
 
     // AFTER DID resolution, handle special recipe merging for resolveNamesOnly
     // Only apply this at the deepest level
-    if (shouldResolveNamesOnly && record.data.recipe) {
-        const recipeData = record.data.recipe;
+    if (shouldResolveNamesOnly && result.data.recipe) {
+        const recipeData = result.data.recipe;
         
         // If this is a recipe with ingredient and ingredient_comment fields
         if (Array.isArray(recipeData.ingredient) && Array.isArray(recipeData.ingredient_comment)) {
@@ -403,7 +420,7 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
         }
     }
 
-    return record;
+    return result;
 };
 
 // Middleware to verify the JWT token

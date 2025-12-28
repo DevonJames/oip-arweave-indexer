@@ -3507,14 +3507,12 @@ async function getRecords(queryParams) {
         }
 
         // Resolve records if resolveDepth is specified
-        // MEMORY LEAK FIX: Clone records before resolution to prevent modifying originals
-        // resolveRecords() modifies records in-place, which can pollute shared references
+        // resolveRecords() now creates its own shallow copies internally (much faster than structuredClone)
+        const depth = parseInt(resolveDepth) || 0;
         let resolvedRecords = await Promise.all(records.map(async (record) => {
-            // Deep clone the record before resolution so we don't modify the original
-            const recordCopy = structuredClone(record);
             let resolvedRecord = await resolveRecords(
-                recordCopy, 
-                parseInt(resolveDepth), 
+                record, 
+                depth, 
                 recordsInDB, 
                 resolveNamesOnly === 'true' || resolveNamesOnly === true,
                 summarizeRecipe === 'true' || summarizeRecipe === true,
