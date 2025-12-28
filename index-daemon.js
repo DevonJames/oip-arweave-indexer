@@ -807,32 +807,12 @@ app.get('/debug/memory', async (req, res) => {
         const heapStats = v8.getHeapStatistics();
         const memUsage = process.memoryUsage();
         
-        // Get cache info from elasticsearch module
-        let cacheInfo = {};
-        try {
-            const { getRecordsInDB, getTemplatesInDB, getCreatorsInDB } = require('./helpers/core/elasticsearch');
-            
-            // Get cache sizes without refreshing
-            const recordsCache = await getRecordsInDB(false);
-            const templatesCache = await getTemplatesInDB();
-            const creatorsCache = await getCreatorsInDB();
-            
-            cacheInfo = {
-                recordsCache: {
-                    count: recordsCache?.records?.length || 0,
-                    estimatedSizeMB: recordsCache?.records ? 
-                        Math.round(JSON.stringify(recordsCache.records).length / 1024 / 1024 * 10) / 10 : 0
-                },
-                templatesCache: {
-                    count: templatesCache?.templatesInDB?.length || 0
-                },
-                creatorsCache: {
-                    count: creatorsCache?.creatorsInDB?.length || 0
-                }
-            };
-        } catch (e) {
-            cacheInfo = { error: e.message };
-        }
+        // Cache info - note: we can't inspect private caches without triggering loads
+        // So we just report that cache inspection isn't available from debug endpoint
+        const cacheInfo = {
+            note: 'Private caches cannot be inspected without loading data',
+            tip: 'Use /debug/clear-cache to force cache clear and observe memory drop'
+        };
         
         // Get heap space breakdown
         const heapSpaces = v8.getHeapSpaceStatistics();
@@ -896,6 +876,40 @@ app.get('/debug/heap-snapshot', async (req, res) => {
             message: 'Heap snapshot saved',
             path: filepath,
             instructions: 'Download this file and open it in Chrome DevTools -> Memory tab'
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DEBUG ENDPOINT - Clear caches to free memory
+app.get('/debug/clear-cache', (req, res) => {
+    try {
+        const { clearRecordsCache } = require('./helpers/core/elasticsearch');
+        
+        const beforeMem = process.memoryUsage();
+        
+        // Clear the records cache
+        clearRecordsCache();
+        
+        // Force GC if available
+        if (global.gc) {
+            global.gc();
+        }
+        
+        const afterMem = process.memoryUsage();
+        
+        res.json({
+            success: true,
+            message: 'Cache cleared and GC triggered',
+            memoryFreed: {
+                heapMB: Math.round((beforeMem.heapUsed - afterMem.heapUsed) / 1024 / 1024),
+                rssMB: Math.round((beforeMem.rss - afterMem.rss) / 1024 / 1024)
+            },
+            currentMemory: {
+                heapUsedMB: Math.round(afterMem.heapUsed / 1024 / 1024),
+                rssMB: Math.round(afterMem.rss / 1024 / 1024)
+            }
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
