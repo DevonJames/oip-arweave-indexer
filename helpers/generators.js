@@ -14,6 +14,19 @@ const multer = require('multer');
 const http = require('http');
 const https = require('https');
 
+// MEMORY LEAK FIX: Reuse HTTP agents instead of creating new ones per request
+// Creating new agents per request causes socket accumulation (was causing 540+ socket leaks!)
+const reusableHttpAgent = new http.Agent({ 
+    keepAlive: false,  // CRITICAL: Close sockets after use
+    maxSockets: 10,
+    timeout: 30000 
+});
+const reusableHttpsAgent = new https.Agent({ 
+    keepAlive: false,  // CRITICAL: Close sockets after use
+    maxSockets: 10,
+    timeout: 30000,
+    rejectUnauthorized: false 
+});
 
 const client = new textToSpeech.TextToSpeechClient({
   keyFilename: 'config/google-service-account-key.json',
@@ -2323,8 +2336,9 @@ async function callXaiApi(params) {
         maxContentLength: 10 * 1024 * 1024,
         maxBodyLength: 10 * 1024 * 1024,
         decompress: true,
-        httpAgent: new http.Agent({ keepAlive: true }),
-        httpsAgent: new https.Agent({ keepAlive: true, rejectUnauthorized: false })
+        // MEMORY LEAK FIX: Use reusable agents instead of creating new ones per request
+        httpAgent: reusableHttpAgent,
+        httpsAgent: reusableHttpsAgent
       });
       
       console.log(`API call successful with status ${response.status}`);
