@@ -5572,6 +5572,8 @@ const reIndexUnconfirmedRecords = async () => {
 };
 
 async function keepDBUpToDate(remapTemplates) {
+    const cycleStart = Date.now();
+    const startCpu = process.cpuUsage();
     infoLog('🔄 [keepDBUpToDate] CYCLE STARTED');
     debugLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     try {
@@ -5720,8 +5722,13 @@ async function keepDBUpToDate(remapTemplates) {
     } finally {
         setIsProcessing(false);
         
+        // CPU usage logging to diagnose 400-500% spikes
+        const endCpu = process.cpuUsage(startCpu);
+        const cycleDuration = Date.now() - cycleStart;
+        const cpuPercent = Math.round((endCpu.user + endCpu.system) / 1000 / cycleDuration * 100);
+        
         debugLog('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        infoLog('🏁 [keepDBUpToDate] CYCLE ENDED');
+        infoLog(`🏁 [keepDBUpToDate] CYCLE ENDED (${Math.round(cycleDuration/1000)}s, CPU: ${cpuPercent}%)`);
         debugLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
         
         // MEMORY LEAK FIX: Trigger GC if available (optional - gc() is not available by default)
