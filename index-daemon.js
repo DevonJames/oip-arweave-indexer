@@ -180,6 +180,15 @@ if (process.env.GUN_SYNC_ENABLED !== 'false') {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Request Counter for Leak Diagnostics
+// ═══════════════════════════════════════════════════════════════════════════════
+let requestStats = {
+    total: 0,
+    byPath: {},
+    lastReset: Date.now()
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Create Express App
 // ═══════════════════════════════════════════════════════════════════════════════
 const app = express();
@@ -936,8 +945,15 @@ app.get('/debug/leak-sources', (req, res) => {
         const moduleCount = Object.keys(require.cache).length;
         
         // Check for accumulated timers/intervals
-        const activeHandles = process._getActiveHandles?.()?.length || 'N/A';
-        const activeRequests = process._getActiveRequests?.()?.length || 'N/A';
+        const activeHandles = process._getActiveHandles?.() || [];
+        const activeRequests = process._getActiveRequests?.() || [];
+        
+        // Categorize active handles
+        const handleTypes = {};
+        for (const handle of activeHandles) {
+            const type = handle.constructor?.name || 'Unknown';
+            handleTypes[type] = (handleTypes[type] || 0) + 1;
+        }
         
         // Get event emitter listener counts for common emitters
         const listenerCounts = {};
@@ -951,18 +967,112 @@ app.get('/debug/leak-sources', (req, res) => {
             }
         } catch (e) { /* ignore */ }
         
+        // Check socket.io connections
+        const io = app.get('io');
+        const socketCount = io?.sockets?.sockets?.size || 0;
+        
         res.json({
             timestamp: new Date().toISOString(),
             potentialSources: {
                 requireCacheModules: moduleCount,
-                activeHandles: activeHandles,
-                activeRequests: activeRequests,
+                activeHandles: activeHandles.length,
+                handleTypes: handleTypes,
+                activeRequests: activeRequests.length,
+                socketIOConnections: socketCount,
                 eventListeners: listenerCounts
             },
             suggestions: [
                 moduleCount > 500 ? '⚠️ High module count - possible dynamic require() leak' : '✅ Module count normal',
-                activeHandles > 100 ? '⚠️ Many active handles - check for unclosed connections' : '✅ Active handles normal'
+                activeHandles.length > 100 ? '⚠️ Many active handles - check for unclosed connections' : '✅ Active handles normal',
+                socketCount > 50 ? '⚠️ Many socket.io connections - possible connection leak' : '✅ Socket.io connections normal'
             ]
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DEBUG ENDPOINT - Request statistics
+app.get('/debug/request-stats', (req, res) => {
+    const uptimeSeconds = Math.round((Date.now() - requestStats.lastReset) / 1000);
+    const requestsPerMinute = uptimeSeconds > 0 ? Math.round((requestStats.total / uptimeSeconds) * 60) : 0;
+    
+    // Sort paths by count
+    const topPaths = Object.entries(requestStats.byPath)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 20);
+    
+    res.json({
+        totalRequests: requestStats.total,
+        uptimeSeconds,
+        requestsPerMinute,
+        topPaths: Object.fromEntries(topPaths),
+        note: 'High request counts that don\'t match client usage may indicate a leak'
+    });
+});
+
+// Middleware to count requests
+app.use((req, res, next) => {
+    requestStats.total++;
+    const path = req.path.split('?')[0]; // Remove query string
+    requestStats.byPath[path] = (requestStats.byPath[path] || 0) + 1;
+    next();
+});
+
+// DEBUG ENDPOINT - Deep memory analysis
+app.get('/debug/memory-deep', (req, res) => {
+    try {
+        const v8 = require('v8');
+        
+        // Get globals that might be leaking
+        const globalKeys = Object.keys(global).filter(k => 
+            k !== 'global' && k !== 'process' && k !== 'console' && 
+            k !== 'Buffer' && k !== 'clearImmediate' && k !== 'clearInterval' &&
+            k !== 'clearTimeout' && k !== 'setImmediate' && k !== 'setInterval' &&
+            k !== 'setTimeout' && k !== 'queueMicrotask' && k !== 'structuredClone' &&
+            k !== 'atob' && k !== 'btoa' && k !== 'performance' && k !== 'fetch' &&
+            k !== 'crypto' && k !== 'navigator' && k !== 'WebAssembly'
+        );
+        
+        const globalInfo = {};
+        for (const key of globalKeys) {
+            const val = global[key];
+            if (val === null) {
+                globalInfo[key] = 'null';
+            } else if (val === undefined) {
+                globalInfo[key] = 'undefined';
+            } else if (typeof val === 'function') {
+                globalInfo[key] = 'function';
+            } else if (typeof val === 'object') {
+                if (Array.isArray(val)) {
+                    globalInfo[key] = `Array(${val.length})`;
+                } else if (val instanceof Map) {
+                    globalInfo[key] = `Map(${val.size})`;
+                } else if (val instanceof Set) {
+                    globalInfo[key] = `Set(${val.size})`;
+                } else {
+                    globalInfo[key] = `Object(${Object.keys(val).length} keys)`;
+                }
+            } else {
+                globalInfo[key] = typeof val;
+            }
+        }
+        
+        // Get V8 heap statistics
+        const heapStats = v8.getHeapStatistics();
+        const heapSpaceStats = v8.getHeapSpaceStatistics();
+        
+        // Find old_space usage
+        const oldSpace = heapSpaceStats.find(s => s.space_name === 'old_space');
+        
+        res.json({
+            timestamp: new Date().toISOString(),
+            uptime: Math.round(process.uptime()),
+            heapUsedMB: Math.round(heapStats.used_heap_size / 1024 / 1024),
+            oldSpaceMB: oldSpace ? Math.round(oldSpace.space_used_size / 1024 / 1024) : 'N/A',
+            globalVariables: globalInfo,
+            requireCacheCount: Object.keys(require.cache).length,
+            note: 'If old_space keeps growing, objects are being retained by references'
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
