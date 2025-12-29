@@ -3524,11 +3524,16 @@ async function getRecords(queryParams) {
         }
 
         // Resolve records if resolveDepth is specified
-        // resolveRecords() now creates its own shallow copies internally (much faster than structuredClone)
+        // MEMORY LEAK FIX: Clone records ONLY when they will be mutated (depth > 0)
+        // This prevents cache pollution while avoiding unnecessary cloning for depth=0 requests
         const depth = parseInt(resolveDepth) || 0;
         let resolvedRecords = await Promise.all(records.map(async (record) => {
+            // Only clone if we're actually going to resolve (mutate) the record
+            // This is the key fix: clone at entry point, not inside resolveRecords
+            const recordToResolve = depth > 0 ? structuredClone(record) : record;
+            
             let resolvedRecord = await resolveRecords(
-                record, 
+                recordToResolve, 
                 depth, 
                 recordsInDB, 
                 resolveNamesOnly === 'true' || resolveNamesOnly === true,
