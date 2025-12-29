@@ -331,3 +331,8 @@ HTTP_KEEPALIVE_TIMEOUT_MS=2100000
 HTTP_HEADERS_TIMEOUT_MS=2100000
 
 MEMORY_CLEANUP_INTERVAL_HOURS=6
+
+# Logging verbosity (affects elasticsearch.js and keepDBUpToDate)
+# Options: normal (all logs), minimal (important only), quiet (errors only)
+# Reducing logging can help prevent memory growth from string accumulation
+LOG_LEVEL=minimal

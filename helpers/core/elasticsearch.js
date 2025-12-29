@@ -3,6 +3,23 @@ const Arweave = require('arweave');
 const { getTransaction, getBlockHeightFromTxId, getCachedBlockHeight, refreshBlockHeightIfStale } = require('./arweave');
 // const { resolveRecords, getLineNumber } = require('./utils');
 const { setIsProcessing } = require('./processingState');  // Adjust the path as needed
+
+// MEMORY OPTIMIZATION: Reduce logging in production to prevent string accumulation
+// Set LOG_LEVEL=quiet to suppress most logs, LOG_LEVEL=minimal for important only
+const LOG_LEVEL = process.env.LOG_LEVEL || 'normal';
+const isQuiet = LOG_LEVEL === 'quiet';
+const isMinimal = LOG_LEVEL === 'minimal' || isQuiet;
+
+// Wrapper functions that respect log level
+const debugLog = (...args) => { if (!isMinimal) console.log(...args); };
+const infoLog = (...args) => { if (!isQuiet) console.log(...args); };
+
+// Log the level at startup
+if (isQuiet) {
+    console.log('📝 [Logging] Level: QUIET (errors only)');
+} else if (isMinimal) {
+    console.log('📝 [Logging] Level: MINIMAL (important messages only)');
+}
 const arweaveConfig = require('../../config/arweave.config');
 const arweave = Arweave.init(arweaveConfig);
 const jwt = require('jsonwebtoken');
@@ -920,12 +937,12 @@ const processRecordForElasticsearch = (record) => {
 
 const indexRecord = async (record) => {
     const recordId = record?.oip?.did || record?.oip?.didTx;
-    console.log(`\n      💾 [indexRecord] Attempting to index/update record: ${recordId}`);
+    debugLog(`\n      💾 [indexRecord] Attempting to index/update record: ${recordId}`);
     try {
         // Enforce record type indexing policy as a safety net
         const typeForIndex = record?.oip?.recordType;
         if (typeForIndex && !shouldIndexRecordType(typeForIndex)) {
-            console.log(`      ⏭️  [indexRecord] Skipping indexing for recordType '${typeForIndex}' per configuration.`);
+            debugLog(`      ⏭️  [indexRecord] Skipping indexing for recordType '${typeForIndex}' per configuration.`);
             return;
         }
         
@@ -940,7 +957,7 @@ const indexRecord = async (record) => {
         });
         
         if (existingRecord.body) {
-            console.log(`      🔄 [indexRecord] Found existing record, UPDATING it with confirmed blockchain data...`);
+            debugLog(`      🔄 [indexRecord] Found existing record, UPDATING...`);
             // Update existing record - process for Elasticsearch compatibility
             const processedRecord = processRecordForElasticsearch(record);
             
@@ -955,9 +972,9 @@ const indexRecord = async (record) => {
                 },
                 refresh: 'wait_for'
             });
-            console.log(`      ✅ [indexRecord] Record UPDATED successfully: ${recordId} → status changed to "original" (${response.result})`);    
+            debugLog(`      ✅ [indexRecord] Record UPDATED: ${recordId} (${response.result})`);    
         } else {
-            console.log(`      ➕ [indexRecord] No existing record found, CREATING new record...`);
+            debugLog(`      ➕ [indexRecord] CREATING new record...`);
             // Create new record - but first process any JSON string arrays for Elasticsearch compatibility
             const processedRecord = processRecordForElasticsearch(record);
             
@@ -967,7 +984,7 @@ const indexRecord = async (record) => {
                 body: processedRecord,
                 refresh: 'wait_for' // Wait for indexing to be complete before returning
             });
-            console.log(`      ✅ [indexRecord] Record CREATED successfully: ${recordId} (${response.result})`);
+            debugLog(`      ✅ [indexRecord] Record CREATED: ${recordId} (${response.result})`);
         }
 
     } catch (error) {
@@ -5555,14 +5572,14 @@ const reIndexUnconfirmedRecords = async () => {
 };
 
 async function keepDBUpToDate(remapTemplates) {
-    console.log('🔄 [keepDBUpToDate] CYCLE STARTED');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    infoLog('🔄 [keepDBUpToDate] CYCLE STARTED');
+    debugLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     try {
         // Refresh block height cache if stale (hourly by default)
         // This avoids network calls on every API request while keeping progress reasonably accurate
         const currentChainBlock = await refreshBlockHeightIfStale();
         if (currentChainBlock) {
-            console.log(`📊 Current Arweave block height: ${currentChainBlock}`);
+            debugLog(`📊 Current Arweave block height: ${currentChainBlock}`);
         } else {
             console.warn('⚠️  Could not fetch current block height - progress will show 0%');
         }
@@ -5686,24 +5703,26 @@ async function keepDBUpToDate(remapTemplates) {
         // searchArweaveForNewTransactions now processes transactions immediately instead of buffering
         const processedCount = await searchArweaveForNewTransactions(foundInDB, remapTemplates);
         if (processedCount === 0) {
-            console.log(`⏳ [keepDBUpToDate] No new OIP transactions found (checking from block ${foundInDB.maxArweaveBlockInDB + 1})`);
+            debugLog(`⏳ [keepDBUpToDate] No new OIP transactions found (checking from block ${foundInDB.maxArweaveBlockInDB + 1})`);
         }
     } catch (error) {
         console.error('\n❌ [keepDBUpToDate] CRITICAL ERROR:', error.message);
         console.error('❌ [keepDBUpToDate] Stack trace:', error.stack);
-        console.error(getFileInfo(), getLineNumber(), 'Error details:', {
-            status: error.response?.status,
-            headers: error.response?.headers,
-            query: error.request?.query,
-            message: error.message
-        });
+        if (!isQuiet) {
+            console.error(getFileInfo(), getLineNumber(), 'Error details:', {
+                status: error.response?.status,
+                headers: error.response?.headers,
+                query: error.request?.query,
+                message: error.message
+            });
+        }
         // return [];
     } finally {
         setIsProcessing(false);
         
-        console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('🏁 [keepDBUpToDate] CYCLE ENDED');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+        debugLog('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        infoLog('🏁 [keepDBUpToDate] CYCLE ENDED');
+        debugLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
         
         // MEMORY LEAK FIX: Trigger GC if available (optional - gc() is not available by default)
         if (global.gc) {
@@ -5812,7 +5831,7 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
     // const min = (qtyRecordsInDB === 0) ? 1579580 : (maxArweaveBlockInDB + 1); // before todays templates
     const min = Math.max(startBlockHeight, (maxArweaveBlockInDB + 1));
 
-    console.log(`🔍 [searchArweaveForNewTransactions] Searching Arweave for OIP records from block ${min}`);
+    debugLog(`🔍 [searchArweaveForNewTransactions] Searching Arweave for OIP records from block ${min}`);
 
     // const min = (qtyRecordsInDB === 0) ? 1579817 : (maxArweaveBlockInDB + 1); // 12/31/2024 10pm
     
@@ -5829,7 +5848,7 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
     let transactionsToProcess = [];
 
     while (hasNextPage && transactionCount < MAX_TRANSACTIONS_PER_CYCLE && !rateLimited) {
-        console.log(`  📄 Pagination: ${transactionCount} records fetched so far (searching from block ${min})`);
+        debugLog(`  📄 Pagination: ${transactionCount} records fetched so far (searching from block ${min})`);
         const query = gql`
             query {
                 transactions(
@@ -5884,7 +5903,7 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
                     
                     // SAFETY CHECK: If using fallback endpoint, verify we're not skipping too many blocks
                     if (endpoint !== endpoints[0]) {
-                        console.log(`✅ Using fallback endpoint: ${endpoint}`);
+                        debugLog(`✅ Using fallback endpoint: ${endpoint}`);
                         
                         // Get max block gap threshold from env (default 1000 blocks)
                         const maxBlockGap = parseInt(process.env.MAX_BLOCK_GAP_FOR_FALLBACK) || 1000;
@@ -5895,11 +5914,11 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
                             
                             // Skip safety check if cache unavailable
                             if (!currentBlockHeight) {
-                                console.warn(`⚠️  [SAFETY CHECK SKIPPED] Block height cache unavailable. Proceeding with caution.`);
+                                debugLog(`⚠️  [SAFETY CHECK SKIPPED] Block height cache unavailable. Proceeding with caution.`);
                             } else {
                                 const blockGap = currentBlockHeight - maxArweaveBlockInDB;
                                 
-                                console.log(`🔍 [SAFETY CHECK] DB at block ${maxArweaveBlockInDB}, fallback at block ${currentBlockHeight}, gap: ${blockGap} blocks`);
+                                debugLog(`🔍 [SAFETY CHECK] DB at block ${maxArweaveBlockInDB}, fallback at block ${currentBlockHeight}, gap: ${blockGap} blocks`);
                                 
                                 if (blockGap > maxBlockGap) {
                                     console.error(`❌ [SAFETY CHECK FAILED] Block gap (${blockGap}) exceeds maximum allowed (${maxBlockGap})`);
@@ -5908,7 +5927,7 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
                                     console.error(`   Set MAX_BLOCK_GAP_FOR_FALLBACK in .env to adjust this threshold.`);
                                     throw new Error(`Block gap too large (${blockGap} > ${maxBlockGap}). Refusing to use fallback to prevent data loss.`);
                                 } else {
-                                    console.log(`✅ [SAFETY CHECK PASSED] Block gap (${blockGap}) is within acceptable range (≤ ${maxBlockGap})`);
+                                    debugLog(`✅ [SAFETY CHECK PASSED] Block gap (${blockGap}) is within acceptable range (≤ ${maxBlockGap})`);
                                 }
                             }
                         } catch (safetyError) {
@@ -5917,8 +5936,8 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
                                 throw safetyError;
                             }
                             // Otherwise, warn but continue (couldn't verify, but don't block the fallback)
-                            console.warn(`⚠️  [SAFETY CHECK] Could not verify block gap: ${safetyError.message}`);
-                            console.warn(`   Proceeding with fallback anyway (safety check failed, not blocking)`);
+                            debugLog(`⚠️  [SAFETY CHECK] Could not verify block gap: ${safetyError.message}`);
+                            debugLog(`   Proceeding with fallback anyway (safety check failed, not blocking)`);
                         }
                     }
                     
@@ -5938,9 +5957,9 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
                     }
                     
                     if (retryCount < maxRetries) {
-                        console.log(`⚠️  Attempt ${retryCount} failed on ${endpoint}: ${error.message}. Retrying...`);
+                        debugLog(`⚠️  Attempt ${retryCount} failed on ${endpoint}: ${error.message}. Retrying...`);
                     } else {
-                        console.warn(`❌ Max retries reached on ${endpoint}. Trying next endpoint...`);
+                        infoLog(`❌ Max retries reached on ${endpoint}. Trying next endpoint...`);
                     }
                 }
             }
@@ -5974,14 +5993,14 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
             if (heights.length > 0) {
                 const minHeight = Math.min(...heights);
                 const maxHeight = Math.max(...heights);
-                console.log(`🔍 [DEBUG] GraphQL page: Blocks ${minHeight} → ${maxHeight} (${transactions.length} transactions, ${heights.length} with block height)`);
+                debugLog(`🔍 [DEBUG] GraphQL page: Blocks ${minHeight} → ${maxHeight} (${transactions.length} transactions, ${heights.length} with block height)`);
                 if (heights.length >= 2) {
                     const isDescending = heights[0] > heights[1];
-                    console.log(`🔍 [DEBUG] GraphQL order: ${isDescending ? 'DESCENDING' : 'ASCENDING'} (${heights[0]} → ${heights[1]})`);
+                    debugLog(`🔍 [DEBUG] GraphQL order: ${isDescending ? 'DESCENDING' : 'ASCENDING'} (${heights[0]} → ${heights[1]})`);
                 }
                 // Check for gaps on first page
                 if (transactionCount === 0 && minHeight > min) {
-                    console.log(`⚠️  [DEBUG] GraphQL skipped blocks ${min} to ${minHeight - 1} (${minHeight - min} blocks skipped)`);
+                    debugLog(`⚠️  [DEBUG] GraphQL skipped blocks ${min} to ${minHeight - 1} (${minHeight - min} blocks skipped)`);
                 }
             }
         }
@@ -5998,7 +6017,7 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
 
         // MEMORY LEAK FIX: Check if we've reached the limit
         if (transactionCount >= MAX_TRANSACTIONS_PER_CYCLE) {
-            console.log(`[searchArweaveForNewTransactions] Reached transaction limit (${MAX_TRANSACTIONS_PER_CYCLE}), will fetch more in next cycle`);
+            infoLog(`[searchArweaveForNewTransactions] Reached transaction limit (${MAX_TRANSACTIONS_PER_CYCLE}), will fetch more in next cycle`);
             hasNextPage = false;
         }
 
@@ -6012,7 +6031,7 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
 
     // MEMORY LEAK FIX: Process transactions immediately as we find them
     // This prevents buffering entire transaction objects in memory
-    console.log(`🔎 [searchArweaveForNewTransactions] GraphQL query completed. Found ${transactionCount} transactions with OIP tags (Index-Method:OIP, Ver:0.8.0) from block ${min} onwards`);
+    infoLog(`🔎 [searchArweaveForNewTransactions] GraphQL query completed. Found ${transactionCount} transactions`);
     
     // Check for gaps and fill them with chunked queries
     const transactionsWithBlockHeight = transactionsToProcess.filter(tx => tx.blockHeight !== null);
@@ -6024,13 +6043,13 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
         const heights = transactionsWithBlockHeight.map(tx => tx.blockHeight).sort((a, b) => a - b);
         const minBlock = heights[0];
         const maxBlock = heights[heights.length - 1];
-        console.log(`🔍 [DEBUG] Block height range in results: ${minBlock} → ${maxBlock} (${transactionsWithBlockHeight.length} transactions with block height)`);
-        console.log(`🔍 [DEBUG] Query was for block >= ${min}, but lowest block found: ${minBlock}`);
+        debugLog(`🔍 [DEBUG] Block height range in results: ${minBlock} → ${maxBlock} (${transactionsWithBlockHeight.length} transactions with block height)`);
+        debugLog(`🔍 [DEBUG] Query was for block >= ${min}, but lowest block found: ${minBlock}`);
         
         // Detect gap and fill it with chunked queries
         if (minBlock > min) {
             const gapSize = minBlock - min;
-            console.log(`⚠️  [GAP DETECTED] Missing blocks ${min} to ${minBlock - 1} (${gapSize} blocks). Querying in chunks...`);
+            infoLog(`⚠️  [GAP DETECTED] Missing blocks ${min} to ${minBlock - 1} (${gapSize} blocks). Querying in chunks...`);
             
             // Query in chunks to fill the gap
             // Use smaller chunks for large gaps to avoid overwhelming GraphQL
@@ -6041,15 +6060,15 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
             
             while (chunkStart < minBlock) {
                 chunkCount++;
-                console.log(`  🔍 [Chunk ${chunkCount}] Querying blocks ${chunkStart} → ${chunkEnd}...`);
+                debugLog(`  🔍 [Chunk ${chunkCount}] Querying blocks ${chunkStart} → ${chunkEnd}...`);
                 
                 try {
                     const chunkTransactions = await queryBlockRange(chunkStart, chunkEnd, endpoints);
                     if (chunkTransactions.length > 0) {
-                        console.log(`  ✅ [Chunk ${chunkCount}] Found ${chunkTransactions.length} transactions in blocks ${chunkStart} → ${chunkEnd}`);
+                        debugLog(`  ✅ [Chunk ${chunkCount}] Found ${chunkTransactions.length} transactions in blocks ${chunkStart} → ${chunkEnd}`);
                         gapFilledTransactions = gapFilledTransactions.concat(chunkTransactions);
                     } else {
-                        console.log(`  ⏭️  [Chunk ${chunkCount}] No transactions found in blocks ${chunkStart} → ${chunkEnd}`);
+                        debugLog(`  ⏭️  [Chunk ${chunkCount}] No transactions found in blocks ${chunkStart} → ${chunkEnd}`);
                     }
                 } catch (error) {
                     console.error(`  ❌ [Chunk ${chunkCount}] Error querying blocks ${chunkStart} → ${chunkEnd}:`, error.message);
@@ -6065,9 +6084,9 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
             }
             
             if (gapFilledTransactions.length > 0) {
-                console.log(`✅ [GAP FILLED] Found ${gapFilledTransactions.length} additional transactions in gap blocks ${min} → ${minBlock - 1}`);
+                infoLog(`✅ [GAP FILLED] Found ${gapFilledTransactions.length} additional transactions in gap`);
             } else {
-                console.log(`⚠️  [GAP] No transactions found in gap blocks ${min} → ${minBlock - 1} (may be empty or GraphQL limitation)`);
+                debugLog(`⚠️  [GAP] No transactions found in gap blocks ${min} → ${minBlock - 1}`);
             }
         }
     }
@@ -6083,7 +6102,7 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
     const deduplicatedTransactions = Array.from(transactionMap.values());
     
     if (gapFilledTransactions.length > 0) {
-        console.log(`📊 [MERGE] Total: ${deduplicatedTransactions.length} transactions (${gapFilledTransactions.length} from gap + ${transactionsToProcess.length} from main query, ${allTransactions.length - deduplicatedTransactions.length} duplicates removed)`);
+        debugLog(`📊 [MERGE] Total: ${deduplicatedTransactions.length} transactions (${gapFilledTransactions.length} from gap + ${transactionsToProcess.length} from main query, ${allTransactions.length - deduplicatedTransactions.length} duplicates removed)`);
     }
     
     // Sort deduplicated transactions by block height (chronological order: lowest to highest)
@@ -6102,20 +6121,20 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
     const sortedTransactions = deduplicatedWithBlockHeight.concat(deduplicatedWithoutBlockHeight);
     
     if (sortedTransactions.length > 0 && sortedTransactions[0].blockHeight && sortedTransactions[sortedTransactions.length - 1].blockHeight) {
-        console.log(`🔍 [DEBUG] Sorted transactions: Block ${sortedTransactions[0].blockHeight} → Block ${sortedTransactions[sortedTransactions.length - 1].blockHeight} (chronological order)`);
+        debugLog(`🔍 [DEBUG] Sorted transactions: Block ${sortedTransactions[0].blockHeight} → Block ${sortedTransactions[sortedTransactions.length - 1].blockHeight}`);
     }
     
-    console.log(`🔍 [keepDBUpToDate] Processing ${sortedTransactions.length} transactions in chronological order (lowest block → highest block)...`);
+    infoLog(`🔍 [keepDBUpToDate] Processing ${sortedTransactions.length} transactions...`);
     
     for (let i = 0; i < sortedTransactions.length; i++) {
         const tx = sortedTransactions[i];
         const blockInfo = tx.blockHeight ? ` (block ${tx.blockHeight})` : '';
-        console.log(`📦 [Transaction ${i+1}/${sortedTransactions.length}] Processing: ${tx.id}${blockInfo}`);
+        debugLog(`📦 [Transaction ${i+1}/${sortedTransactions.length}] Processing: ${tx.id}${blockInfo}`);
         await processTransaction(tx, remapTemplates);
         processedCount++;
     }
     
-    console.log(`✅ [searchArweaveForNewTransactions] Completed processing ${processedCount} transactions`);
+    infoLog(`✅ [searchArweaveForNewTransactions] Completed processing ${processedCount} transactions`);
     
     // Clear array to free memory
     transactionsToProcess.length = 0;
