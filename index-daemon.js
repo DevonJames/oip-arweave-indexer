@@ -1079,6 +1079,65 @@ app.get('/debug/memory-deep', (req, res) => {
     }
 });
 
+// Memory growth tracking for leak detection
+let memorySnapshots = [];
+const MAX_SNAPSHOTS = 60; // Keep 60 samples (1 hour at 1 per minute)
+
+// DEBUG ENDPOINT - Track memory growth over time
+app.get('/debug/memory-growth', (req, res) => {
+    try {
+        const v8 = require('v8');
+        const heapStats = v8.getHeapStatistics();
+        const heapSpaceStats = v8.getHeapSpaceStatistics();
+        const oldSpace = heapSpaceStats.find(s => s.space_name === 'old_space');
+        
+        // Take a new snapshot
+        const snapshot = {
+            timestamp: Date.now(),
+            heapUsedMB: Math.round(heapStats.used_heap_size / 1024 / 1024),
+            oldSpaceMB: oldSpace ? Math.round(oldSpace.space_used_size / 1024 / 1024) : 0,
+            externalMB: Math.round(process.memoryUsage().external / 1024 / 1024),
+            requireCacheCount: Object.keys(require.cache).length,
+            activeHandles: process._getActiveHandles().length,
+            activeRequests: process._getActiveRequests().length
+        };
+        
+        memorySnapshots.push(snapshot);
+        if (memorySnapshots.length > MAX_SNAPSHOTS) {
+            memorySnapshots.shift();
+        }
+        
+        // Calculate growth rates if we have enough data
+        let growthAnalysis = null;
+        if (memorySnapshots.length >= 5) {
+            const oldest = memorySnapshots[0];
+            const newest = memorySnapshots[memorySnapshots.length - 1];
+            const timeDiffMinutes = (newest.timestamp - oldest.timestamp) / 1000 / 60;
+            
+            if (timeDiffMinutes > 0) {
+                growthAnalysis = {
+                    periodMinutes: Math.round(timeDiffMinutes),
+                    heapGrowthPerMin: ((newest.heapUsedMB - oldest.heapUsedMB) / timeDiffMinutes).toFixed(2),
+                    oldSpaceGrowthPerMin: ((newest.oldSpaceMB - oldest.oldSpaceMB) / timeDiffMinutes).toFixed(2),
+                    requireCacheGrowth: newest.requireCacheCount - oldest.requireCacheCount,
+                    handleGrowth: newest.activeHandles - oldest.activeHandles
+                };
+            }
+        }
+        
+        res.json({
+            current: snapshot,
+            growthAnalysis,
+            snapshotCount: memorySnapshots.length,
+            suggestion: growthAnalysis && parseFloat(growthAnalysis.oldSpaceGrowthPerMin) > 5 
+                ? '⚠️ Significant old_space growth - objects being retained'
+                : '✅ Memory growth within normal range'
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // DEBUG ENDPOINT - Clear caches to free memory
 app.get('/debug/clear-cache', (req, res) => {
     try {
@@ -1349,6 +1408,68 @@ initializeIndices()
                 }
             }, SOCKET_CLEANUP_INTERVAL);
             console.log(`✅ Periodic socket cleanup scheduled (every 30 minutes)`);
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // MEMORY SAFETY: Scheduled restart check at configured time
+            // Checks memory once per day at MEMORY_RESTART_TIME (default 02:00)
+            // Only restarts if heap exceeds MEMORY_RESTART_THRESHOLD_GB
+            // Set MEMORY_RESTART_THRESHOLD_GB to 0 to disable
+            // ═══════════════════════════════════════════════════════════════════
+            const memoryRestartThresholdGB = parseFloat(process.env.MEMORY_RESTART_THRESHOLD_GB ?? 12);
+            const memoryRestartTime = process.env.MEMORY_RESTART_TIME || '02:00'; // 24-hour format, local time
+            const memoryRestartTZ = process.env.MEMORY_RESTART_TIMEZONE || 'America/Los_Angeles';
+            
+            if (memoryRestartThresholdGB > 0) {
+                // Parse the configured time
+                const [targetHour, targetMinute] = memoryRestartTime.split(':').map(Number);
+                
+                // Check every minute if we've reached the target time
+                let lastCheckDate = null;
+                
+                setInterval(() => {
+                    try {
+                        // Get current time in the configured timezone
+                        const now = new Date();
+                        const localTime = new Date(now.toLocaleString('en-US', { timeZone: memoryRestartTZ }));
+                        const currentHour = localTime.getHours();
+                        const currentMinute = localTime.getMinutes();
+                        const todayDate = localTime.toDateString();
+                        
+                        // Only check once per day at the target time (within a 1-minute window)
+                        if (currentHour === targetHour && 
+                            currentMinute === targetMinute && 
+                            lastCheckDate !== todayDate) {
+                            
+                            lastCheckDate = todayDate;
+                            
+                            const memUsage = process.memoryUsage();
+                            const heapUsedGB = memUsage.heapUsed / 1024 / 1024 / 1024;
+                            const rssGB = memUsage.rss / 1024 / 1024 / 1024;
+                            
+                            console.log(`\n🕐 [Scheduled Check] ${memoryRestartTime} ${memoryRestartTZ}`);
+                            console.log(`   Heap: ${heapUsedGB.toFixed(2)}GB | Threshold: ${memoryRestartThresholdGB}GB`);
+                            
+                            if (heapUsedGB > memoryRestartThresholdGB) {
+                                console.log(`\n⚠️  ════════════════════════════════════════════════════════`);
+                                console.log(`⚠️  MEMORY THRESHOLD EXCEEDED: ${heapUsedGB.toFixed(2)}GB > ${memoryRestartThresholdGB}GB`);
+                                console.log(`⚠️  RSS: ${rssGB.toFixed(2)}GB | Initiating graceful restart...`);
+                                console.log(`⚠️  ════════════════════════════════════════════════════════\n`);
+                                
+                                // Graceful shutdown - allow Docker to restart
+                                process.exit(0);
+                            } else {
+                                console.log(`   ✅ Memory OK, no restart needed\n`);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('❌ [Scheduled Check] Error:', error.message);
+                    }
+                }, 60 * 1000); // Check every minute
+                
+                console.log(`✅ Scheduled memory check: ${memoryRestartTime} ${memoryRestartTZ} (threshold: ${memoryRestartThresholdGB}GB)`);
+            } else {
+                console.log(`ℹ️  Scheduled memory restart disabled (MEMORY_RESTART_THRESHOLD_GB=0)`);
+            }
 
             // ═══════════════════════════════════════════════════════════════════
             // keepDBUpToDate (Arweave indexing)
