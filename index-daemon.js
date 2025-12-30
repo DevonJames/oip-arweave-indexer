@@ -163,7 +163,8 @@ const { keepDBUpToDate, deleteRecordsByBlock, deleteRecordsByDID,
         deleteRecordsByIndexedAt, deleteRecordsByIndex, deleteIndex,
         remapExistingRecords } = require('./helpers/core/elasticsearch');
 const { getMediaSeeder } = require('./services/mediaSeeder');
-const { getTracker } = require('./helpers/core/memoryTracker');
+// Note: memoryTracker removed - was disabled and just adding log noise
+// Memory monitoring now handled by /debug/memory endpoints and MEMORY_RESTART_THRESHOLD_GB
 const socket = require('./socket');
 
 // Validate environment
@@ -1494,16 +1495,8 @@ initializeIndices()
                 const unit = interval > 120 ? 'minutes' : 'seconds';
                 console.log(`📡 Will sync from Arweave every ${minutes} ${unit}`);
 
-                // Start memory tracker
-                if (process.env.DISABLE_MEMORY_TRACKER !== 'true') {
-                    const memTracker = getTracker({
-                        trackingInterval: 60000,
-                        maxSamples: 30,
-                        alertThreshold: 5000
-                    });
-                    memTracker.start();
-                    console.log('🔍 Memory tracker started');
-                }
+                // Note: Old memory tracker removed - was disabled and just adding log noise
+                // Memory monitoring now handled by /debug/memory endpoints and MEMORY_RESTART_THRESHOLD_GB
 
                 setTimeout(async () => {
                     console.log('🚀 Starting first keepDBUpToDate cycle...');
