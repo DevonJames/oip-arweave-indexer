@@ -328,12 +328,10 @@ MEMORY_RESTART_THRESHOLD_GB=36
 MEMORY_RESTART_TIME=02:00
 MEMORY_RESTART_TIMEZONE=America/Los_Angeles
 
-# V8 memory optimization flags
+# V8 memory configuration
 # --max-old-space-size: Maximum heap size in MB (should be > MEMORY_RESTART_THRESHOLD_GB)
-# --optimize-for-size: Prioritize memory over speed
-# --trace-gc: (optional) Log every GC event for debugging
-# Note: --expose-gc is passed via CMD in Dockerfile (not allowed in NODE_OPTIONS)
-NODE_OPTIONS=--max-old-space-size=49152 --optimize-for-size
+# Note: --expose-gc and --optimize-for-size are passed via Dockerfile CMD (not allowed in NODE_OPTIONS)
+NODE_OPTIONS=--max-old-space-size=49152
 
 # STT Max Duration (5 hours)
 STT_MAX_DURATION_SECONDS=18000

@@ -152,9 +152,9 @@ services:
       - MEMORY_RESTART_TIME=${MEMORY_RESTART_TIME:-02:00}
       - MEMORY_RESTART_TIMEZONE=${MEMORY_RESTART_TIMEZONE:-America/Los_Angeles}
       - MEMORY_CLEANUP_INTERVAL_HOURS=${MEMORY_CLEANUP_INTERVAL_HOURS:-2}
-      # V8 memory optimization flags (max-old-space-size should be higher than MEMORY_RESTART_THRESHOLD_GB)
-      # Note: --expose-gc is passed via CMD in Dockerfile, not allowed in NODE_OPTIONS
-      - NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=49152 --optimize-for-size}
+      # V8 memory flags (max-old-space-size should be higher than MEMORY_RESTART_THRESHOLD_GB)
+      # Note: --expose-gc and --optimize-for-size must be passed via CMD, not NODE_OPTIONS
+      - NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=49152}
     depends_on:
       - elasticsearch
       - gun-relay

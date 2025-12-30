@@ -150,9 +150,9 @@ RUN mkdir -p \
 # ─────────────────────────────────────────────────────────────────────────────
 # Memory Configuration
 # ─────────────────────────────────────────────────────────────────────────────
-# Note: --expose-gc is passed via CMD below (not allowed in NODE_OPTIONS)
 # Default heap size: 4GB (can be overridden by docker-compose NODE_OPTIONS)
-ENV NODE_OPTIONS="--max-old-space-size=4096 --optimize-for-size"
+# Note: --expose-gc and --optimize-for-size must be in CMD, not NODE_OPTIONS
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Expose Ports
@@ -171,5 +171,5 @@ HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
 # Startup
 # ─────────────────────────────────────────────────────────────────────────────
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["node", "--expose-gc", "index.js", "--keepDBUpToDate", "15", "600"]
+CMD ["node", "--expose-gc", "--optimize-for-size", "index.js", "--keepDBUpToDate", "15", "600"]
 
