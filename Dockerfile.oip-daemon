@@ -150,9 +150,9 @@ RUN mkdir -p \
 # ─────────────────────────────────────────────────────────────────────────────
 # Memory Configuration
 # ─────────────────────────────────────────────────────────────────────────────
-# MEMORY LEAK FIX: Expose GC for manual garbage collection
-# Default heap size: 4GB (configurable via NODE_OPTIONS)
-ENV NODE_OPTIONS="--expose-gc --max-old-space-size=4096"
+# Note: --expose-gc is passed via CMD below (not allowed in NODE_OPTIONS)
+# Default heap size: 4GB (can be overridden by docker-compose NODE_OPTIONS)
+ENV NODE_OPTIONS="--max-old-space-size=4096 --optimize-for-size"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Expose Ports
