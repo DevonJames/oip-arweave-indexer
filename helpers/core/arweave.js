@@ -4,8 +4,14 @@ const { createData, ArweaveSigner, JWKInterface } = require('arbundles');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const http = require('http');
+const https = require('https');
 const { crypto, createHash } = require('crypto');
 const base64url = require('base64url');
+
+// MEMORY LEAK FIX: Create agents that close sockets after use
+const httpAgent = new http.Agent({ keepAlive: false, maxSockets: 10, timeout: 30000 });
+const httpsAgent = new https.Agent({ keepAlive: false, maxSockets: 10, timeout: 30000 });
 
 const arweaveConfig = require('../../config/arweave.config');
 const arweave = Arweave.init(arweaveConfig);
@@ -126,7 +132,8 @@ const getTransaction = async (transactionId) => {
                 try {
                     graphqlResponse = await axios.post(graphqlEndpoint, graphqlQuery, {
                         headers: { 'Content-Type': 'application/json' },
-                        timeout: 15000
+                        timeout: 15000,
+                        httpAgent, httpsAgent  // MEMORY LEAK FIX: Close sockets after use
                     });
                     if (graphqlEndpoint !== graphqlEndpoints[0]) {
                         console.log(`✅ Using fallback GraphQL endpoint: ${graphqlEndpoint}`);
@@ -174,7 +181,8 @@ const getTransaction = async (transactionId) => {
                     // Try direct gateway fetch first for data items (avoids the native client bug)
                     dataResponse = await axios.get(`${gatewayBaseUrl}/${transactionId}`, {
                         responseType: 'text',
-                        timeout: 30000
+                        timeout: 30000,
+                        httpAgent, httpsAgent  // MEMORY LEAK FIX: Close sockets after use
                     });
                     data = dataResponse.data;
                     if (gatewayBaseUrl !== gatewayUrls[0]) {
@@ -328,7 +336,8 @@ async function getBlockHeightFromTxId(txId) {
                     console.log(`🔍 [getBlockHeightFromTxId] Trying: ${requestUrl}`);
                 }
                 arweaveResponse = await axios.get(requestUrl, {
-                    timeout: 10000 // 10 second timeout
+                    timeout: 10000,
+                    httpAgent, httpsAgent  // MEMORY LEAK FIX: Close sockets after use
                 });
                 if (gatewayBaseUrl !== gatewayUrls[0]) {
                     console.log(`✅ Using fallback gateway for tx status: ${gatewayBaseUrl}`);
@@ -444,7 +453,9 @@ const getCurrentBlockHeight = async () => {
                     ? `${gatewayBaseUrl}/info`
                     : `${gatewayBaseUrl}/ar-io/info`;
                 
-                response = await axios.get(infoEndpoint);
+                response = await axios.get(infoEndpoint, {
+                    httpAgent, httpsAgent  // MEMORY LEAK FIX: Close sockets after use
+                });
                 if (gatewayBaseUrl !== gatewayUrls[0]) {
                     console.log(`✅ Using fallback gateway for info: ${gatewayBaseUrl}`);
                 }

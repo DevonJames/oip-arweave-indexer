@@ -227,6 +227,9 @@ let graphqlClients = new Map();
 let graphqlClientsCreatedAt = Date.now();
 const GRAPHQL_CLIENT_MAX_AGE = parseInt(process.env.GRAPHQL_CLIENT_RECREATION_INTERVAL) || 1800000; // 30 minutes default
 
+// MEMORY LEAK FIX: Import node-fetch at top level, not inside closures
+const nodeFetch = require('node-fetch');
+
 function createGraphQLClients() {
     const endpoints = getGraphQLEndpoints();
     const clients = new Map();
@@ -239,7 +242,7 @@ function createGraphQLClients() {
         clients.set(endpoint, new GraphQLClient(endpoint, {
             fetch: (url, options = {}) => {
                 // Use node-fetch with our custom agents
-                const nodeFetch = require('node-fetch');
+                // Agent is captured in closure, nodeFetch is module-level
                 return nodeFetch(url, {
                     ...options,
                     agent: agent
@@ -1066,7 +1069,8 @@ async function searchTemplateByTxId(templateTxid) {
         return null;
     }
     
-    template = searchResponse.hits.hits[0]._source;
+    // FIX: Use const to prevent global scope leak
+    const template = searchResponse.hits.hits[0]._source;
     searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
     // console.log('12345 template:', template);
     return template
@@ -5596,7 +5600,8 @@ async function keepDBUpToDate(remapTemplates) {
         let { qtyOrganizationsInDB, maxArweaveOrgBlockInDB, organizationsInDB } = await getOrganizationsInDB();
         
         // MEMORY LEAK FIX: Only store counts and block heights, not full record data
-        foundInDB = {
+        // FIX: Use const to prevent global scope leak
+        const foundInDB = {
             qtyRecordsInDB: qtyCreatorsInDB,
             maxArweaveBlockInDB: maxArweaveCreatorRegBlockInDB
         };
@@ -5736,7 +5741,17 @@ async function keepDBUpToDate(remapTemplates) {
         infoLog(`🏁 [keepDBUpToDate] CYCLE ENDED (${Math.round(cycleDuration/1000)}s, CPU: ${cpuPercent}%)`);
         debugLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
         
-        // MEMORY LEAK FIX: Trigger GC if available (optional - gc() is not available by default)
+        // MEMORY LEAK FIX: Aggressively close all sockets on HTTP agents
+        // This prevents socket accumulation from GraphQL queries
+        try {
+            graphqlHttpAgent.destroy();
+            graphqlHttpsAgent.destroy();
+            debugLog('🔌 [keepDBUpToDate] Destroyed HTTP agent sockets');
+        } catch (e) {
+            // Ignore errors - agents might already be destroyed
+        }
+        
+        // MEMORY LEAK FIX: Trigger GC if available
         if (global.gc) {
             global.gc();
         }

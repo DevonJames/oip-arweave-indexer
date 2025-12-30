@@ -6,6 +6,14 @@
  */
 
 const axios = require('axios');
+const https = require('https');
+
+// MEMORY LEAK FIX: Create agent that closes sockets after use
+const httpsAgent = new https.Agent({
+    keepAlive: false,  // Close sockets after each request
+    maxSockets: 5,
+    timeout: 15000
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HARDCODED TOP 20 GATEWAYS
@@ -75,7 +83,8 @@ async function fetchLiveGateways() {
         try {
             const response = await axios.get(endpoint, {
                 timeout: 10000,
-                headers: { 'Accept': 'application/json' }
+                headers: { 'Accept': 'application/json' },
+                httpsAgent: httpsAgent  // MEMORY LEAK FIX: Close socket after use
             });
             
             // Handle different response formats

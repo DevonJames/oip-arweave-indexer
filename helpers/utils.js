@@ -38,6 +38,16 @@ const {crypto, createHash} = require('crypto');
 const jwt = require('jsonwebtoken');
 const base64url = require('base64url');
 const templatesConfig = require('../config/templates.config.js');
+
+// MEMORY LEAK FIX: Import at top level, not inside functions
+// Dynamic requires inside functions can cause module cache issues
+let searchRecordInDB = null;
+const getSearchRecordInDB = () => {
+    if (!searchRecordInDB) {
+        searchRecordInDB = require('./elasticsearch').searchRecordInDB;
+    }
+    return searchRecordInDB;
+};
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 dotenv.config();
 
@@ -212,8 +222,8 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
         return record;
     }
 
-    // Import searchRecordInDB for on-demand record fetching
-    const { searchRecordInDB } = require('./elasticsearch');
+    // Get searchRecordInDB lazily (avoids circular dependency issues)
+    const searchRecordInDB = getSearchRecordInDB();
 
     // Get the record's DID to track visits
     const recordDid = record.oip?.did || record.oip?.didTx;

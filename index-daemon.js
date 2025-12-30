@@ -1327,6 +1327,28 @@ initializeIndices()
             } else {
                 console.log(`ℹ️  Periodic memory cleanup disabled (MEMORY_CLEANUP_INTERVAL_HOURS=0)`);
             }
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // MEMORY LEAK FIX: Periodic Socket Cleanup (every 30 minutes)
+            // Destroys accumulated sockets from HTTP agents to prevent socket leak
+            // ═══════════════════════════════════════════════════════════════════
+            const SOCKET_CLEANUP_INTERVAL = 30 * 60 * 1000; // 30 minutes
+            setInterval(() => {
+                try {
+                    const beforeHandles = process._getActiveHandles().filter(h => h.constructor.name === 'Socket').length;
+                    
+                    // Destroy and recreate HTTP agents
+                    httpAgent.destroy();
+                    httpsAgent.destroy();
+                    
+                    // Log socket count
+                    const afterHandles = process._getActiveHandles().filter(h => h.constructor.name === 'Socket').length;
+                    console.log(`🔌 [Socket Cleanup] Destroyed agents. Sockets: ${beforeHandles} → ${afterHandles}`);
+                } catch (error) {
+                    console.error('❌ [Socket Cleanup] Error:', error.message);
+                }
+            }, SOCKET_CLEANUP_INTERVAL);
+            console.log(`✅ Periodic socket cleanup scheduled (every 30 minutes)`);
 
             // ═══════════════════════════════════════════════════════════════════
             // keepDBUpToDate (Arweave indexing)
