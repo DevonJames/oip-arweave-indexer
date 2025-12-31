@@ -895,36 +895,58 @@ async function indexDocument(index, id, body) {
 }
 
 // Process record to convert JSON strings back to arrays for Elasticsearch compatibility
+// Also stringify objects in fields that expect strings (defensive fix for type mismatches)
 const processRecordForElasticsearch = (record) => {
     const processedRecord = JSON.parse(JSON.stringify(record)); // Deep clone
     
-    // Recursively convert JSON string arrays back to actual arrays for Elasticsearch
-    const convertJSONStringsToArrays = (obj) => {
+    // Check if an object is a "leaf" object (contains only primitive values)
+    // These are the ones that likely should have been stringified
+    const isLeafObject = (obj) => {
+        if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) return false;
+        return Object.values(obj).every(v => 
+            v === null || 
+            typeof v === 'string' || 
+            typeof v === 'number' || 
+            typeof v === 'boolean'
+        );
+    };
+    
+    // Recursively process the record data
+    const processValue = (obj, depth = 0) => {
         if (obj === null || obj === undefined) return obj;
         
+        // Convert JSON string arrays back to actual arrays
         if (typeof obj === 'string' && obj.startsWith('[') && obj.endsWith(']')) {
             try {
-                // Try to parse as JSON array
                 const parsed = JSON.parse(obj);
                 if (Array.isArray(parsed)) {
                     return parsed;
                 }
             } catch (e) { 
-                // If parsing fails, return original string
                 return obj;
             }
         }
         
-        if (typeof obj === 'object' && !Array.isArray(obj)) {
-            const converted = {};
-            for (const [key, value] of Object.entries(obj)) {
-                converted[key] = convertJSONStringsToArrays(value);
-            }
-            return converted;
+        // Handle arrays
+        if (Array.isArray(obj)) {
+            return obj.map(item => processValue(item, depth + 1));
         }
         
-        if (Array.isArray(obj)) {
-            return obj.map(item => convertJSONStringsToArrays(item));
+        // Handle objects
+        if (typeof obj === 'object') {
+            // If this is a leaf object at depth > 1 (inside a record type's data),
+            // stringify it to prevent ES mapping conflicts
+            // Depth 0 = data, Depth 1 = recordType (e.g., exerciseResult), Depth 2+ = fields
+            if (depth >= 2 && isLeafObject(obj)) {
+                debugLog(`      🔧 [processRecord] Stringifying leaf object at depth ${depth}: ${JSON.stringify(obj).substring(0, 50)}...`);
+                return JSON.stringify(obj);
+            }
+            
+            const converted = {};
+            for (const [key, value] of Object.entries(obj)) {
+                converted[key] = processValue(value, depth + 1);
+            }
+            return converted;
         }
         
         return obj;
@@ -932,7 +954,7 @@ const processRecordForElasticsearch = (record) => {
     
     // Apply conversion to the entire record data
     if (processedRecord.data) {
-        processedRecord.data = convertJSONStringsToArrays(processedRecord.data);
+        processedRecord.data = processValue(processedRecord.data, 0);
     }
     
     return processedRecord;
