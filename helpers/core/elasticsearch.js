@@ -898,42 +898,31 @@ async function indexDocument(index, id, body) {
 // Handles type mismatches from old GUN records created before canonical template enforcement:
 // 1. JSON string arrays → actual arrays (e.g., "[1,2,3]" → [1,2,3])
 // 2. JSON string objects → actual objects (e.g., '{"key":"value"}' → {key:"value"})
-// 3. Leaf objects in string fields → stringified (e.g., {reps:10} → '{"reps":10}')
+// 3. Objects in string fields → stringified (e.g., {reps:10} → '{"reps":10}')
 const processRecordForElasticsearch = (record) => {
     const processedRecord = JSON.parse(JSON.stringify(record)); // Deep clone
     
     // Fields known to be string type in templates but often stored as objects in old records
     // Add field names here as we discover them
-    const knownStringFields = ['set_details', 'notes', 'description', 'metadata'];
-    
-    // Check if an object is a "leaf" object (contains only primitive values)
-    const isLeafObject = (obj) => {
-        if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) return false;
-        return Object.values(obj).every(v => 
-            v === null || 
-            typeof v === 'string' || 
-            typeof v === 'number' || 
-            typeof v === 'boolean'
-        );
-    };
+    const knownStringFields = ['set_details', 'notes', 'description', 'metadata', 'calendar_preferences'];
     
     // Recursively process the record data
     const processValue = (obj, depth = 0, parentKey = '') => {
         if (obj === null || obj === undefined) return obj;
         
         // Convert JSON strings back to their parsed form (arrays or objects)
-        // This fixes: old records with stringified objects in object-type fields
+        // BUT only at shallow depths (depth < 2) - deeper strings should stay as strings
         if (typeof obj === 'string') {
             const trimmed = obj.trim();
-            // Check if it looks like JSON array or object
-            if ((trimmed.startsWith('[') && trimmed.endsWith(']')) ||
-                (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+            // Only parse JSON at depth 0-1 (data level and recordType level)
+            // Deeper strings that look like JSON should stay as strings
+            if (depth < 2 && 
+                ((trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+                 (trimmed.startsWith('{') && trimmed.endsWith('}')))) {
                 try {
                     const parsed = JSON.parse(trimmed);
-                    // Successfully parsed - return the parsed value (recursively process it too)
                     return processValue(parsed, depth, parentKey);
                 } catch (e) { 
-                    // Not valid JSON, return original string
                     return obj;
                 }
             }
@@ -947,10 +936,16 @@ const processRecordForElasticsearch = (record) => {
         
         // Handle objects
         if (typeof obj === 'object') {
-            // Stringify leaf objects that are in known string fields or at deep nesting
-            // This fixes: old records with object values in string-type fields (like set_details)
-            if (isLeafObject(obj) && (knownStringFields.includes(parentKey) || depth >= 3)) {
-                debugLog(`      🔧 [processRecord] Stringifying leaf object in field '${parentKey}': ${JSON.stringify(obj).substring(0, 50)}...`);
+            // Stringify objects that are in known string fields
+            // This fixes: old records with object values in string-type fields
+            if (knownStringFields.includes(parentKey)) {
+                debugLog(`      🔧 [processRecord] Stringifying object in string field '${parentKey}': ${JSON.stringify(obj).substring(0, 50)}...`);
+                return JSON.stringify(obj);
+            }
+            
+            // Also stringify any object at depth >= 3 (deeply nested = likely should be a string)
+            if (depth >= 3) {
+                debugLog(`      🔧 [processRecord] Stringifying deep object at depth ${depth}: ${JSON.stringify(obj).substring(0, 50)}...`);
                 return JSON.stringify(obj);
             }
             
