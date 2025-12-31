@@ -2,7 +2,9 @@
  * Socket Manager Module for streaming responses
  */
 const WebSocket = require('ws');
-const { ongoingScrapes, ongoingDialogues } = require('../helpers/sharedState');
+// CRITICAL FIX: Use the same sharedState as Alexandria routes
+// Previously used ../helpers/sharedState which is a DIFFERENT Map!
+const { ongoingScrapes, ongoingDialogues } = require('../helpers/core/sharedState');
 const { getBaseUrl } = require('../helpers/urlHelper');
 
 // Store active connections
@@ -122,7 +124,7 @@ function closeConnections(id) {
  */
 function addClient(id, client) {
     // IMPORTANT FIX: Import the shared Map from your application
-    const ongoingDialogues = require('../helpers/sharedState').ongoingDialogues;
+    const ongoingDialogues = require('../helpers/core/sharedState').ongoingDialogues;
     
     if (!ongoingDialogues.has(id)) {
         ongoingDialogues.set(id, {
@@ -144,7 +146,7 @@ function addClient(id, client) {
  */
 function removeClient(id, client) {
     // IMPORTANT FIX: Import the shared Map from your application
-    const ongoingDialogues = require('../helpers/sharedState').ongoingDialogues;
+    const ongoingDialogues = require('../helpers/core/sharedState').ongoingDialogues;
     
     if (!ongoingDialogues.has(id)) {
         return;

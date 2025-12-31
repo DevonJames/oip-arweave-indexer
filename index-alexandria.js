@@ -182,6 +182,9 @@ const corsOptions = {
             'https://alexandria.io',
             'https://www.alexandria.io',
             'https://api.alexandria.io',
+            'https://app.fitnessally.io',
+            'https://fitnessally.io',
+            'https://www.fitnessally.io',
         ];
         
         if (process.env.NODE_ENV === 'development' && origin.includes('localhost')) {
