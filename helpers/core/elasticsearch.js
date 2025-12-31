@@ -894,13 +894,19 @@ async function indexDocument(index, id, body) {
     }
 }
 
-// Process record to convert JSON strings back to arrays for Elasticsearch compatibility
-// Also stringify objects in fields that expect strings (defensive fix for type mismatches)
+// Process record to normalize data types for Elasticsearch compatibility
+// Handles type mismatches from old GUN records created before canonical template enforcement:
+// 1. JSON string arrays → actual arrays (e.g., "[1,2,3]" → [1,2,3])
+// 2. JSON string objects → actual objects (e.g., '{"key":"value"}' → {key:"value"})
+// 3. Leaf objects in string fields → stringified (e.g., {reps:10} → '{"reps":10}')
 const processRecordForElasticsearch = (record) => {
     const processedRecord = JSON.parse(JSON.stringify(record)); // Deep clone
     
+    // Fields known to be string type in templates but often stored as objects in old records
+    // Add field names here as we discover them
+    const knownStringFields = ['set_details', 'notes', 'description', 'metadata'];
+    
     // Check if an object is a "leaf" object (contains only primitive values)
-    // These are the ones that likely should have been stringified
     const isLeafObject = (obj) => {
         if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) return false;
         return Object.values(obj).every(v => 
@@ -912,39 +918,45 @@ const processRecordForElasticsearch = (record) => {
     };
     
     // Recursively process the record data
-    const processValue = (obj, depth = 0) => {
+    const processValue = (obj, depth = 0, parentKey = '') => {
         if (obj === null || obj === undefined) return obj;
         
-        // Convert JSON string arrays back to actual arrays
-        if (typeof obj === 'string' && obj.startsWith('[') && obj.endsWith(']')) {
-            try {
-                const parsed = JSON.parse(obj);
-                if (Array.isArray(parsed)) {
-                    return parsed;
+        // Convert JSON strings back to their parsed form (arrays or objects)
+        // This fixes: old records with stringified objects in object-type fields
+        if (typeof obj === 'string') {
+            const trimmed = obj.trim();
+            // Check if it looks like JSON array or object
+            if ((trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+                (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    // Successfully parsed - return the parsed value (recursively process it too)
+                    return processValue(parsed, depth, parentKey);
+                } catch (e) { 
+                    // Not valid JSON, return original string
+                    return obj;
                 }
-            } catch (e) { 
-                return obj;
             }
+            return obj;
         }
         
         // Handle arrays
         if (Array.isArray(obj)) {
-            return obj.map(item => processValue(item, depth + 1));
+            return obj.map(item => processValue(item, depth + 1, parentKey));
         }
         
         // Handle objects
         if (typeof obj === 'object') {
-            // If this is a leaf object at depth > 1 (inside a record type's data),
-            // stringify it to prevent ES mapping conflicts
-            // Depth 0 = data, Depth 1 = recordType (e.g., exerciseResult), Depth 2+ = fields
-            if (depth >= 2 && isLeafObject(obj)) {
-                debugLog(`      🔧 [processRecord] Stringifying leaf object at depth ${depth}: ${JSON.stringify(obj).substring(0, 50)}...`);
+            // Stringify leaf objects that are in known string fields or at deep nesting
+            // This fixes: old records with object values in string-type fields (like set_details)
+            if (isLeafObject(obj) && (knownStringFields.includes(parentKey) || depth >= 3)) {
+                debugLog(`      🔧 [processRecord] Stringifying leaf object in field '${parentKey}': ${JSON.stringify(obj).substring(0, 50)}...`);
                 return JSON.stringify(obj);
             }
             
             const converted = {};
             for (const [key, value] of Object.entries(obj)) {
-                converted[key] = processValue(value, depth + 1);
+                converted[key] = processValue(value, depth + 1, key);
             }
             return converted;
         }
@@ -954,7 +966,7 @@ const processRecordForElasticsearch = (record) => {
     
     // Apply conversion to the entire record data
     if (processedRecord.data) {
-        processedRecord.data = processValue(processedRecord.data, 0);
+        processedRecord.data = processValue(processedRecord.data, 0, '');
     }
     
     return processedRecord;
