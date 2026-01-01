@@ -2663,11 +2663,11 @@ async function getRecords(queryParams) {
         }
         
         // DEBUG: For meal plans, show sample dates
-        if (recordType === 'mealPlan' && records.length > 0) {
+        if ((recordType === 'mealPlan' || recordType === 'mealPlanDaily') && records.length > 0) {
             const sampleMealPlans = records.slice(0, 5);
-            console.log(`🍽️  [DEBUG] Sample mealPlan dates from ES:`);
+            console.log(`🍽️  [DEBUG] Sample ${recordType} dates from ES:`);
             sampleMealPlans.forEach(r => {
-                const mealDate = r.data?.mealPlan?.meal_date;
+                const mealDate = r.data?.[recordType]?.meal_date;
                 const did = r.oip?.did;
                 console.log(`   - ${did}: meal_date = ${mealDate}`);
             });
@@ -2741,6 +2741,9 @@ async function getRecords(queryParams) {
                 } else if (recordType === 'mealPlan') {
                     recordDate = record.data?.mealPlan?.meal_date;
                     dateFieldName = 'data.mealPlan.meal_date';
+                } else if (recordType === 'mealPlanDaily') {
+                    recordDate = record.data?.mealPlanDaily?.meal_date;
+                    dateFieldName = 'data.mealPlanDaily.meal_date';
                 } else {
                     recordDate = record.data?.basic?.date;
                     dateFieldName = 'data.basic.date';
@@ -3458,8 +3461,8 @@ async function getRecords(queryParams) {
                 }
 
                 if (fieldToSortBy === 'scheduleDate') {
-                    // Only allow 'scheduleDate' sorting when recordType is mealPlan or workoutSchedule
-                    if (recordType === 'mealPlan' || recordType === 'workoutSchedule') {
+                    // Only allow 'scheduleDate' sorting when recordType is mealPlan, mealPlanDaily, or workoutSchedule
+                    if (recordType === 'mealPlan' || recordType === 'mealPlanDaily' || recordType === 'workoutSchedule') {
                         recordsToSort.sort((a, b) => {
                             let aDate, bDate;
                             
@@ -3467,6 +3470,9 @@ async function getRecords(queryParams) {
                             if (recordType === 'mealPlan') {
                                 aDate = a.data?.mealPlan?.meal_date;
                                 bDate = b.data?.mealPlan?.meal_date;
+                            } else if (recordType === 'mealPlanDaily') {
+                                aDate = a.data?.mealPlanDaily?.meal_date;
+                                bDate = b.data?.mealPlanDaily?.meal_date;
                             } else if (recordType === 'workoutSchedule') {
                                 aDate = a.data?.workoutSchedule?.scheduled_date;
                                 bDate = b.data?.workoutSchedule?.scheduled_date;
@@ -3486,7 +3492,7 @@ async function getRecords(queryParams) {
                         });
                         if (!silent) console.log(`sorted by scheduled date (${order}) for recordType=${recordType}`);
                     } else {
-                        if (!silent) console.log(`Warning: sortBy=scheduledDate specified but recordType is '${recordType}' (must be 'mealPlan' or 'workoutSchedule') - skipping scheduledDate sort`);
+                        if (!silent) console.log(`Warning: sortBy=scheduledDate specified but recordType is '${recordType}' (must be 'mealPlan', 'mealPlanDaily', or 'workoutSchedule') - skipping scheduledDate sort`);
                     }
                 }
             }
