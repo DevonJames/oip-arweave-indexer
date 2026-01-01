@@ -875,7 +875,8 @@ const processRecordForElasticsearch = (record) => {
     
     // Fields known to be string type in templates but often stored as objects in old records
     // Add field names here as we discover them
-    const knownStringFields = ['set_details', 'notes', 'description', 'metadata', 'calendar_preferences'];
+    // Note: 'notes' is NOT in this list because data.notes is a record TYPE, not a string field
+    const knownStringFields = ['set_details', 'description', 'metadata', 'calendar_preferences'];
     
     // Recursively process the record data
     const processValue = (obj, depth = 0, parentKey = '') => {
@@ -908,8 +909,9 @@ const processRecordForElasticsearch = (record) => {
         // Handle objects
         if (typeof obj === 'object') {
             // Stringify objects that are in known string fields
-            // This fixes: old records with object values in string-type fields
-            if (knownStringFields.includes(parentKey)) {
+            // BUT only at depth >= 2 (inside a record type, not the record type itself)
+            // depth 0 = data, depth 1 = recordType (e.g., userFitnessProfile), depth 2+ = fields
+            if (depth >= 2 && knownStringFields.includes(parentKey)) {
                 console.log(`      🔧 [processRecord] Stringifying object in string field '${parentKey}': ${JSON.stringify(obj).substring(0, 50)}...`);
                 return JSON.stringify(obj);
             }
