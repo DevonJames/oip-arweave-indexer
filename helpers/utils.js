@@ -110,7 +110,9 @@ const validateTemplateFields = (fieldsJson) => {
                 return false;
             }
 
-            lastKeyWasEnum = fields[key] === "enum";
+            // Check for enum types (including "repeated enum")
+            const fieldType = fields[key];
+            lastKeyWasEnum = fieldType === "enum" || fieldType === "repeated enum";
         }
 
         return true;

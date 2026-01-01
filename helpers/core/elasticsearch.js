@@ -899,61 +899,100 @@ async function indexDocument(index, id, body) {
 // 1. JSON string arrays → actual arrays (e.g., "[1,2,3]" → [1,2,3])
 // 2. JSON string objects → actual objects (e.g., '{"key":"value"}' → {key:"value"})
 // 3. Objects in string fields → stringified (e.g., {reps:10} → '{"reps":10}')
-const processRecordForElasticsearch = (record) => {
+// 
+// templateFields: optional object mapping field names to their expected types
+// e.g., { meal_type: "repeated enum", servings: "repeated float", metadata: "string" }
+const processRecordForElasticsearch = (record, templateFields = null) => {
     const processedRecord = JSON.parse(JSON.stringify(record)); // Deep clone
     
-    // Fields known to be string type in templates but often stored as objects in old records
-    // Add field names here as we discover them
-    // Note: 'notes' is NOT in this list because data.notes is a record TYPE, not a string field
-    const knownStringFields = ['set_details', 'description', 'metadata', 'calendar_preferences'];
+    // Helper to check if a template type expects an array
+    const expectsArray = (fieldType) => {
+        if (!fieldType) return false;
+        return fieldType.startsWith('repeated');
+    };
+    
+    // Helper to check if a template type expects a simple string (not object/array)
+    const expectsString = (fieldType) => {
+        if (!fieldType) return false;
+        // These are string types that should NOT be parsed as JSON objects
+        return fieldType === 'string' || fieldType === 'dref' || fieldType === 'txid';
+    };
+    
+    // Helper to check if a template type expects an object
+    const expectsObject = (fieldType) => {
+        if (!fieldType) return false;
+        // Complex types that expect nested structures
+        return fieldType === 'object' || fieldType === 'json' || fieldType === 'map';
+    };
     
     // Recursively process the record data
-    const processValue = (obj, depth = 0, parentKey = '') => {
+    const processValue = (obj, fieldName = '', recordTypeFields = null) => {
         if (obj === null || obj === undefined) return obj;
         
-        // Convert JSON strings back to their parsed form (arrays or objects)
-        // BUT only at shallow depths (depth < 2) - deeper strings should stay as strings
+        const expectedType = recordTypeFields?.[fieldName];
+        
+        // Handle strings - might need to parse to array/object based on template
         if (typeof obj === 'string') {
             const trimmed = obj.trim();
-            // Only parse JSON at depth 0-1 (data level and recordType level)
-            // Deeper strings that look like JSON should stay as strings
-            if (depth < 2 && 
-                ((trimmed.startsWith('[') && trimmed.endsWith(']')) ||
-                 (trimmed.startsWith('{') && trimmed.endsWith('}')))) {
-                try {
-                    const parsed = JSON.parse(trimmed);
-                    return processValue(parsed, depth, parentKey);
-                } catch (e) { 
-                    return obj;
+            
+            // If template says it should be an array (repeated type) and we have a JSON array string
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                // Always parse arrays - GUN stringifies them for compatibility
+                // If template expects array (repeated) OR we don't have template info, parse it
+                if (!expectedType || expectsArray(expectedType)) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (Array.isArray(parsed)) {
+                            return processValue(parsed, fieldName, recordTypeFields);
+                        }
+                    } catch (e) { 
+                        // Not valid JSON, keep as string
+                    }
                 }
+                // Template expects string but got array string - keep as string
+                return obj;
             }
+            
+            // If template says it should be an object and we have a JSON object string
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                // Only parse if template expects object, OR if we don't have template info and it's a recognized object field
+                if (expectedType && expectsObject(expectedType)) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        return processValue(parsed, fieldName, recordTypeFields);
+                    } catch (e) { 
+                        return obj;
+                    }
+                }
+                // Template expects string (or we have no template) - keep as string
+                return obj;
+            }
+            
             return obj;
         }
         
         // Handle arrays
         if (Array.isArray(obj)) {
-            return obj.map(item => processValue(item, depth + 1, parentKey));
+            // If template expects a string but we have an array, stringify it
+            if (expectedType && expectsString(expectedType)) {
+                debugLog(`      🔧 [processRecord] Template expects string for '${fieldName}', stringifying array`);
+                return JSON.stringify(obj);
+            }
+            return obj.map((item, idx) => processValue(item, fieldName, recordTypeFields));
         }
         
         // Handle objects
         if (typeof obj === 'object') {
-            // Stringify objects that are in known string fields
-            // BUT only at depth >= 2 (inside a record type, not the record type itself)
-            // depth 0 = data, depth 1 = recordType (e.g., userFitnessProfile), depth 2+ = fields
-            if (depth >= 2 && knownStringFields.includes(parentKey)) {
-                debugLog(`      🔧 [processRecord] Stringifying object in string field '${parentKey}': ${JSON.stringify(obj).substring(0, 50)}...`);
+            // If template expects a string but we have an object, stringify it
+            if (expectedType && expectsString(expectedType)) {
+                debugLog(`      🔧 [processRecord] Template expects string for '${fieldName}', stringifying object: ${JSON.stringify(obj).substring(0, 50)}...`);
                 return JSON.stringify(obj);
             }
             
-            // Also stringify any object at depth >= 3 (deeply nested = likely should be a string)
-            if (depth >= 3) {
-                debugLog(`      🔧 [processRecord] Stringifying deep object at depth ${depth}: ${JSON.stringify(obj).substring(0, 50)}...`);
-                return JSON.stringify(obj);
-            }
-            
+            // Recursively process object properties
             const converted = {};
             for (const [key, value] of Object.entries(obj)) {
-                converted[key] = processValue(value, depth + 1, key);
+                converted[key] = processValue(value, key, recordTypeFields);
             }
             return converted;
         }
@@ -963,11 +1002,77 @@ const processRecordForElasticsearch = (record) => {
     
     // Apply conversion to the entire record data
     if (processedRecord.data) {
-        processedRecord.data = processValue(processedRecord.data, 0, '');
+        // Process each record type section with its template fields
+        for (const [recordType, recordTypeData] of Object.entries(processedRecord.data)) {
+            if (recordTypeData && typeof recordTypeData === 'object' && !Array.isArray(recordTypeData)) {
+                // Get template fields for this record type if available
+                const fieldsForType = templateFields?.[recordType] || templateFields || null;
+                processedRecord.data[recordType] = processValue(recordTypeData, recordType, fieldsForType);
+            } else {
+                processedRecord.data[recordType] = processValue(recordTypeData, recordType, null);
+            }
+        }
     }
     
     return processedRecord;
 };
+
+// Cache for template field types (recordType -> fields map)
+const templateFieldsCache = new Map();
+
+// Get template fields for a record type (cached)
+async function getTemplateFieldsForRecordType(recordType) {
+    // Check cache first
+    if (templateFieldsCache.has(recordType)) {
+        return templateFieldsCache.get(recordType);
+    }
+    
+    try {
+        const templateTxid = getTemplateTxidByName(recordType);
+        if (!templateTxid) {
+            templateFieldsCache.set(recordType, null);
+            return null;
+        }
+        
+        const template = await searchTemplateByTxId(templateTxid);
+        if (!template?.data) {
+            templateFieldsCache.set(recordType, null);
+            return null;
+        }
+        
+        let fields = null;
+        if (template.data.fields) {
+            // Parse fields JSON string
+            const rawFields = typeof template.data.fields === 'string' 
+                ? JSON.parse(template.data.fields) 
+                : template.data.fields;
+            
+            // Build field name -> type map
+            fields = {};
+            for (const [key, value] of Object.entries(rawFields)) {
+                // Skip index_ fields and Values arrays
+                if (!key.startsWith('index_') && !key.endsWith('Values')) {
+                    fields[key] = value; // e.g., "repeated float", "string", "dref"
+                }
+            }
+        } else if (template.data.fieldsInTemplate) {
+            // Alternative format
+            fields = {};
+            for (const [key, value] of Object.entries(template.data.fieldsInTemplate)) {
+                if (!key.startsWith('index_') && !key.endsWith('Values')) {
+                    fields[key] = typeof value === 'object' ? value.type : value;
+                }
+            }
+        }
+        
+        templateFieldsCache.set(recordType, fields);
+        return fields;
+    } catch (e) {
+        debugLog(`      ⚠️ [processRecord] Failed to get template fields for ${recordType}: ${e.message}`);
+        templateFieldsCache.set(recordType, null);
+        return null;
+    }
+}
 
 const indexRecord = async (record) => {
     const recordId = record?.oip?.did || record?.oip?.didTx;
@@ -985,6 +1090,15 @@ const indexRecord = async (record) => {
             throw new Error('Record must have either oip.did or oip.didTx field');
         }
         
+        // Look up template fields for this record type to enable smart type conversion
+        let templateFields = null;
+        if (typeForIndex) {
+            templateFields = await getTemplateFieldsForRecordType(typeForIndex);
+            if (templateFields) {
+                debugLog(`      📋 [indexRecord] Got template fields for '${typeForIndex}': ${Object.keys(templateFields).length} fields`);
+            }
+        }
+        
         const existingRecord = await getElasticsearchClient().exists({
             index: 'records',
             id: recordId
@@ -993,7 +1107,7 @@ const indexRecord = async (record) => {
         if (existingRecord.body) {
             debugLog(`      🔄 [indexRecord] Found existing record, UPDATING...`);
             // Update existing record - process for Elasticsearch compatibility
-            const processedRecord = processRecordForElasticsearch(record);
+            const processedRecord = processRecordForElasticsearch(record, templateFields);
             
             const response = await getElasticsearchClient().update({
                 index: 'records',
@@ -1010,7 +1124,7 @@ const indexRecord = async (record) => {
         } else {
             debugLog(`      ➕ [indexRecord] CREATING new record...`);
             // Create new record - but first process any JSON string arrays for Elasticsearch compatibility
-            const processedRecord = processRecordForElasticsearch(record);
+            const processedRecord = processRecordForElasticsearch(record, templateFields);
             
             const response = await getElasticsearchClient().index({
                 index: 'records',
