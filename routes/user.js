@@ -1373,7 +1373,7 @@ router.post('/generate-calendar-jwt', authenticateToken, async (req, res) => {
                 email: userEmail,
                 publicKey: userPublicKey, // Required for GUN record decryption
                 scope: 'calendar-read-only',
-                allowedRecordTypes: ['workoutSchedule', 'mealPlan'],
+                allowedRecordTypes: ['workoutSchedule', 'mealPlan', 'mealPlanDaily'],
                 tokenType: 'calendar',
                 isAdmin: false
             },
@@ -1510,7 +1510,7 @@ router.post('/generate-calendar-token', authenticateToken, async (req, res) => {
                 email: email,
                 publicKey: publicKey, // ✅ Still needed for GUN decryption
                 scope: 'calendar-read-only',
-                allowedRecordTypes: ['workoutSchedule', 'mealPlan'],
+                allowedRecordTypes: ['workoutSchedule', 'mealPlan', 'mealPlanDaily'],
                 tokenType: 'calendar',
                 isAdmin: false
             },

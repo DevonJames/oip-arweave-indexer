@@ -101,7 +101,7 @@ function enforceCalendarScope(req, res, next) {
   
   // RESTRICTION 2: Limited record types (workoutSchedule, mealPlan only)
   const recordType = req.query.recordType || req.params.recordType;
-  const allowedTypes = req.user.allowedRecordTypes || ['workoutSchedule', 'mealPlan'];
+  const allowedTypes = req.user.allowedRecordTypes || ['workoutSchedule', 'mealPlan', 'mealPlanDaily'];
   
   if (recordType && !allowedTypes.includes(recordType)) {
     console.warn('⚠️ [Calendar Scope] Blocked access to record type:', recordType);
