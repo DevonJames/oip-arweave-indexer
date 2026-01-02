@@ -18,16 +18,20 @@
 
 const templatesConfig = require('../config/templates.config');
 const axios = require('axios');
+const https = require('https');
+
+// Use the centralized gateway registry for robust failover
+const { requestWithFailover } = require('./core/gateway-registry');
+
+// MEMORY LEAK FIX: Create agent that closes sockets after use
+const httpsAgent = new https.Agent({
+    keepAlive: false,
+    maxSockets: 5,
+    timeout: 15000
+});
 
 // Cache for canonical template fields to avoid repeated lookups
 const canonicalFieldsCache = new Map();
-
-// Arweave gateways for fetching templates not yet in ES
-const ARWEAVE_GATEWAYS = [
-    'https://arweave.net',
-    'https://ar-io.dev',
-    'https://g8way.io'
-];
 
 /**
  * Gets the canonical template txid for a template name from templates.config.js
@@ -52,16 +56,19 @@ function hasCanonicalTemplate(templateName) {
 /**
  * Fetches template data directly from Arweave by txid.
  * Used when the canonical template isn't in ES yet during initial sync.
+ * Uses the centralized gateway registry with 20+ gateways for robust failover.
  * 
  * @param {string} txid - Arweave transaction ID
  * @returns {Promise<object|null>} - Parsed template fields or null
  */
 async function fetchTemplateFromArweave(txid) {
-    for (const gateway of ARWEAVE_GATEWAYS) {
-        try {
-            const response = await axios.get(`${gateway}/${txid}`, {
-                timeout: 10000,
-                headers: { 'Accept': 'application/json' }
+    try {
+        // Use the centralized failover system
+        const fields = await requestWithFailover(async (gatewayUrl) => {
+            const response = await axios.get(`${gatewayUrl}/${txid}`, {
+                timeout: 15000,
+                headers: { 'Accept': 'application/json' },
+                httpsAgent: httpsAgent
             });
             
             if (response.data) {
@@ -70,27 +77,28 @@ async function fetchTemplateFromArweave(txid) {
                     : response.data;
                 
                 // Parse fields into our standard format
-                const fields = {};
+                const parsedFields = {};
                 for (const [fieldName, fieldValue] of Object.entries(rawFields)) {
                     if (fieldName.startsWith('index_') || fieldName.endsWith('Values')) {
                         continue;
                     }
-                    fields[fieldName] = {
+                    parsedFields[fieldName] = {
                         type: typeof fieldValue === 'object' ? fieldValue.type : fieldValue,
                         index: typeof fieldValue === 'object' ? fieldValue.index : rawFields[`index_${fieldName}`]
                     };
                 }
                 
-                console.log(`[CanonicalResolver] Fetched template ${txid} from ${gateway}`);
-                return fields;
+                console.log(`[CanonicalResolver] Fetched template ${txid} from ${gatewayUrl}`);
+                return parsedFields;
             }
-        } catch (error) {
-            console.warn(`[CanonicalResolver] Failed to fetch ${txid} from ${gateway}: ${error.message}`);
-            // Continue to next gateway
-        }
+            throw new Error('No data in response');
+        }, { maxRetries: 2, timeout: 20000 });
+        
+        return fields;
+    } catch (error) {
+        console.warn(`[CanonicalResolver] Failed to fetch ${txid} from all gateways: ${error.message}`);
+        return null;
     }
-    
-    return null;
 }
 
 /**
