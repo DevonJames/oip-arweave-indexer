@@ -84,25 +84,14 @@ async function validateNodeAdmin(req, res, next) {
         }
         
         // Sort matching organizations by date (most recent first)
-        // Use multiple date fields for robustness
         matchingOrgs.sort((a, b) => {
-            const dateA = a._source.data?.date || 
-                         a._source.oip?.indexedAt || 
-                         a._source.oip?.inArweaveBlock || 
-                         0;
-            const dateB = b._source.data?.date || 
-                         b._source.oip?.indexedAt || 
-                         b._source.oip?.inArweaveBlock || 
-                         0;
-            
-            // Convert dates to numbers for comparison
+            const dateA = a._source.data?.date || a._source.oip?.indexedAt || a._source.oip?.inArweaveBlock || 0;
+            const dateB = b._source.data?.date || b._source.oip?.indexedAt || b._source.oip?.inArweaveBlock || 0;
             const numA = typeof dateA === 'string' ? new Date(dateA).getTime() : Number(dateA);
             const numB = typeof dateB === 'string' ? new Date(dateB).getTime() : Number(dateB);
-            
-            return numB - numA; // Descending order (most recent first)
+            return numB - numA;
         });
         
-        // Use the most recent matching organization
         const organization = matchingOrgs[0]._source;
         
         if (matchingOrgs.length > 1) {
@@ -111,15 +100,13 @@ async function validateNodeAdmin(req, res, next) {
         }
         console.log('✅ Found organization for node:', organization.data?.name || organization.data?.orgHandle);
         
-        // Extract admin public keys from organization
-        // Try multiple locations in the organization object
-        let adminPublicKeys = 
-            organization.data?.adminPublicKeys || 
-            organization.oip?.organization?.adminPublicKeys ||
-            organization.adminPublicKeys;
+        // Extract admin public keys
+        let adminPublicKeys = organization.data?.adminPublicKeys || 
+                              organization.oip?.organization?.adminPublicKeys ||
+                              organization.adminPublicKeys;
         
         if (!adminPublicKeys) {
-            console.error('❌ No adminPublicKeys found in organization:', JSON.stringify(organization, null, 2));
+            console.error('❌ No adminPublicKeys found in organization');
             return res.status(500).json({
                 error: 'Configuration error',
                 message: 'Organization record is missing adminPublicKeys field'
@@ -128,16 +115,10 @@ async function validateNodeAdmin(req, res, next) {
         
         // Handle both array and string formats
         if (typeof adminPublicKeys === 'string') {
-            // Try parsing as JSON array
             try {
                 const parsed = JSON.parse(adminPublicKeys);
-                if (Array.isArray(parsed)) {
-                    adminPublicKeys = parsed;
-                } else {
-                    adminPublicKeys = [adminPublicKeys]; // Single key as string
-                }
+                adminPublicKeys = Array.isArray(parsed) ? parsed : [adminPublicKeys];
             } catch (e) {
-                // Not JSON, treat as single admin key string
                 adminPublicKeys = [adminPublicKeys];
             }
         }
@@ -146,16 +127,11 @@ async function validateNodeAdmin(req, res, next) {
             adminPublicKeys = adminPublicKeys ? [adminPublicKeys] : [];
         }
         
-        // Filter out any null/undefined values
         adminPublicKeys = adminPublicKeys.filter(key => key);
         
         console.log('🔑 Organization admin public keys:', adminPublicKeys.length, 'key(s)');
-        console.log('🔑 Admin keys:', adminPublicKeys.map(k => k.substring(0, 20) + '...').join(', '));
-        console.log('🔑 Requesting user public key:', user.publicKey?.substring(0, 20) + '...');
         
-        // Check if user's public key matches any admin public key
         const isAdmin = adminPublicKeys.some(adminKey => {
-            // Handle different string formats and trim whitespace
             const normalizedAdminKey = String(adminKey).trim();
             const normalizedUserKey = String(user.publicKey).trim();
             return normalizedAdminKey === normalizedUserKey;
@@ -173,7 +149,6 @@ async function validateNodeAdmin(req, res, next) {
         
         console.log('✅ User validated as node admin');
         
-        // Attach organization info to request for use in route handlers
         req.isNodeAdmin = true;
         req.nodeOrganization = organization;
         
@@ -188,16 +163,10 @@ async function validateNodeAdmin(req, res, next) {
     }
 }
 
-/**
- * Extract domain from URL
- */
 function extractDomain(url) {
     try {
-        // Remove protocol if present
         let domain = url.replace(/^https?:\/\//, '');
-        // Remove port if present
         domain = domain.replace(/:\d+.*$/, '');
-        // Remove path if present
         domain = domain.replace(/\/.*$/, '');
         return domain;
     } catch (error) {
@@ -205,50 +174,32 @@ function extractDomain(url) {
     }
 }
 
-/**
- * Extract base domain (without subdomain)
- * e.g., "oip.fitnessally.io" → "fitnessally.io"
- */
 function extractBaseDomain(domain) {
     const parts = domain.split('.');
     if (parts.length > 2) {
-        // Return last two parts (e.g., "fitnessally.io")
         return parts.slice(-2).join('.');
     }
     return domain;
 }
 
-/**
- * Check if organization webUrl matches the node domain
- */
 function doesOrgMatchDomain(orgWebUrl, nodeDomain) {
     if (!orgWebUrl || !nodeDomain) return false;
     
-    // Normalize both URLs
     const normalizedOrgUrl = extractDomain(orgWebUrl.toLowerCase());
     const normalizedNodeDomain = nodeDomain.toLowerCase();
     
-    // Exact match
-    if (normalizedOrgUrl === normalizedNodeDomain) {
-        return true;
-    }
+    if (normalizedOrgUrl === normalizedNodeDomain) return true;
     
-    // Base domain match (e.g., "oip.fitnessally.io" matches "fitnessally.io")
     const orgBaseDomain = extractBaseDomain(normalizedOrgUrl);
     const nodeBaseDomain = extractBaseDomain(normalizedNodeDomain);
     
-    if (orgBaseDomain === nodeBaseDomain) {
-        return true;
-    }
-    
-    return false;
+    return orgBaseDomain === nodeBaseDomain;
 }
 
 /**
  * GET /api/admin/node-analytics
  * 
- * Get comprehensive analytics for the OIP node
- * Requires: Organization admin authentication
+ * Get comprehensive analytics for the OIP node including FitnessAlly funnel tracking
  * 
  * Query params:
  * - timeRange: 24h, 7d, 30d, 90d, all (default: 30d)
@@ -262,45 +213,32 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
         console.log('📊 Node analytics request from admin:', req.user.email);
         console.log('📊 Time range:', timeRange);
         
-        // Calculate time filter
         const timeFilter = calculateTimeFilter(timeRange);
         console.log('📊 Time filter:', timeFilter || 'none (all time)');
         
-        // Build base query
-        const baseQuery = {
-            bool: {
-                must: []
-            }
-        };
-        
+        // Build base query for activity logs
+        const baseQuery = { bool: { must: [] } };
         if (timeFilter) {
-            baseQuery.bool.must.push({
-                range: {
-                    timestamp: { gte: timeFilter }
-                }
-            });
+            baseQuery.bool.must.push({ range: { timestamp: { gte: timeFilter } } });
         }
-        
         if (userId) {
-            baseQuery.bool.must.push({
-                term: { userId: userId }
-            });
+            baseQuery.bool.must.push({ term: { userId: userId } });
         }
         
-        // Get registered users count and list
+        // ==========================================
+        // 1. Get registered users with their publicKeys
+        // ==========================================
         const usersResult = await elasticClient.search({
             index: 'users',
             body: {
-                query: {
-                    match: { waitlistStatus: 'registered' }
-                },
+                query: { match: { waitlistStatus: 'registered' } },
                 size: 1000,
                 _source: ['email', 'publicKey', 'createdAt', 'subscriptionStatus', 'isAdmin', 'importedWallet']
             }
         });
         
         const registeredUsers = usersResult.hits.hits.map(hit => ({
-            userId: hit._id,
+            id: hit._id,
             email: hit._source.email,
             publicKey: hit._source.publicKey,
             createdAt: hit._source.createdAt,
@@ -309,76 +247,108 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
             importedWallet: hit._source.importedWallet || false
         }));
         
-        // Get total activity count
-        const totalActivityResult = await elasticClient.count({
-            index: 'user_activity',
-            body: {
-                query: baseQuery
+        // Create publicKey -> user mapping for later use
+        const publicKeyToUser = {};
+        registeredUsers.forEach(user => {
+            if (user.publicKey) {
+                publicKeyToUser[user.publicKey] = user;
             }
         });
         
-        // Get activity breakdown by request type
+        // ==========================================
+        // 2. Get FitnessAlly funnel data from GUN records
+        // ==========================================
+        const funnelData = await getFitnessAllyFunnelData(timeFilter, publicKeyToUser);
+        
+        // ==========================================
+        // 3. Get activity stats (existing functionality)
+        // ==========================================
+        const totalActivityResult = await elasticClient.count({
+            index: 'user_activity',
+            body: { query: baseQuery }
+        });
+        
+        // Activity breakdown by request type
         const activityByTypeResult = await elasticClient.search({
             index: 'user_activity',
             body: {
                 query: baseQuery,
                 size: 0,
                 aggs: {
-                    by_request_type: {
-                        terms: {
-                            field: 'requestType',
-                            size: 50
-                        }
-                    }
+                    by_request_type: { terms: { field: 'requestType', size: 50 } }
                 }
             }
         });
         
-        // Get activity by user (only authenticated users)
-        const activityByUserResult = await elasticClient.search({
-            index: 'user_activity',
-            body: {
-                query: {
-                    bool: {
-                        must: [
-                            ...baseQuery.bool.must,
-                            { exists: { field: 'userEmail' } } // Only include authenticated requests
-                        ]
-                    }
-                },
-                size: 0,
-                aggs: {
-                    by_user: {
-                        terms: {
-                            field: 'userEmail.keyword',
-                            size: 1000,
-                            order: { _count: 'desc' },
-                            min_doc_count: 1 // Only show users with at least 1 request
-                        },
-                        aggs: {
-                            by_request_type: {
-                                terms: {
-                                    field: 'requestType',
-                                    size: 20
-                                }
+        // Activity by user - try both keyword and direct field
+        let activityByUserResult;
+        try {
+            activityByUserResult = await elasticClient.search({
+                index: 'user_activity',
+                body: {
+                    query: {
+                        bool: {
+                            must: [
+                                ...baseQuery.bool.must,
+                                { exists: { field: 'userEmail' } }
+                            ]
+                        }
+                    },
+                    size: 0,
+                    aggs: {
+                        by_user: {
+                            terms: {
+                                field: 'userEmail', // Use direct field, not .keyword
+                                size: 1000,
+                                order: { _count: 'desc' },
+                                min_doc_count: 1
                             },
-                            avg_duration: {
-                                avg: {
-                                    field: 'duration'
-                                }
-                            },
-                            success_rate: {
-                                avg: {
-                                    field: 'success'
-                                }
+                            aggs: {
+                                by_request_type: { terms: { field: 'requestType', size: 20 } },
+                                by_record_type: { terms: { field: 'recordType', size: 20 } },
+                                avg_duration: { avg: { field: 'duration' } },
+                                success_rate: { avg: { field: 'success' } }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        } catch (err) {
+            console.log('⚠️ userEmail aggregation failed, trying userPublicKey:', err.message);
+            // Fallback to aggregating by userPublicKey
+            activityByUserResult = await elasticClient.search({
+                index: 'user_activity',
+                body: {
+                    query: {
+                        bool: {
+                            must: [
+                                ...baseQuery.bool.must,
+                                { exists: { field: 'userPublicKey' } }
+                            ]
+                        }
+                    },
+                    size: 0,
+                    aggs: {
+                        by_user: {
+                            terms: {
+                                field: 'userPublicKey',
+                                size: 1000,
+                                order: { _count: 'desc' },
+                                min_doc_count: 1
+                            },
+                            aggs: {
+                                by_request_type: { terms: { field: 'requestType', size: 20 } },
+                                by_record_type: { terms: { field: 'recordType', size: 20 } },
+                                avg_duration: { avg: { field: 'duration' } },
+                                success_rate: { avg: { field: 'success' } }
+                            }
+                        }
+                    }
+                }
+            });
+        }
         
-        // Get recent logins (within time range)
+        // Recent logins
         const loginQuery = {
             bool: {
                 must: [
@@ -387,14 +357,8 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
                 ]
             }
         };
-        
-        // Add time filter if specified
         if (timeFilter) {
-            loginQuery.bool.must.push({
-                range: {
-                    timestamp: { gte: timeFilter }
-                }
-            });
+            loginQuery.bool.must.push({ range: { timestamp: { gte: timeFilter } } });
         }
         
         const recentLoginsResult = await elasticClient.search({
@@ -407,7 +371,7 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
             }
         });
         
-        // Get most active endpoints
+        // Top endpoints
         const topEndpointsResult = await elasticClient.search({
             index: 'user_activity',
             body: {
@@ -415,46 +379,30 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
                 size: 0,
                 aggs: {
                     top_endpoints: {
-                        terms: {
-                            field: 'endpoint',
-                            size: 20,
-                            order: { _count: 'desc' }
-                        },
+                        terms: { field: 'endpoint', size: 20, order: { _count: 'desc' } },
                         aggs: {
-                            avg_duration: {
-                                avg: { field: 'duration' }
-                            },
-                            success_rate: {
-                                avg: { field: 'success' }
-                            }
+                            avg_duration: { avg: { field: 'duration' } },
+                            success_rate: { avg: { field: 'success' } }
                         }
                     }
                 }
             }
         });
         
-        // Get authenticated vs unauthenticated breakdown
+        // Auth breakdown
         const authBreakdownResult = await elasticClient.search({
             index: 'user_activity',
             body: {
                 query: baseQuery,
                 size: 0,
                 aggs: {
-                    authenticated: {
-                        filter: { exists: { field: 'userEmail' } }
-                    },
-                    unauthenticated: {
-                        filter: { 
-                            bool: {
-                                must_not: { exists: { field: 'userEmail' } }
-                            }
-                        }
-                    }
+                    authenticated: { filter: { exists: { field: 'userEmail' } } },
+                    unauthenticated: { filter: { bool: { must_not: { exists: { field: 'userEmail' } } } } }
                 }
             }
         });
         
-        // Get error rate over time
+        // Error rate over time
         const errorRateResult = await elasticClient.search({
             index: 'user_activity',
             body: {
@@ -467,17 +415,37 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
                             calendar_interval: timeRange === '24h' ? 'hour' : 'day'
                         },
                         aggs: {
-                            error_rate: {
-                                avg: {
-                                    script: {
-                                        source: "doc['success'].value ? 0 : 1"
-                                    }
-                                }
-                            }
+                            error_rate: { avg: { script: { source: "doc['success'].value ? 0 : 1" } } }
                         }
                     }
                 }
             }
+        });
+        
+        // ==========================================
+        // 4. Process user activity data
+        // ==========================================
+        const userBuckets = activityByUserResult.aggregations?.by_user?.buckets || [];
+        const byUserData = userBuckets.map(bucket => {
+            // Check if bucket.key is email or publicKey
+            const isPublicKey = bucket.key.length === 66 && /^[0-9a-f]+$/i.test(bucket.key);
+            const userInfo = isPublicKey ? publicKeyToUser[bucket.key] : null;
+            
+            return {
+                email: isPublicKey ? (userInfo?.email || 'unknown') : bucket.key,
+                publicKey: isPublicKey ? bucket.key : (userInfo?.publicKey || null),
+                totalRequests: bucket.doc_count,
+                avgDuration: Math.round(bucket.avg_duration?.value || 0),
+                successRate: ((bucket.success_rate?.value || 0) * 100).toFixed(2) + '%',
+                requestBreakdown: (bucket.by_request_type?.buckets || []).map(tb => ({
+                    type: tb.key,
+                    count: tb.doc_count
+                })),
+                recordTypeBreakdown: (bucket.by_record_type?.buckets || []).map(tb => ({
+                    type: tb.key,
+                    count: tb.doc_count
+                }))
+            };
         });
         
         // Log analytics summary
@@ -485,11 +453,13 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
         console.log(`   - Total requests: ${totalActivityResult.count}`);
         console.log(`   - Authenticated: ${authBreakdownResult.aggregations.authenticated.doc_count}`);
         console.log(`   - Unauthenticated: ${authBreakdownResult.aggregations.unauthenticated.doc_count}`);
-        console.log(`   - Active users: ${activityByUserResult.aggregations.by_user.buckets.length}`);
+        console.log(`   - Active users from activity logs: ${byUserData.length}`);
+        console.log(`   - Active users from funnel: ${funnelData.userFunnel.length}`);
         console.log(`   - Recent logins: ${recentLoginsResult.hits.hits.length}`);
-        console.log(`   - Top request types:`, activityByTypeResult.aggregations.by_request_type.buckets.slice(0, 5).map(b => `${b.key}(${b.doc_count})`).join(', '));
         
-        // Compile response
+        // ==========================================
+        // 5. Compile final response
+        // ==========================================
         const response = {
             nodeInfo: {
                 baseUrl: process.env.PUBLIC_API_BASE_URL,
@@ -505,8 +475,23 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
             
             users: {
                 totalRegistered: registeredUsers.length,
-                activeUsers: activityByUserResult.aggregations.by_user.buckets.length, // Users who made requests in time range
-                users: registeredUsers
+                activeUsers: funnelData.userFunnel.length, // Users with actual GUN records
+                users: registeredUsers.map(u => ({
+                    userId: u.id,
+                    email: u.email,
+                    publicKey: u.publicKey,
+                    createdAt: u.createdAt,
+                    subscriptionStatus: u.subscriptionStatus,
+                    isAdmin: u.isAdmin,
+                    importedWallet: u.importedWallet
+                }))
+            },
+            
+            // NEW: FitnessAlly-specific funnel analytics
+            fitnessAllyFunnel: {
+                summary: funnelData.summary,
+                funnelStages: funnelData.funnelStages,
+                userFunnel: funnelData.userFunnel
             },
             
             activity: {
@@ -520,27 +505,18 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
                     percentage: ((bucket.doc_count / totalActivityResult.count) * 100).toFixed(1) + '%'
                 })),
                 
-                byUser: activityByUserResult.aggregations.by_user.buckets.map(bucket => ({
-                    email: bucket.key,
-                    totalRequests: bucket.doc_count,
-                    avgDuration: Math.round(bucket.avg_duration.value) || 0,
-                    successRate: (bucket.success_rate.value * 100).toFixed(2) + '%',
-                    requestBreakdown: bucket.by_request_type.buckets.map(typeBucket => ({
-                        type: typeBucket.key,
-                        count: typeBucket.doc_count
-                    }))
-                })),
+                byUser: byUserData,
                 
                 topEndpoints: topEndpointsResult.aggregations.top_endpoints.buckets.map(bucket => ({
                     endpoint: bucket.key,
                     count: bucket.doc_count,
-                    avgDuration: Math.round(bucket.avg_duration.value) || 0,
-                    successRate: (bucket.success_rate.value * 100).toFixed(2) + '%'
+                    avgDuration: Math.round(bucket.avg_duration?.value || 0),
+                    successRate: ((bucket.success_rate?.value || 0) * 100).toFixed(2) + '%'
                 })),
                 
                 errorRateOverTime: errorRateResult.aggregations.errors_over_time.buckets.map(bucket => ({
                     timestamp: bucket.key_as_string,
-                    errorRate: (bucket.error_rate.value * 100).toFixed(2) + '%'
+                    errorRate: ((bucket.error_rate?.value || 0) * 100).toFixed(2) + '%'
                 }))
             },
             
@@ -562,7 +538,6 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
                     sort: [{ timestamp: 'desc' }]
                 }
             });
-            
             response.detailedLogs = detailedLogsResult.hits.hits.map(hit => hit._source);
         }
         
@@ -576,6 +551,247 @@ router.get('/node-analytics', authenticateToken, validateNodeAdmin, async (req, 
         });
     }
 });
+
+/**
+ * Get FitnessAlly-specific funnel data by analyzing GUN records
+ * 
+ * FitnessAlly Funnel:
+ * 1. Registered - User created an account
+ * 2. Profile Started - Created userFitnessProfile record
+ * 3. Questions Answered - userFitnessProfile has fitness_goals
+ * 4. Meals Selected - userFitnessProfile has selected_meals  
+ * 5. Equipment Selected - userFitnessProfile has selected_equipment
+ * 6. Plan Generated - Has workoutSchedule and mealPlanDaily records
+ * 7. Plan Regenerated - Has multiple sets of workout/meal records
+ */
+async function getFitnessAllyFunnelData(timeFilter, publicKeyToUser) {
+    try {
+        // Query all GUN records for FitnessAlly record types
+        const recordTypesToCheck = ['userFitnessProfile', 'workoutSchedule', 'mealPlanDaily'];
+        
+        const query = {
+            bool: {
+                must: [
+                    { prefix: { 'oip.did.keyword': 'did:gun:' } },
+                    { terms: { 'oip.recordType': recordTypesToCheck } }
+                ]
+            }
+        };
+        
+        if (timeFilter) {
+            query.bool.must.push({
+                range: { 'oip.indexedAt': { gte: timeFilter } }
+            });
+        }
+        
+        const gunRecordsResult = await elasticClient.search({
+            index: 'records',
+            body: {
+                query: query,
+                size: 5000,
+                _source: ['oip.did', 'oip.recordType', 'oip.indexedAt', 'data']
+            }
+        });
+        
+        console.log(`📊 [Funnel] Found ${gunRecordsResult.hits.hits.length} GUN records for funnel analysis`);
+        
+        // Group records by user (extract user identifier from GUN soul)
+        // GUN soul format: {publicKeyHash}:{localId}
+        // e.g., 647f79c2a338:user_nbgehZsBcV66tiWtK1aG
+        const userRecords = {};
+        
+        gunRecordsResult.hits.hits.forEach(hit => {
+            const did = hit._source.oip?.did || '';
+            const recordType = hit._source.oip?.recordType;
+            const data = hit._source.data || {};
+            
+            // Extract pubKeyHash from DID (did:gun:647f79c2a338:localId)
+            const match = did.match(/did:gun:([a-f0-9]+):/i);
+            if (!match) return;
+            
+            const pubKeyHash = match[1];
+            
+            if (!userRecords[pubKeyHash]) {
+                userRecords[pubKeyHash] = {
+                    pubKeyHash: pubKeyHash,
+                    records: [],
+                    userFitnessProfile: null,
+                    workoutSchedules: [],
+                    mealPlanDailies: []
+                };
+            }
+            
+            userRecords[pubKeyHash].records.push({
+                did: did,
+                recordType: recordType,
+                indexedAt: hit._source.oip?.indexedAt,
+                data: data
+            });
+            
+            // Categorize by record type
+            if (recordType === 'userFitnessProfile') {
+                // Keep the most recent profile
+                if (!userRecords[pubKeyHash].userFitnessProfile || 
+                    hit._source.oip?.indexedAt > userRecords[pubKeyHash].userFitnessProfile.indexedAt) {
+                    userRecords[pubKeyHash].userFitnessProfile = {
+                        did: did,
+                        indexedAt: hit._source.oip?.indexedAt,
+                        data: data
+                    };
+                }
+            } else if (recordType === 'workoutSchedule') {
+                userRecords[pubKeyHash].workoutSchedules.push({
+                    did: did,
+                    indexedAt: hit._source.oip?.indexedAt,
+                    scheduledDate: data.workoutSchedule?.scheduled_date
+                });
+            } else if (recordType === 'mealPlanDaily') {
+                userRecords[pubKeyHash].mealPlanDailies.push({
+                    did: did,
+                    indexedAt: hit._source.oip?.indexedAt,
+                    mealDate: data.mealPlanDaily?.meal_date
+                });
+            }
+        });
+        
+        // Calculate funnel stage for each user
+        const userFunnel = [];
+        const funnelCounts = {
+            registered: 0,
+            profileStarted: 0,
+            questionsAnswered: 0,
+            mealsSelected: 0,
+            equipmentSelected: 0,
+            planGenerated: 0,
+            planRegenerated: 0
+        };
+        
+        Object.values(userRecords).forEach(userData => {
+            const profile = userData.userFitnessProfile?.data?.userFitnessProfile || {};
+            const basicData = userData.userFitnessProfile?.data?.basic || {};
+            
+            // Determine funnel stage
+            let funnelStage = 'profileStarted'; // They have at least created a profile
+            let stageDetails = {};
+            
+            // Check questions answered (has fitness goals)
+            const hasGoals = profile.fitness_goals && 
+                            (Array.isArray(profile.fitness_goals) ? profile.fitness_goals.length > 0 : profile.fitness_goals);
+            
+            // Check meals selected
+            const hasSelectedMeals = profile.selected_meals && 
+                                     (Array.isArray(profile.selected_meals) ? profile.selected_meals.length > 0 : profile.selected_meals);
+            
+            // Check equipment selected
+            const hasEquipment = profile.selected_equipment && 
+                                 (Array.isArray(profile.selected_equipment) ? profile.selected_equipment.length > 0 : profile.selected_equipment);
+            
+            // Check plan generated
+            const hasWorkouts = userData.workoutSchedules.length > 0;
+            const hasMeals = userData.mealPlanDailies.length > 0;
+            const hasPlan = hasWorkouts || hasMeals;
+            
+            // Determine if plan was regenerated (multiple generation sessions)
+            // Count unique generation batches by looking at time gaps between records
+            const allRecordTimes = [
+                ...userData.workoutSchedules.map(r => r.indexedAt),
+                ...userData.mealPlanDailies.map(r => r.indexedAt)
+            ].filter(t => t).sort();
+            
+            let generationCount = 0;
+            if (allRecordTimes.length > 0) {
+                generationCount = 1;
+                let lastTime = new Date(allRecordTimes[0]).getTime();
+                for (let i = 1; i < allRecordTimes.length; i++) {
+                    const thisTime = new Date(allRecordTimes[i]).getTime();
+                    // If more than 5 minutes gap, count as new generation
+                    if (thisTime - lastTime > 5 * 60 * 1000) {
+                        generationCount++;
+                    }
+                    lastTime = thisTime;
+                }
+            }
+            
+            // Set funnel stage based on progress
+            if (generationCount > 1) {
+                funnelStage = 'planRegenerated';
+                funnelCounts.planRegenerated++;
+            } else if (hasPlan) {
+                funnelStage = 'planGenerated';
+                funnelCounts.planGenerated++;
+            } else if (hasEquipment) {
+                funnelStage = 'equipmentSelected';
+                funnelCounts.equipmentSelected++;
+            } else if (hasSelectedMeals) {
+                funnelStage = 'mealsSelected';
+                funnelCounts.mealsSelected++;
+            } else if (hasGoals) {
+                funnelStage = 'questionsAnswered';
+                funnelCounts.questionsAnswered++;
+            } else {
+                funnelCounts.profileStarted++;
+            }
+            
+            stageDetails = {
+                hasGoals: hasGoals,
+                hasSelectedMeals: hasSelectedMeals,
+                hasEquipment: hasEquipment,
+                workoutCount: userData.workoutSchedules.length,
+                mealPlanCount: userData.mealPlanDailies.length,
+                generationCount: generationCount
+            };
+            
+            userFunnel.push({
+                pubKeyHash: userData.pubKeyHash,
+                funnelStage: funnelStage,
+                stageDetails: stageDetails,
+                profileCreated: userData.userFitnessProfile?.indexedAt,
+                lastActivity: allRecordTimes.length > 0 ? allRecordTimes[allRecordTimes.length - 1] : userData.userFitnessProfile?.indexedAt
+            });
+        });
+        
+        // Sort by last activity (most recent first)
+        userFunnel.sort((a, b) => {
+            const dateA = new Date(a.lastActivity || 0).getTime();
+            const dateB = new Date(b.lastActivity || 0).getTime();
+            return dateB - dateA;
+        });
+        
+        // Create summary
+        const summary = {
+            totalUsersWithProfiles: userFunnel.length,
+            completedFunnel: funnelCounts.planGenerated + funnelCounts.planRegenerated,
+            completionRate: userFunnel.length > 0 
+                ? ((funnelCounts.planGenerated + funnelCounts.planRegenerated) / userFunnel.length * 100).toFixed(1) + '%'
+                : '0%'
+        };
+        
+        // Create funnel stages breakdown
+        const funnelStages = [
+            { stage: 'profileStarted', label: '📝 Profile Started', count: funnelCounts.profileStarted },
+            { stage: 'questionsAnswered', label: '❓ Questions Answered', count: funnelCounts.questionsAnswered },
+            { stage: 'mealsSelected', label: '🍽️ Meals Selected', count: funnelCounts.mealsSelected },
+            { stage: 'equipmentSelected', label: '🏋️ Equipment Selected', count: funnelCounts.equipmentSelected },
+            { stage: 'planGenerated', label: '✅ Plan Generated', count: funnelCounts.planGenerated },
+            { stage: 'planRegenerated', label: '🔄 Plan Regenerated', count: funnelCounts.planRegenerated }
+        ];
+        
+        return {
+            summary: summary,
+            funnelStages: funnelStages,
+            userFunnel: userFunnel
+        };
+        
+    } catch (error) {
+        console.error('❌ Error getting funnel data:', error);
+        return {
+            summary: { totalUsersWithProfiles: 0, completedFunnel: 0, completionRate: '0%' },
+            funnelStages: [],
+            userFunnel: [],
+            error: error.message
+        };
+    }
+}
 
 /**
  * Calculate time filter for analytics queries
@@ -593,7 +809,7 @@ function calculateTimeFilter(timeRange) {
         case '90d':
             return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
         case 'all':
-            return null; // No time filter
+            return null;
         default:
             return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
     }
@@ -639,22 +855,14 @@ router.get('/user-sessions/:userId', authenticateToken, validateNodeAdmin, async
         const activityResult = await elasticClient.search({
             index: 'user_activity',
             body: {
-                query: {
-                    term: { userId: userId }
-                },
+                query: { term: { userId: userId } },
                 size: 0,
                 aggs: {
                     by_date: {
-                        date_histogram: {
-                            field: 'timestamp',
-                            calendar_interval: 'day'
-                        }
+                        date_histogram: { field: 'timestamp', calendar_interval: 'day' }
                     },
                     by_request_type: {
-                        terms: {
-                            field: 'requestType',
-                            size: 50
-                        }
+                        terms: { field: 'requestType', size: 50 }
                     }
                 }
             }
@@ -698,5 +906,105 @@ router.get('/user-sessions/:userId', authenticateToken, validateNodeAdmin, async
     }
 });
 
-module.exports = router;
+/**
+ * GET /api/admin/user-funnel/:pubKeyHash
+ * 
+ * Get detailed funnel data for a specific user by their pubKeyHash
+ */
+router.get('/user-funnel/:pubKeyHash', authenticateToken, validateNodeAdmin, async (req, res) => {
+    try {
+        const { pubKeyHash } = req.params;
+        
+        // Get all GUN records for this user
+        const userRecordsResult = await elasticClient.search({
+            index: 'records',
+            body: {
+                query: {
+                    bool: {
+                        must: [
+                            { prefix: { 'oip.did.keyword': `did:gun:${pubKeyHash}:` } }
+                        ]
+                    }
+                },
+                size: 1000,
+                sort: [{ 'oip.indexedAt': 'asc' }],
+                _source: ['oip.did', 'oip.recordType', 'oip.indexedAt', 'data']
+            }
+        });
+        
+        const records = userRecordsResult.hits.hits.map(hit => ({
+            did: hit._source.oip?.did,
+            recordType: hit._source.oip?.recordType,
+            indexedAt: hit._source.oip?.indexedAt,
+            data: hit._source.data
+        }));
+        
+        // Group by record type
+        const byType = {};
+        records.forEach(r => {
+            if (!byType[r.recordType]) byType[r.recordType] = [];
+            byType[r.recordType].push(r);
+        });
+        
+        // Build timeline of events
+        const timeline = records.map(r => ({
+            time: r.indexedAt,
+            event: r.recordType,
+            did: r.did,
+            details: summarizeRecordData(r.recordType, r.data)
+        })).sort((a, b) => new Date(a.time) - new Date(b.time));
+        
+        res.status(200).json({
+            pubKeyHash: pubKeyHash,
+            totalRecords: records.length,
+            recordsByType: Object.keys(byType).reduce((acc, type) => {
+                acc[type] = byType[type].length;
+                return acc;
+            }, {}),
+            timeline: timeline,
+            records: records
+        });
+        
+    } catch (error) {
+        console.error('❌ Error fetching user funnel:', error);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            message: error.message
+        });
+    }
+});
 
+/**
+ * Summarize record data for timeline display
+ */
+function summarizeRecordData(recordType, data) {
+    if (!data) return {};
+    
+    switch (recordType) {
+        case 'userFitnessProfile':
+            const profile = data.userFitnessProfile || {};
+            return {
+                hasGoals: Boolean(profile.fitness_goals),
+                hasMeals: Boolean(profile.selected_meals),
+                hasEquipment: Boolean(profile.selected_equipment),
+                goalCount: Array.isArray(profile.fitness_goals) ? profile.fitness_goals.length : 0,
+                mealCount: Array.isArray(profile.selected_meals) ? profile.selected_meals.length : 0
+            };
+        case 'workoutSchedule':
+            const workout = data.workoutSchedule || {};
+            return {
+                scheduledDate: workout.scheduled_date,
+                hasWorkoutRef: Boolean(workout.workout_reference)
+            };
+        case 'mealPlanDaily':
+            const meal = data.mealPlanDaily || {};
+            return {
+                mealDate: meal.meal_date,
+                hasMealRef: Boolean(meal.meal_reference)
+            };
+        default:
+            return {};
+    }
+}
+
+module.exports = router;

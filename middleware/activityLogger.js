@@ -3,6 +3,10 @@ const { elasticClient } = require('../helpers/elasticsearch');
 /**
  * Middleware to log API activity for analytics
  * Tracks authenticated user activity, endpoints called, and response status
+ * 
+ * IMPORTANT: This middleware intercepts res.json() which is called AFTER 
+ * authentication middleware runs, so req.user should be populated for 
+ * authenticated requests.
  */
 async function logAPIActivity(req, res, next) {
     // Capture the original res.json to intercept response
@@ -34,7 +38,8 @@ async function logActivity(req, res, duration, responseBody) {
             '/api/admin/node-analytics', // Don't log the analytics endpoint itself
             '/health',
             '/metrics',
-            '/config.js' // Skip config endpoint
+            '/config.js', // Skip config endpoint
+            '/favicon' // Skip favicon
         ];
         
         if (skipEndpoints.some(endpoint => fullPath.startsWith(endpoint))) {
@@ -43,6 +48,7 @@ async function logActivity(req, res, duration, responseBody) {
         
         // Extract user info from JWT (if authenticated)
         // Authentication middleware sets req.user for authenticated requests
+        // By the time res.json is called, auth middleware has already run
         const user = req.user || null;
         
         // Extract user data with fallbacks for different token types
@@ -50,6 +56,15 @@ async function logActivity(req, res, duration, responseBody) {
         const userEmail = user?.email || null;
         const userPublicKey = user?.publicKey || user?.publisherPubKey || null;
         const isAdmin = user?.isAdmin || false;
+        
+        // Extract record type with enhanced detection for FitnessAlly funnel tracking
+        const recordType = extractRecordType(req);
+        
+        // Extract localId for GUN records (contains user profile ID)
+        const localId = req.query.localId || null;
+        
+        // Extract GUN soul from response body if present (for newRecord responses)
+        const gunSoul = responseBody?.did?.startsWith('did:gun:') ? responseBody.did : null;
         
         const activityLog = {
             timestamp: new Date().toISOString(),
@@ -77,7 +92,12 @@ async function logActivity(req, res, duration, responseBody) {
             requestType: categorizeRequest(fullPath, req.method),
             
             // Record type if publishing/querying records
-            recordType: extractRecordType(req),
+            recordType: recordType,
+            
+            // GUN-specific tracking for private records
+            localId: localId,
+            gunSoul: gunSoul,
+            storage: req.query.storage || null,
             
             // Error info if failed
             error: res.statusCode >= 400 ? (responseBody?.error || responseBody?.message) : null
@@ -97,9 +117,14 @@ async function logActivity(req, res, duration, responseBody) {
             body: activityLog
         });
         
-        // Debug log for first few requests to verify it's working
-        if (Math.random() < 0.05) { // 5% sampling for debugging
-            console.log(`📊 [Activity] ${user?.email || 'anonymous'} - ${req.method} ${fullPath} - ${activityLog.requestType}`);
+        // Enhanced debug logging for authenticated requests
+        if (userEmail) {
+            // Log all authenticated requests for now to debug the issue
+            if (recordType && ['userFitnessProfile', 'workoutSchedule', 'mealPlanDaily'].includes(recordType)) {
+                console.log(`📊 [Activity] ${userEmail} - ${req.method} ${fullPath} - ${activityLog.requestType} - ${recordType}`);
+            }
+        } else if (Math.random() < 0.02) { // 2% sampling for anonymous requests
+            console.log(`📊 [Activity] anonymous - ${req.method} ${fullPath} - ${activityLog.requestType}`);
         }
         
     } catch (error) {
@@ -160,11 +185,14 @@ function categorizeRequest(path, method) {
 }
 
 /**
- * Extract record type from request
+ * Extract record type from request with enhanced FitnessAlly detection
  */
 function extractRecordType(req) {
-    // Check query params
+    // Check query params first (most reliable)
     if (req.query.recordType) return req.query.recordType;
+    
+    // Check URL for record types (for newRecord endpoint)
+    const url = req.originalUrl || '';
     
     // Check body for publish requests
     if (req.body) {
@@ -172,7 +200,13 @@ function extractRecordType(req) {
         if (req.body.recordType) return req.body.recordType;
         
         // Check for template names in body (post, recipe, exercise, etc.)
-        const commonTemplates = ['post', 'recipe', 'exercise', 'video', 'image', 'conversationSession', 'organization'];
+        const commonTemplates = [
+            'post', 'recipe', 'exercise', 'video', 'image', 
+            'conversationSession', 'organization',
+            // FitnessAlly-specific record types
+            'userFitnessProfile', 'workoutSchedule', 'mealPlanDaily',
+            'workout', 'fitnessEquipment'
+        ];
         for (const template of commonTemplates) {
             if (req.body[template]) return template;
         }
@@ -211,6 +245,9 @@ async function ensureActivityIndexExists() {
                             userAgent: { type: 'text' },
                             requestType: { type: 'keyword' },
                             recordType: { type: 'keyword' },
+                            localId: { type: 'keyword' },
+                            gunSoul: { type: 'keyword' },
+                            storage: { type: 'keyword' },
                             error: { type: 'text' }
                         }
                     }
@@ -224,4 +261,3 @@ async function ensureActivityIndexExists() {
 }
 
 module.exports = { logAPIActivity };
-
