@@ -2575,6 +2575,7 @@ async function getRecords(queryParams) {
         ingredientMatchMode = 'exact', // New parameter for ingredient match behavior ('exact' or 'partial', default 'exact')
         excludeIngredientNames, // New parameter to exclude recipes containing these ingredients
         excludeIngredientMatchMode = 'exact', // Match mode for excluded ingredients ('exact' or 'partial', default 'exact')
+        unresolveable = false, // New parameter: filter for records with unresolved dref fields (broken references)
         equipmentRequired, // New parameter for exercise equipment filtering
         equipmentMatchMode = 'AND', // New parameter for equipment match behavior (AND/OR)
         exerciseType, // New parameter for exercise type filtering
@@ -4052,6 +4053,70 @@ async function getRecords(queryParams) {
             console.log('After excluding ingredients, removed', beforeCount - resolvedRecords.length, 'recipes, remaining:', resolvedRecords.length);
         }
 
+        // Filter for records with unresolved dref fields (broken references)
+        if (unresolveable === true || unresolveable === 'true') {
+            console.log('Filtering for records with unresolved dref fields...');
+            
+            // Helper function to check if a value is an unresolved DID
+            const isUnresolvedDID = (value) => {
+                if (typeof value !== 'string') return false;
+                return value.startsWith('did:arweave:') || 
+                       value.startsWith('did:gun:') || 
+                       value.startsWith('did:irys:');
+            };
+            
+            // Helper function to recursively check an object for unresolved DIDs
+            const hasUnresolvedDrefs = (obj, depth = 0) => {
+                if (depth > 10) return false; // Prevent infinite recursion
+                
+                if (obj === null || obj === undefined) return false;
+                
+                // Check if this value itself is an unresolved DID
+                if (isUnresolvedDID(obj)) {
+                    return true;
+                }
+                
+                // Check arrays
+                if (Array.isArray(obj)) {
+                    return obj.some(item => {
+                        // If array item is a DID string, it's unresolved
+                        if (isUnresolvedDID(item)) return true;
+                        // If it's an object, recurse into it
+                        if (typeof item === 'object' && item !== null) {
+                            return hasUnresolvedDrefs(item, depth + 1);
+                        }
+                        return false;
+                    });
+                }
+                
+                // Check objects
+                if (typeof obj === 'object') {
+                    return Object.values(obj).some(value => {
+                        if (isUnresolvedDID(value)) return true;
+                        if (typeof value === 'object' && value !== null) {
+                            return hasUnresolvedDrefs(value, depth + 1);
+                        }
+                        return false;
+                    });
+                }
+                
+                return false;
+            };
+            
+            const beforeCount = resolvedRecords.length;
+            
+            // Filter to only include records that have at least one unresolved dref
+            resolvedRecords = resolvedRecords.filter(record => {
+                // Check the data object for unresolved DIDs
+                if (record.data && hasUnresolvedDrefs(record.data)) {
+                    return true;
+                }
+                return false;
+            });
+            
+            console.log('After filtering for unresolveable records, found', resolvedRecords.length, 'records with broken references (from', beforeCount, 'total)');
+        }
+
         if (hasAudio) {
             // console.log('Filtering for records with audio...');
             const initialResolvedRecords = resolvedRecords;
@@ -5039,6 +5104,7 @@ const needsPostProcessing = (params) => {
         params.exerciseDIDs ||
         params.ingredientNames ||
         params.excludeIngredientNames ||
+        params.unresolveable ||
         params.didTxRef ||
         params.template ||
         params.noDuplicates ||
@@ -5055,7 +5121,7 @@ const needsPostProcessing = (params) => {
  * When we need post-processing, fetch more records to account for filtering
  */
 const getOverFetchMultiplier = (params) => {
-    if (params.exerciseNames || params.ingredientNames || params.excludeIngredientNames || params.didTxRef) {
+    if (params.exerciseNames || params.ingredientNames || params.excludeIngredientNames || params.unresolveable || params.didTxRef) {
         return 5;  // Need to over-fetch significantly for complex filters
     }
     if (params.template || params.isAuthenticated || params.scheduledOn) {
