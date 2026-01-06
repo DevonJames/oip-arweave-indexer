@@ -2573,6 +2573,7 @@ async function getRecords(queryParams) {
         exerciseDIDs, // New parameter for workout exercise filtering by DID
         ingredientNames, // New parameter for recipe ingredient filtering
         ingredientMatchMode = 'exact', // New parameter for ingredient match behavior ('exact' or 'partial', default 'exact')
+        ingredientNamesMatchMode = 'OR', // New parameter for ingredient names match behavior (AND/OR, default OR)
         excludeIngredientNames, // New parameter to exclude recipes containing these ingredients
         excludeIngredientMatchMode = 'exact', // Match mode for excluded ingredients ('exact' or 'partial', default 'exact')
         unresolveable = false, // New parameter: filter for records with unresolved dref fields (broken references)
@@ -3886,7 +3887,7 @@ async function getRecords(queryParams) {
 
         // Filter recipes by ingredient names if ingredientNames parameter is provided
         if (ingredientNames && recordType === 'recipe') {
-            console.log('Filtering recipes by ingredient names:', ingredientNames, '(matchMode:', ingredientMatchMode + ')');
+            console.log('Filtering recipes by ingredient names:', ingredientNames, '(matchMode:', ingredientMatchMode + ', namesMatchMode:', ingredientNamesMatchMode + ')');
             const requestedIngredients = ingredientNames.split(',').map(name => name.trim().toLowerCase());
             
             // Helper function to calculate order similarity score for ingredients
@@ -3970,8 +3971,17 @@ async function getRecords(queryParams) {
                 
                 const { score, matchedCount } = calculateIngredientOrderSimilarity(recipeIngredients, requestedIngredients);
                 
-                // Only include recipes that have at least one matching ingredient
-                if (matchedCount > 0) {
+                // Check match based on ingredientNamesMatchMode
+                let shouldInclude = false;
+                if (ingredientNamesMatchMode === 'AND') {
+                    // AND mode: recipe must have ALL requested ingredients
+                    shouldInclude = matchedCount === requestedIngredients.length;
+                } else {
+                    // OR mode (default): recipe must have at least one matching ingredient
+                    shouldInclude = matchedCount > 0;
+                }
+                
+                if (shouldInclude) {
                     record.ingredientScore = score;
                     record.ingredientMatchedCount = matchedCount;
                     return true;
