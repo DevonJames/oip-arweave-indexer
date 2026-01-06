@@ -2572,6 +2572,9 @@ async function getRecords(queryParams) {
         exerciseNames, // New parameter for workout exercise filtering
         exerciseDIDs, // New parameter for workout exercise filtering by DID
         ingredientNames, // New parameter for recipe ingredient filtering
+        ingredientMatchMode = 'exact', // New parameter for ingredient match behavior ('exact' or 'partial', default 'exact')
+        excludeIngredientNames, // New parameter to exclude recipes containing these ingredients
+        excludeIngredientMatchMode = 'exact', // Match mode for excluded ingredients ('exact' or 'partial', default 'exact')
         equipmentRequired, // New parameter for exercise equipment filtering
         equipmentMatchMode = 'AND', // New parameter for equipment match behavior (AND/OR)
         exerciseType, // New parameter for exercise type filtering
@@ -2585,6 +2588,9 @@ async function getRecords(queryParams) {
         fieldSearch, // New parameter: value to search for in a specific field path
         fieldName, // New parameter: dot-notation path to field (e.g., 'recipe.course', 'data.basic.name')
         fieldMatchMode = 'partial', // New parameter: 'exact' or 'partial' matching (default: 'partial')
+        resolvedFieldSearch, // NEW: Search value for post-resolution filtering (searches resolved dref data)
+        resolvedFieldName, // NEW: Field path for post-resolution search (e.g., 'recipe.ingredient' to search resolved ingredient names)
+        resolvedFieldMatchMode = 'partial', // NEW: 'exact' or 'partial' matching for resolved field search (default: 'partial')
         noteSearchQuery, // NEW: Special parameter for RAG-based note search (searches tags and text)
         noteAttendees, // NEW: Comma-separated list of attendee names for note search
     } = queryParams;
@@ -3879,7 +3885,7 @@ async function getRecords(queryParams) {
 
         // Filter recipes by ingredient names if ingredientNames parameter is provided
         if (ingredientNames && recordType === 'recipe') {
-            console.log('Filtering recipes by ingredient names:', ingredientNames);
+            console.log('Filtering recipes by ingredient names:', ingredientNames, '(matchMode:', ingredientMatchMode + ')');
             const requestedIngredients = ingredientNames.split(',').map(name => name.trim().toLowerCase());
             
             // Helper function to calculate order similarity score for ingredients
@@ -3901,9 +3907,30 @@ async function getRecords(queryParams) {
                 let score = 0;
                 let matchedCount = 0;
                 
+                // Helper function to check if ingredient matches based on match mode
+                const ingredientMatches = (recipeIngredientName, searchTerm) => {
+                    if (ingredientMatchMode === 'partial') {
+                        // Partial matching: check if search term is contained in ingredient name
+                        return recipeIngredientName.includes(searchTerm);
+                    } else {
+                        // Exact matching (default): check for exact match
+                        return recipeIngredientName === searchTerm;
+                    }
+                };
+                
+                // Helper function to find index of matching ingredient
+                const findMatchingIndex = (searchTerm) => {
+                    if (ingredientMatchMode === 'partial') {
+                        return recipeIngredientNames.findIndex(name => name.includes(searchTerm));
+                    } else {
+                        return recipeIngredientNames.indexOf(searchTerm);
+                    }
+                };
+                
                 // Check how many requested ingredients are present
                 for (const requestedIngredient of requestedIngredients) {
-                    if (recipeIngredientNames.includes(requestedIngredient)) {
+                    const hasMatch = recipeIngredientNames.some(name => ingredientMatches(name, requestedIngredient));
+                    if (hasMatch) {
                         matchedCount++;
                     }
                 }
@@ -3916,7 +3943,7 @@ async function getRecords(queryParams) {
                 let lastFoundIndex = -1;
                 
                 for (const requestedIngredient of requestedIngredients) {
-                    const foundIndex = recipeIngredientNames.indexOf(requestedIngredient);
+                    const foundIndex = findMatchingIndex(requestedIngredient);
                     if (foundIndex > lastFoundIndex) {
                         orderBonus += 0.1; // Small bonus for maintaining order
                         lastFoundIndex = foundIndex;
@@ -3962,6 +3989,67 @@ async function getRecords(queryParams) {
             });
             
             console.log('After filtering by ingredient names, there are', resolvedRecords.length, 'recipe records');
+        }
+
+        // Filter OUT recipes that contain excluded ingredients (works with or without ingredientNames)
+        if (excludeIngredientNames && (recordType === 'recipe' || !recordType)) {
+            console.log('Excluding recipes with ingredient names:', excludeIngredientNames, '(matchMode:', excludeIngredientMatchMode + ')');
+            const excludedIngredients = excludeIngredientNames.split(',').map(name => name.trim().toLowerCase());
+            
+            // Helper function to extract ingredient names from resolved records
+            const extractIngredientNames = (recipeIngredients) => {
+                return recipeIngredients.map(ingredient => {
+                    if (typeof ingredient === 'string') {
+                        return ingredient.toLowerCase();
+                    } else if (ingredient && typeof ingredient === 'object' && ingredient.data && ingredient.data.basic && ingredient.data.basic.name) {
+                        return ingredient.data.basic.name.toLowerCase();
+                    } else if (ingredient && typeof ingredient === 'object' && ingredient.name) {
+                        return ingredient.name.toLowerCase();
+                    } else {
+                        return '';
+                    }
+                }).filter(name => name); // Remove empty strings
+            };
+            
+            // Helper function to check if ingredient matches based on exclude match mode
+            const ingredientMatchesExclude = (recipeIngredientName, excludeTerm) => {
+                if (excludeIngredientMatchMode === 'partial') {
+                    // Partial matching: check if exclude term is contained in ingredient name
+                    return recipeIngredientName.includes(excludeTerm);
+                } else {
+                    // Exact matching (default): check for exact match
+                    return recipeIngredientName === excludeTerm;
+                }
+            };
+            
+            const beforeCount = resolvedRecords.length;
+            
+            // Filter out records that contain any excluded ingredient
+            resolvedRecords = resolvedRecords.filter(record => {
+                // Skip non-recipe records
+                if (record.oip?.recordType !== 'recipe' || !record.data?.recipe?.ingredient) {
+                    return true; // Keep non-recipe records
+                }
+                
+                const recipeIngredients = record.data.recipe.ingredient;
+                
+                // Ensure recipeIngredients is an array
+                if (!Array.isArray(recipeIngredients) || recipeIngredients.length === 0) {
+                    return true; // Keep if no ingredients to check
+                }
+                
+                const recipeIngredientNames = extractIngredientNames(recipeIngredients);
+                
+                // Check if any excluded ingredient is present in this recipe
+                const hasExcludedIngredient = excludedIngredients.some(excludedIngredient => 
+                    recipeIngredientNames.some(name => ingredientMatchesExclude(name, excludedIngredient))
+                );
+                
+                // Keep the record only if it does NOT have any excluded ingredient
+                return !hasExcludedIngredient;
+            });
+            
+            console.log('After excluding ingredients, removed', beforeCount - resolvedRecords.length, 'recipes, remaining:', resolvedRecords.length);
         }
 
         if (hasAudio) {
@@ -4950,6 +5038,7 @@ const needsPostProcessing = (params) => {
         params.exerciseNames ||
         params.exerciseDIDs ||
         params.ingredientNames ||
+        params.excludeIngredientNames ||
         params.didTxRef ||
         params.template ||
         params.noDuplicates ||
@@ -4966,7 +5055,7 @@ const needsPostProcessing = (params) => {
  * When we need post-processing, fetch more records to account for filtering
  */
 const getOverFetchMultiplier = (params) => {
-    if (params.exerciseNames || params.ingredientNames || params.didTxRef) {
+    if (params.exerciseNames || params.ingredientNames || params.excludeIngredientNames || params.didTxRef) {
         return 5;  // Need to over-fetch significantly for complex filters
     }
     if (params.template || params.isAuthenticated || params.scheduledOn) {
