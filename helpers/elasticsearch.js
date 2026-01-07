@@ -3887,8 +3887,31 @@ async function getRecords(queryParams) {
 
         // Filter recipes by ingredient names if ingredientNames parameter is provided
         if (ingredientNames && recordType === 'recipe') {
-            console.log('Filtering recipes by ingredient names:', ingredientNames, '(matchMode:', ingredientMatchMode + ', namesMatchMode:', ingredientNamesMatchMode + ')');
+            // Normalize match mode parameters (case-insensitive)
+            const normalizedIngredientMatchMode = (ingredientMatchMode || 'exact').toString().toLowerCase();
+            const normalizedNamesMatchMode = (ingredientNamesMatchMode || 'OR').toString().toUpperCase();
+            
+            console.log('Filtering recipes by ingredient names:', ingredientNames, '(matchMode:', normalizedIngredientMatchMode + ', namesMatchMode:', normalizedNamesMatchMode + ')');
             const requestedIngredients = ingredientNames.split(',').map(name => name.trim().toLowerCase());
+            console.log('Looking for ingredients:', requestedIngredients);
+            
+            // Debug: log first recipe's ingredient data to help diagnose issues
+            if (resolvedRecords.length > 0 && resolvedRecords[0].data?.recipe?.ingredient) {
+                const firstRecipeIngredients = resolvedRecords[0].data.recipe.ingredient;
+                console.log('DEBUG - First recipe ingredient array type:', Array.isArray(firstRecipeIngredients) ? 'array' : typeof firstRecipeIngredients);
+                console.log('DEBUG - First recipe ingredient count:', Array.isArray(firstRecipeIngredients) ? firstRecipeIngredients.length : 'N/A');
+                if (Array.isArray(firstRecipeIngredients) && firstRecipeIngredients.length > 0) {
+                    console.log('DEBUG - First 3 ingredients sample:', firstRecipeIngredients.slice(0, 3).map(ing => {
+                        if (typeof ing === 'string') return `string: "${ing.substring(0, 50)}..."`;
+                        if (ing && typeof ing === 'object') {
+                            if (ing.data?.basic?.name) return `resolved obj: "${ing.data.basic.name}"`;
+                            if (ing.name) return `simple obj: "${ing.name}"`;
+                            return `unknown obj: ${JSON.stringify(ing).substring(0, 50)}...`;
+                        }
+                        return `other: ${typeof ing}`;
+                    }));
+                }
+            }
             
             // Helper function to calculate order similarity score for ingredients
             const calculateIngredientOrderSimilarity = (recipeIngredients, requestedIngredients) => {
@@ -3911,9 +3934,15 @@ async function getRecords(queryParams) {
                 
                 // Helper function to check if ingredient matches based on match mode
                 const ingredientMatches = (recipeIngredientName, searchTerm) => {
-                    if (ingredientMatchMode === 'partial') {
+                    if (normalizedIngredientMatchMode === 'partial') {
                         // Partial matching: check if search term is contained in ingredient name
-                        return recipeIngredientName.includes(searchTerm);
+                        // Also check if any word in the ingredient name starts with or contains the search term
+                        const directMatch = recipeIngredientName.includes(searchTerm);
+                        if (directMatch) return true;
+                        
+                        // Also check word-by-word for partial word matches
+                        const words = recipeIngredientName.split(/[\s,]+/);
+                        return words.some(word => word.includes(searchTerm) || searchTerm.includes(word));
                     } else {
                         // Exact matching (default): check for exact match
                         return recipeIngredientName === searchTerm;
@@ -3922,8 +3951,12 @@ async function getRecords(queryParams) {
                 
                 // Helper function to find index of matching ingredient
                 const findMatchingIndex = (searchTerm) => {
-                    if (ingredientMatchMode === 'partial') {
-                        return recipeIngredientNames.findIndex(name => name.includes(searchTerm));
+                    if (normalizedIngredientMatchMode === 'partial') {
+                        return recipeIngredientNames.findIndex(name => {
+                            if (name.includes(searchTerm)) return true;
+                            const words = name.split(/[\s,]+/);
+                            return words.some(word => word.includes(searchTerm) || searchTerm.includes(word));
+                        });
                     } else {
                         return recipeIngredientNames.indexOf(searchTerm);
                     }
@@ -3973,7 +4006,7 @@ async function getRecords(queryParams) {
                 
                 // Check match based on ingredientNamesMatchMode
                 let shouldInclude = false;
-                if (ingredientNamesMatchMode === 'AND') {
+                if (normalizedNamesMatchMode === 'AND') {
                     // AND mode: recipe must have ALL requested ingredients
                     shouldInclude = matchedCount === requestedIngredients.length;
                 } else {
@@ -4064,8 +4097,15 @@ async function getRecords(queryParams) {
         }
 
         // Filter for records with unresolved dref fields (broken references)
-        if (unresolveable === true || unresolveable === 'true') {
-            console.log('Filtering for records with unresolved dref fields...');
+        // Normalize the parameter (handle string 'true', boolean true, etc.)
+        const shouldFilterUnresolveable = unresolveable === true || 
+            (typeof unresolveable === 'string' && unresolveable.toLowerCase() === 'true');
+        
+        console.log('DEBUG unresolveable param:', unresolveable, 'type:', typeof unresolveable, 'shouldFilter:', shouldFilterUnresolveable);
+        
+        if (shouldFilterUnresolveable) {
+            console.log('=== FILTERING FOR UNRESOLVEABLE RECORDS ===');
+            console.log('Starting with', resolvedRecords.length, 'records');
             
             // Helper function to check if a value is an unresolved DID
             const isUnresolvedDID = (value) => {
@@ -4075,56 +4115,66 @@ async function getRecords(queryParams) {
                        value.startsWith('did:irys:');
             };
             
-            // Helper function to recursively check an object for unresolved DIDs
-            const hasUnresolvedDrefs = (obj, depth = 0) => {
-                if (depth > 10) return false; // Prevent infinite recursion
+            // Helper function to recursively find unresolved DIDs in an object
+            const findUnresolvedDrefs = (obj, path = '', depth = 0) => {
+                const found = [];
+                if (depth > 10) return found; // Prevent infinite recursion
                 
-                if (obj === null || obj === undefined) return false;
+                if (obj === null || obj === undefined) return found;
                 
                 // Check if this value itself is an unresolved DID
                 if (isUnresolvedDID(obj)) {
-                    return true;
+                    found.push({ path, value: obj });
+                    return found;
                 }
                 
                 // Check arrays
                 if (Array.isArray(obj)) {
-                    return obj.some(item => {
-                        // If array item is a DID string, it's unresolved
-                        if (isUnresolvedDID(item)) return true;
-                        // If it's an object, recurse into it
-                        if (typeof item === 'object' && item !== null) {
-                            return hasUnresolvedDrefs(item, depth + 1);
+                    obj.forEach((item, index) => {
+                        if (isUnresolvedDID(item)) {
+                            found.push({ path: `${path}[${index}]`, value: item });
+                        } else if (typeof item === 'object' && item !== null) {
+                            found.push(...findUnresolvedDrefs(item, `${path}[${index}]`, depth + 1));
                         }
-                        return false;
                     });
+                    return found;
                 }
                 
                 // Check objects
                 if (typeof obj === 'object') {
-                    return Object.values(obj).some(value => {
-                        if (isUnresolvedDID(value)) return true;
-                        if (typeof value === 'object' && value !== null) {
-                            return hasUnresolvedDrefs(value, depth + 1);
+                    Object.entries(obj).forEach(([key, value]) => {
+                        const newPath = path ? `${path}.${key}` : key;
+                        if (isUnresolvedDID(value)) {
+                            found.push({ path: newPath, value: value });
+                        } else if (typeof value === 'object' && value !== null) {
+                            found.push(...findUnresolvedDrefs(value, newPath, depth + 1));
                         }
-                        return false;
                     });
                 }
                 
-                return false;
+                return found;
             };
             
             const beforeCount = resolvedRecords.length;
+            let foundCount = 0;
             
             // Filter to only include records that have at least one unresolved dref
             resolvedRecords = resolvedRecords.filter(record => {
                 // Check the data object for unresolved DIDs
-                if (record.data && hasUnresolvedDrefs(record.data)) {
+                const unresolvedDrefs = findUnresolvedDrefs(record.data);
+                
+                if (unresolvedDrefs.length > 0) {
+                    foundCount++;
+                    if (foundCount <= 3) {
+                        console.log('Found unresolved DIDs in record', record.oip?.did || 'unknown', ':', unresolvedDrefs.slice(0, 3));
+                    }
                     return true;
                 }
                 return false;
             });
             
-            console.log('After filtering for unresolveable records, found', resolvedRecords.length, 'records with broken references (from', beforeCount, 'total)');
+            console.log('=== UNRESOLVEABLE FILTER COMPLETE ===');
+            console.log('Found', resolvedRecords.length, 'records with broken references (from', beforeCount, 'total)');
         }
 
         if (hasAudio) {
