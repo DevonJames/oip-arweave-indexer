@@ -11,12 +11,20 @@ const JobStatus = {
     QUEUED: 'queued',
     UPLOADING: 'uploading',
     TRANSCRIBING: 'transcribing',
+    TRANSCRIBING_ENHANCED: 'transcribing_enhanced', // NEW: Enhanced transcription in background
     CHUNKING: 'chunking',
     SUMMARIZING: 'summarizing',
     CREATING_RECORDS: 'creating_records',
+    UPDATING_NOTE: 'updating_note', // NEW: Updating note with enhanced transcript
     COMPLETE: 'complete',
     FAILED: 'failed',
     CANCELLED: 'cancelled'
+};
+
+// Job types
+const JobType = {
+    FULL_PROCESSING: 'full_processing',          // Original async job type
+    TRANSCRIPT_ENHANCEMENT: 'transcript_enhancement'  // NEW: Background enhancement only
 };
 
 // In-memory job store (can be replaced with Redis for production scaling)
@@ -42,6 +50,7 @@ class NotesJobService extends EventEmitter {
         
         const job = {
             id: jobId,
+            jobType: params.jobType || JobType.FULL_PROCESSING,
             status: JobStatus.QUEUED,
             progress: 0,
             createdAt: new Date().toISOString(),
@@ -58,15 +67,51 @@ class NotesJobService extends EventEmitter {
             // Metadata for display
             audioFilename: params.audioFilename,
             audioSize: params.audioSize,
-            durationSec: params.durationSec
+            durationSec: params.durationSec,
+            // Enhancement-specific fields
+            noteDid: params.noteDid || null,
+            noteHash: params.noteHash || null,
+            initialTranscript: params.initialTranscript || null,
+            transcriptComparison: null
         };
         
         jobs.set(jobId, job);
         
-        console.log(`📋 [NotesJobService] Created job ${jobId} for user ${params.userEmail || params.userId}`);
+        console.log(`📋 [NotesJobService] Created ${job.jobType} job ${jobId} for user ${params.userEmail || params.userId}`);
         this.emit('jobCreated', job);
         
         return jobId;
+    }
+
+    /**
+     * Create a transcript enhancement job (for hybrid processing)
+     * @param {object} params - Enhancement job parameters
+     * @returns {string} Job ID
+     */
+    createEnhancementJob(params) {
+        return this.createJob({
+            ...params,
+            jobType: JobType.TRANSCRIPT_ENHANCEMENT
+        });
+    }
+
+    /**
+     * Update transcript comparison metrics
+     * @param {string} jobId - Job ID
+     * @param {object} comparison - Comparison data
+     */
+    updateTranscriptComparison(jobId, comparison) {
+        const job = jobs.get(jobId);
+        if (!job) return false;
+        
+        job.transcriptComparison = {
+            initial_word_count: comparison.initialWordCount || 0,
+            current_word_count: comparison.currentWordCount || 0,
+            estimated_improvement: comparison.estimatedImprovement || 'unknown'
+        };
+        job.updatedAt = new Date().toISOString();
+        
+        return true;
     }
 
     /**
@@ -310,6 +355,7 @@ function getNotesJobService() {
 module.exports = {
     NotesJobService,
     getNotesJobService,
-    JobStatus
+    JobStatus,
+    JobType
 };
 

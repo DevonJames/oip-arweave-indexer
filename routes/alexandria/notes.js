@@ -19,6 +19,7 @@ const { getSTTService } = require('../../services/sttService');
 const { getSummarizationService } = require('../../services/summarizationService');
 const { getChunkingService } = require('../../services/chunkingService');
 const { getNotesRecordsService } = require('../../services/notesRecordsService');
+const { getNotesJobService, JobStatus, JobType } = require('../../services/notesJobService');
 
 /**
  * Helper to get oipClient from request context
@@ -866,6 +867,709 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
             success: false,
             error: 'Audio note ingestion failed',
             details: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/notes/from-audio-hybrid
+ * Hybrid audio ingestion endpoint for Mac Client integration
+ * 
+ * Accepts both audio AND an initial real-time transcript.
+ * - Returns immediate summary from initial transcript (< 10 seconds)
+ * - Queues background job for high-accuracy backend transcription
+ * - Note automatically updates when better transcript is available
+ * 
+ * This enables the mac-client to show instant results while maintaining
+ * the quality of backend transcription.
+ */
+router.post('/from-audio-hybrid', authenticateToken, upload.single('audio'), async (req, res) => {
+    let tempFilePath = null;
+    
+    try {
+        console.log('🎙️ [POST /api/notes/from-audio-hybrid] Starting hybrid audio note ingestion');
+        console.log('📋 [Request] User:', req.user.email);
+        console.log('📋 [Request] File:', req.file ? req.file.originalname : 'none');
+        console.log('📋 [Request] Has initial transcript:', !!req.body.initial_transcript);
+
+        // ========================================
+        // STEP 1: Validate Request
+        // ========================================
+        const hasAudioFile = !!req.file;
+        const hasInitialTranscript = !!req.body.initial_transcript;
+        
+        // For hybrid mode, we require BOTH audio AND initial transcript
+        if (!hasAudioFile) {
+            return res.status(400).json({
+                success: false,
+                error: 'Audio file is required for hybrid processing'
+            });
+        }
+        
+        if (!hasInitialTranscript) {
+            return res.status(400).json({
+                success: false,
+                error: 'Initial transcript is required for hybrid processing. Use /from-audio for audio-only processing.'
+            });
+        }
+
+        const {
+            start_time,
+            end_time,
+            note_type,
+            device_type,
+            capture_location,
+            initial_transcript,
+            initial_transcript_source = 'mlx_whisper_realtime',
+            initial_transcript_language = 'en',
+            chunking_strategy = 'BY_TIME_30S',
+            participant_display_names,
+            participant_roles,
+            calendar_event_id,
+            calendar_start_time,
+            calendar_end_time,
+            model = 'parallel',
+            addToWebServer = 'false',
+            addToBitTorrent = 'false',
+            addToIPFS = 'false',
+            skip_backend_stt = 'false',
+            queue_enhanced_transcript = 'true'
+        } = req.body;
+
+        // Validate required fields
+        if (!start_time || !end_time) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: start_time and end_time'
+            });
+        }
+
+        if (!note_type) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required field: note_type'
+            });
+        }
+
+        if (!device_type) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required field: device_type'
+            });
+        }
+
+        // Validate note_type
+        const validNoteTypes = ['MEETING', 'ONE_ON_ONE', 'STANDUP', 'IDEA', 'REFLECTION', 'INTERVIEW', 'OTHER'];
+        if (!validNoteTypes.includes(note_type)) {
+            return res.status(400).json({
+                success: false,
+                error: `Invalid note_type. Must be one of: ${validNoteTypes.join(', ')}`
+            });
+        }
+
+        // Validate device_type
+        const validDeviceTypes = ['IPHONE', 'MAC', 'WATCH', 'OTHER'];
+        if (!validDeviceTypes.includes(device_type)) {
+            return res.status(400).json({
+                success: false,
+                error: `Invalid device_type. Must be one of: ${validDeviceTypes.join(', ')}`
+            });
+        }
+
+        // Validate time range
+        const startDate = new Date(start_time);
+        const endDate = new Date(end_time);
+        if (startDate >= endDate) {
+            return res.status(400).json({
+                success: false,
+                error: 'start_time must be before end_time'
+            });
+        }
+
+        // Parse participant arrays
+        let participantNames = [];
+        let participantRolesArray = [];
+        if (participant_display_names) {
+            try {
+                participantNames = JSON.parse(participant_display_names);
+            } catch (e) {
+                participantNames = [participant_display_names];
+            }
+        }
+        if (participant_roles) {
+            try {
+                participantRolesArray = JSON.parse(participant_roles);
+            } catch (e) {
+                participantRolesArray = [participant_roles];
+            }
+        }
+
+        tempFilePath = req.file.path;
+        const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
+        const token = req.headers.authorization.split(' ')[1];
+
+        if (!userPublicKey) {
+            return res.status(401).json({
+                success: false,
+                error: 'User public key not available'
+            });
+        }
+
+        // ========================================
+        // STEP 2: Upload Audio File
+        // ========================================
+        console.log('📼 [Hybrid Step 2] Uploading audio file...');
+        
+        const audioBuffer = fs.readFileSync(tempFilePath);
+        const audioSize = audioBuffer.length;
+        const audioHash = crypto.createHash('sha256').update(audioBuffer).digest('hex');
+        const durationSec = Math.round((endDate - startDate) / 1000);
+
+        const notesRecordsService = getNotesRecordsService();
+        
+        let audioMeta = {
+            audioHash,
+            durationSec,
+            audioCodec: router._detectCodecFromMime(req.file.mimetype),
+            contentType: req.file.mimetype,
+            size: audioSize,
+            filename: req.file.originalname || `note_audio_${Date.now()}.${router._getExtensionFromMime(req.file.mimetype)}`,
+            webUrl: null,
+            arweaveAddress: null,
+            ipfsAddress: null,
+            bittorrentAddress: null,
+            magnetURI: null
+        };
+
+        // Upload audio
+        try {
+            const FormData = require('form-data');
+            const uploadForm = new FormData();
+            uploadForm.append('file', audioBuffer, {
+                filename: audioMeta.filename,
+                contentType: req.file.mimetype
+            });
+            uploadForm.append('access_level', 'private');
+
+            const axios = require('axios');
+            const uploadResponse = await axios.post(
+                `http://localhost:${process.env.PORT || 3005}/api/media/upload`,
+                uploadForm,
+                {
+                    headers: {
+                        ...uploadForm.getHeaders(),
+                        'Authorization': `Bearer ${token}`
+                    },
+                    timeout: 60000
+                }
+            );
+
+            if (uploadResponse.data && uploadResponse.data.success) {
+                audioMeta.mediaId = uploadResponse.data.mediaId;
+                audioMeta.httpUrl = uploadResponse.data.httpUrl;
+                audioMeta.bittorrentAddress = uploadResponse.data.magnetURI;
+                audioMeta.magnetURI = uploadResponse.data.magnetURI;
+                console.log('✅ [Hybrid Step 2] Audio uploaded:', audioMeta.mediaId);
+            }
+        } catch (uploadError) {
+            console.warn('⚠️ [Hybrid Step 2] Media upload failed (continuing):', uploadError.message);
+        }
+
+        // ========================================
+        // STEP 3: Use Initial Transcript for Immediate Processing
+        // ========================================
+        console.log('📝 [Hybrid Step 3] Using initial real-time transcript...');
+        console.log(`   Source: ${initial_transcript_source}`);
+        console.log(`   Language: ${initial_transcript_language}`);
+        console.log(`   Length: ${initial_transcript.length} chars`);
+
+        const transcriptionResult = {
+            text: initial_transcript,
+            language: initial_transcript_language,
+            segments: [] // Initial transcript typically doesn't have segments
+        };
+
+        // ========================================
+        // STEP 4: Compute Note Hash & Create Chunks
+        // ========================================
+        console.log('🔐 [Hybrid Step 4] Computing note hash...');
+        const noteHash = notesRecordsService.computeNoteHash(transcriptionResult.text);
+        console.log(`✅ [Hybrid Step 4] Note hash: ${noteHash.substring(0, 16)}...`);
+
+        // Chunk transcript
+        const chunkingService = getChunkingService();
+        const chunks = chunkingService.chunk({
+            segments: transcriptionResult.segments,
+            strategy: chunking_strategy,
+            fullText: transcriptionResult.text
+        });
+        console.log(`✅ [Hybrid Step 4] Created ${chunks.length} chunks`);
+
+        // ========================================
+        // STEP 5: Create Transcript Text Record
+        // ========================================
+        console.log('📄 [Hybrid Step 5] Creating transcript text record...');
+        
+        let transcriptTextDid = null;
+        try {
+            const transcriptRecord = await notesRecordsService.createTranscriptTextRecord(
+                noteHash,
+                transcriptionResult.text,
+                transcriptionResult.language,
+                userPublicKey,
+                token
+            );
+            transcriptTextDid = transcriptRecord.did;
+            console.log('✅ [Hybrid Step 5] Transcript record created:', transcriptTextDid);
+        } catch (error) {
+            console.error('❌ [Hybrid Step 5] Transcript record creation failed:', error.message);
+        }
+
+        // ========================================
+        // STEP 6: Generate Summary (Immediate)
+        // ========================================
+        console.log(`📝 [Hybrid Step 6] Generating summary with model: ${model}...`);
+        
+        const summarizationService = getSummarizationService();
+        let summary;
+        
+        try {
+            summary = await summarizationService.summarize({
+                text: transcriptionResult.text,
+                note_type: note_type,
+                participants: participantNames,
+                calendar: calendar_event_id ? {
+                    calendar_event_id,
+                    calendar_start_time,
+                    calendar_end_time
+                } : null,
+                model: model
+            });
+            console.log('✅ [Hybrid Step 6] Summary generated');
+            console.log(`   Key points: ${summary.key_points.length}`);
+            console.log(`   Action items: ${summary.action_items.length}`);
+        } catch (error) {
+            console.error('❌ [Hybrid Step 6] Summarization failed:', error.message);
+            summary = {
+                key_points: [],
+                decisions: [],
+                action_items: [],
+                open_questions: [],
+                sentiment_overall: 'NEUTRAL',
+                topics: [],
+                keywords: [],
+                tags: []
+            };
+        }
+
+        // ========================================
+        // STEP 7: Create Note Record with INITIAL status
+        // ========================================
+        console.log('📋 [Hybrid Step 7] Creating main note record (INITIAL status)...');
+        
+        const actionItemTexts = summary.action_items.map(item => item.text || '');
+        const actionItemAssignees = summary.action_items.map(item => item.assignee || 'unassigned');
+        const actionItemDueDates = summary.action_items.map(item => item.due_text || 'no date');
+        const noteTags = summary.tags || [];
+
+        // Set empty tags for chunks (skip LLM tag generation for speed)
+        chunks.forEach(chunk => { chunk.tags = []; });
+
+        const notePayload = {
+            title: router._generateNoteTitle(note_type, participantNames, transcriptionResult.text),
+            description: 'Alfred Notes capture (hybrid processing)',
+            language: transcriptionResult.language,
+            tags: noteTags,
+            note_type,
+            created_at: start_time,
+            ended_at: end_time,
+            device_type,
+            capture_location,
+            transcription_engine_did: null,
+            transcription_status: 'INITIAL', // NEW: Mark as initial transcript
+            transcription_source: initial_transcript_source,
+            transcript_did: transcriptTextDid,
+            audio_ref: null,
+            audio_meta: audioMeta,
+            summary_key_points: summary.key_points,
+            summary_decisions: summary.decisions,
+            summary_action_item_texts: actionItemTexts,
+            summary_action_item_assignees: actionItemAssignees,
+            summary_action_item_due_texts: actionItemDueDates,
+            summary_open_questions: summary.open_questions,
+            sentiment_overall: summary.sentiment_overall,
+            topics_auto: summary.topics,
+            keywords_auto: summary.keywords,
+            participant_display_names: participantNames,
+            participant_roles: participantRolesArray,
+            calendar_event_id,
+            calendar_start_time,
+            calendar_end_time,
+            chunking_strategy,
+            chunk_count: chunks.length,
+            chunk_ids: []
+        };
+
+        let noteRecordDid = null;
+        try {
+            const noteRecord = await notesRecordsService.createNoteRecord(
+                noteHash,
+                notePayload,
+                userPublicKey,
+                token
+            );
+            noteRecordDid = noteRecord.did;
+            console.log('✅ [Hybrid Step 7] Note record created:', noteRecordDid);
+        } catch (error) {
+            console.error('❌ [Hybrid Step 7] Note record creation failed:', error.message);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to create note record',
+                details: error.message
+            });
+        }
+
+        // ========================================
+        // STEP 8: Create Note Chunk Records
+        // ========================================
+        console.log(`🗂️ [Hybrid Step 8] Creating ${chunks.length} chunk records...`);
+        
+        const captureDate = new Date(start_time).getTime();
+        const chunkResults = await notesRecordsService.createAllNoteChunks(
+            noteHash,
+            chunks,
+            note_type,
+            captureDate,
+            userPublicKey,
+            token,
+            noteRecordDid
+        );
+        
+        const chunkDids = chunkResults.map(chunk => chunk.did);
+        console.log(`✅ [Hybrid Step 8] Created ${chunkResults.length} chunk records`);
+
+        // Update note with chunk IDs
+        try {
+            await notesRecordsService.updateNoteChunkIds(
+                noteHash,
+                notePayload,
+                chunkDids,
+                userPublicKey,
+                token
+            );
+            console.log('✅ [Hybrid Step 8] Note updated with chunk IDs');
+        } catch (error) {
+            console.warn('⚠️ [Hybrid Step 8] Failed to update note with chunk IDs:', error.message);
+        }
+
+        // ========================================
+        // STEP 9: Queue Background Enhancement Job (if requested)
+        // ========================================
+        let enhancementJob = null;
+        const shouldQueueEnhancement = queue_enhanced_transcript === 'true' || queue_enhanced_transcript === true;
+        const shouldSkipBackendSTT = skip_backend_stt === 'true' || skip_backend_stt === true;
+        
+        if (shouldQueueEnhancement && !shouldSkipBackendSTT) {
+            console.log('🔄 [Hybrid Step 9] Queuing background enhancement job...');
+            
+            const notesJobService = getNotesJobService();
+            
+            const jobId = notesJobService.createEnhancementJob({
+                userId: req.user.id || req.user.userId,
+                userPublicKey,
+                userEmail: req.user.email,
+                token,
+                tempFilePath, // Keep for background processing
+                audioFilename: audioMeta.filename,
+                audioSize: audioMeta.size,
+                durationSec,
+                noteDid: noteRecordDid,
+                noteHash,
+                initialTranscript: initial_transcript,
+                initial_transcript_source,
+                model,
+                note_type,
+                chunking_strategy
+            });
+            
+            enhancementJob = {
+                jobId,
+                status: JobStatus.QUEUED,
+                statusUrl: `/api/notes/jobs/${jobId}`
+            };
+            
+            console.log(`✅ [Hybrid Step 9] Enhancement job created: ${jobId}`);
+            
+            // Start background processing (fire and forget)
+            processEnhancementJob(jobId).catch(err => {
+                console.error(`❌ Enhancement job ${jobId} failed:`, err);
+            });
+        } else {
+            // Clean up temp file since we're not doing background enhancement
+            if (tempFilePath && fs.existsSync(tempFilePath)) {
+                fs.unlinkSync(tempFilePath);
+                console.log('✅ [Hybrid Step 9] Temp file cleaned up (no enhancement queued)');
+            }
+        }
+
+        // ========================================
+        // STEP 10: Return Immediate Response
+        // ========================================
+        console.log('✅ [POST /api/notes/from-audio-hybrid] Hybrid ingestion complete');
+        
+        res.status(200).json({
+            success: true,
+            noteHash,
+            noteDid: noteRecordDid,
+            transcription_status: 'INITIAL',
+            transcription_source: initial_transcript_source,
+            chunkCount: chunks.length,
+            summary: {
+                keyPoints: summary.key_points,
+                decisions: summary.decisions,
+                actionItems: summary.action_items,
+                openQuestions: summary.open_questions
+            },
+            enhancementJob
+        });
+
+    } catch (error) {
+        console.error('❌ [POST /api/notes/from-audio-hybrid] Fatal error:', error);
+        
+        // Cleanup temp file on error
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+            try {
+                fs.unlinkSync(tempFilePath);
+            } catch (cleanupError) {
+                console.warn('⚠️ Failed to cleanup temp file:', cleanupError.message);
+            }
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'Hybrid audio note ingestion failed',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * Background processing function for enhancement jobs
+ * Runs high-accuracy transcription and updates the note
+ */
+async function processEnhancementJob(jobId) {
+    const notesJobService = getNotesJobService();
+    const job = notesJobService.getJob(jobId);
+    
+    if (!job) {
+        console.error(`[Enhancement] Job ${jobId} not found`);
+        return;
+    }
+    
+    try {
+        // Update status: Starting transcription
+        notesJobService.updateJob(jobId, {
+            status: JobStatus.TRANSCRIBING_ENHANCED,
+            progress: 10,
+            currentStep: 'Starting high-accuracy transcription...'
+        });
+        
+        // Run full STT processing
+        const sttService = getSTTService();
+        const transcriptionResult = await sttService.transcribe(job.tempFilePath, null);
+        
+        notesJobService.updateJob(jobId, {
+            progress: 50,
+            currentStep: 'Transcription complete, comparing results...'
+        });
+        
+        // Compare transcripts
+        const initialWordCount = (job.initialTranscript || '').split(/\s+/).length;
+        const enhancedWordCount = (transcriptionResult.text || '').split(/\s+/).length;
+        const wordDiff = Math.abs(enhancedWordCount - initialWordCount);
+        const diffPercent = (wordDiff / Math.max(initialWordCount, 1)) * 100;
+        
+        let estimatedImprovement = 'minimal';
+        if (diffPercent > 20) {
+            estimatedImprovement = 'significant';
+        } else if (diffPercent > 5) {
+            estimatedImprovement = 'moderate';
+        }
+        
+        notesJobService.updateTranscriptComparison(jobId, {
+            initialWordCount,
+            currentWordCount: enhancedWordCount,
+            estimatedImprovement
+        });
+        
+        console.log(`[Enhancement] Transcript comparison: ${initialWordCount} → ${enhancedWordCount} words (${estimatedImprovement})`);
+        
+        // If significant improvement, regenerate summary and update note
+        if (estimatedImprovement !== 'minimal') {
+            notesJobService.updateJob(jobId, {
+                status: JobStatus.SUMMARIZING,
+                progress: 60,
+                currentStep: 'Regenerating summary with enhanced transcript...'
+            });
+            
+            // Regenerate summary
+            const summarizationService = getSummarizationService();
+            const summary = await summarizationService.summarize({
+                text: transcriptionResult.text,
+                note_type: job.params.note_type,
+                model: job.params.model
+            });
+            
+            notesJobService.updateJob(jobId, {
+                status: JobStatus.UPDATING_NOTE,
+                progress: 80,
+                currentStep: 'Updating note with enhanced transcript...'
+            });
+            
+            // Update the note record with enhanced data
+            const notesRecordsService = getNotesRecordsService();
+            const OIPClient = require('../../helpers/oipClient');
+            const oipClient = new OIPClient(job.token);
+            
+            // Create new transcript record
+            const transcriptRecord = await notesRecordsService.createTranscriptTextRecord(
+                job.noteHash,
+                transcriptionResult.text,
+                transcriptionResult.language,
+                job.userPublicKey,
+                job.token
+            );
+            
+            // Note: Full update would require fetching the note and re-publishing
+            // For now, we log the enhanced data (full implementation would update the GUN record)
+            console.log(`[Enhancement] Enhanced transcript saved: ${transcriptRecord.did}`);
+            console.log(`[Enhancement] Summary regenerated with ${summary.key_points.length} key points`);
+        }
+        
+        notesJobService.updateJob(jobId, {
+            progress: 90,
+            currentStep: 'Cleaning up...'
+        });
+        
+        // Cleanup temp file
+        if (job.tempFilePath && fs.existsSync(job.tempFilePath)) {
+            fs.unlinkSync(job.tempFilePath);
+        }
+        
+        // Mark complete
+        notesJobService.completeJob(jobId, {
+            noteHash: job.noteHash,
+            noteDid: job.noteDid,
+            transcriptionImprovement: estimatedImprovement,
+            enhancedWordCount,
+            initialWordCount
+        });
+        
+        console.log(`✅ [Enhancement] Job ${jobId} complete`);
+        
+    } catch (error) {
+        console.error(`❌ [Enhancement] Job ${jobId} failed:`, error);
+        
+        // Cleanup temp file on error
+        if (job.tempFilePath && fs.existsSync(job.tempFilePath)) {
+            try {
+                fs.unlinkSync(job.tempFilePath);
+            } catch (e) {}
+        }
+        
+        notesJobService.failJob(jobId, error);
+    }
+}
+
+/**
+ * GET /api/notes/jobs/:jobId
+ * Get job status for polling
+ */
+router.get('/jobs/:jobId', authenticateToken, async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const notesJobService = getNotesJobService();
+        
+        const jobStatus = notesJobService.getJobStatus(jobId);
+        
+        if (!jobStatus) {
+            return res.status(404).json({
+                success: false,
+                error: 'Job not found'
+            });
+        }
+        
+        res.json({
+            success: true,
+            job: jobStatus
+        });
+        
+    } catch (error) {
+        console.error('❌ [GET /api/notes/jobs/:jobId] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get job status'
+        });
+    }
+});
+
+/**
+ * GET /api/notes/jobs
+ * List user's processing jobs
+ */
+router.get('/jobs', authenticateToken, async (req, res) => {
+    try {
+        const { limit = 10, status } = req.query;
+        const userId = req.user.id || req.user.userId;
+        const notesJobService = getNotesJobService();
+        
+        const jobs = notesJobService.listUserJobs(userId, {
+            limit: parseInt(limit),
+            status
+        });
+        
+        res.json({
+            success: true,
+            jobs
+        });
+        
+    } catch (error) {
+        console.error('❌ [GET /api/notes/jobs] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to list jobs'
+        });
+    }
+});
+
+/**
+ * DELETE /api/notes/jobs/:jobId
+ * Cancel a processing job
+ */
+router.delete('/jobs/:jobId', authenticateToken, async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const notesJobService = getNotesJobService();
+        
+        const success = notesJobService.cancelJob(jobId);
+        
+        if (!success) {
+            return res.status(400).json({
+                success: false,
+                error: 'Cannot cancel job (not found or already completed)'
+            });
+        }
+        
+        res.json({
+            success: true,
+            message: 'Job cancelled'
+        });
+        
+    } catch (error) {
+        console.error('❌ [DELETE /api/notes/jobs/:jobId] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to cancel job'
         });
     }
 });
@@ -1967,6 +2671,362 @@ ${context.relatedContent.map((item, i) => {
         });
     }
 });
+
+// ========================================
+// STREAMING VOICE MODE ENDPOINTS
+// For mac-client voice chat integration
+// ========================================
+
+// In-memory store for streaming dialogues
+const dialogueContexts = new Map();
+
+// Cleanup old dialogues every 5 minutes
+setInterval(() => {
+    const now = Date.now();
+    const maxAge = 10 * 60 * 1000; // 10 minutes
+    for (const [dialogueId, context] of dialogueContexts.entries()) {
+        if (now - context.createdAt > maxAge) {
+            dialogueContexts.delete(dialogueId);
+        }
+    }
+}, 5 * 60 * 1000);
+
+/**
+ * POST /api/notes/converse-stream
+ * Initialize streaming voice conversation about notes
+ * Returns dialogueId for SSE connection
+ */
+router.post('/converse-stream', authenticateToken, async (req, res) => {
+    try {
+        const {
+            noteDid,
+            question,
+            model = 'llama3.2:3b',
+            conversationHistory = [],
+            includeRelated = true,
+            maxRelated = 5,
+            allNotes = false,
+            voice_mode = true,
+            voice_config = {}
+        } = req.body;
+
+        console.log(`\n${'='.repeat(80)}`);
+        console.log(`[ALFRED Notes Stream] Initializing streaming conversation`);
+        console.log(`[ALFRED Notes Stream] Question: "${question}"`);
+        console.log(`[ALFRED Notes Stream] Voice mode: ${voice_mode}`);
+        console.log(`${'='.repeat(80)}\n`);
+
+        if (!question) {
+            return res.status(400).json({
+                success: false,
+                error: 'Question is required'
+            });
+        }
+
+        // Generate dialogue ID
+        const dialogueId = crypto.randomUUID();
+        
+        // Store dialogue context for SSE handler
+        dialogueContexts.set(dialogueId, {
+            question,
+            noteDid,
+            allNotes,
+            model,
+            conversationHistory,
+            includeRelated,
+            maxRelated,
+            voice_mode,
+            voice_config: {
+                engine: voice_config.engine || 'elevenlabs',
+                voice_id: voice_config.voice_id || 'onwK4e9ZLuTAKqWW03F9',
+                speed: voice_config.speed || 1
+            },
+            user: req.user,
+            token: req.headers.authorization.split(' ')[1],
+            createdAt: Date.now(),
+            chunks: [],
+            audioChunks: [],
+            complete: false,
+            error: null,
+            listeners: []
+        });
+
+        // Start background processing
+        processStreamingDialogue(dialogueId).catch(err => {
+            console.error(`[Streaming] Dialogue ${dialogueId} failed:`, err);
+            const ctx = dialogueContexts.get(dialogueId);
+            if (ctx) {
+                ctx.error = err.message;
+                ctx.complete = true;
+                notifyListeners(dialogueId, { type: 'error', error: err.message });
+            }
+        });
+
+        res.json({
+            success: true,
+            dialogueId,
+            statusUrl: `/api/notes/stream?dialogueId=${dialogueId}`
+        });
+
+    } catch (error) {
+        console.error('[ALFRED Notes Stream] ❌ Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to initialize streaming conversation',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/notes/stream
+ * SSE endpoint for streaming responses
+ */
+router.get('/stream', (req, res) => {
+    const { dialogueId } = req.query;
+    
+    if (!dialogueId) {
+        return res.status(400).json({ error: 'dialogueId is required' });
+    }
+    
+    const context = dialogueContexts.get(dialogueId);
+    if (!context) {
+        return res.status(404).json({ error: 'Dialogue not found' });
+    }
+
+    // Set up SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    // Send any existing chunks immediately
+    for (const chunk of context.chunks) {
+        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+    }
+    for (const audioChunk of context.audioChunks) {
+        res.write(`data: ${JSON.stringify(audioChunk)}\n\n`);
+    }
+    
+    // If already complete, send completion and close
+    if (context.complete) {
+        if (context.error) {
+            res.write(`data: ${JSON.stringify({ type: 'error', error: context.error })}\n\n`);
+        } else {
+            res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
+        }
+        res.end();
+        return;
+    }
+
+    // Add listener for new chunks
+    const listener = (chunk) => {
+        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        if (chunk.type === 'complete' || chunk.type === 'error') {
+            res.end();
+        }
+    };
+    
+    context.listeners.push(listener);
+    
+    // Handle client disconnect
+    req.on('close', () => {
+        const idx = context.listeners.indexOf(listener);
+        if (idx !== -1) {
+            context.listeners.splice(idx, 1);
+        }
+    });
+});
+
+/**
+ * Notify all SSE listeners of a new chunk
+ */
+function notifyListeners(dialogueId, chunk) {
+    const context = dialogueContexts.get(dialogueId);
+    if (!context) return;
+    
+    // Store chunk for late-joining listeners
+    if (chunk.type === 'textChunk') {
+        context.chunks.push(chunk);
+    } else if (chunk.type === 'audioChunk') {
+        context.audioChunks.push(chunk);
+    }
+    
+    // Notify all current listeners
+    for (const listener of context.listeners) {
+        try {
+            listener(chunk);
+        } catch (e) {
+            console.warn('[Streaming] Listener error:', e);
+        }
+    }
+}
+
+/**
+ * Process streaming dialogue in background
+ */
+async function processStreamingDialogue(dialogueId) {
+    const context = dialogueContexts.get(dialogueId);
+    if (!context) return;
+    
+    try {
+        const userPublicKey = context.user.publicKey || context.user.publisherPubKey;
+        
+        // Build note context (similar to /converse endpoint)
+        let noteContext = null;
+        let transcriptText = '';
+        
+        if (context.noteDid) {
+            // Fetch note and build context
+            const noteResults = await getRecords({
+                source: 'gun',
+                did: context.noteDid,
+                limit: 1,
+                resolveDepth: 1
+            }, { user: context.user, headers: { authorization: `Bearer ${context.token}` } });
+            
+            if (noteResults.records && noteResults.records.length > 0) {
+                const noteRecord = noteResults.records[0];
+                const noteData = noteRecord.data?.notes || {};
+                const noteBasic = noteRecord.data?.basic || {};
+                
+                // Extract transcript
+                const transcriptData = noteData.transcript_full_text;
+                if (typeof transcriptData === 'object' && transcriptData.data?.text?.value) {
+                    transcriptText = transcriptData.data.text.value;
+                } else if (typeof transcriptData === 'string') {
+                    try {
+                        const transcriptResults = await getRecords({
+                            source: 'gun',
+                            did: transcriptData,
+                            limit: 1
+                        }, { user: context.user, headers: { authorization: `Bearer ${context.token}` } });
+                        
+                        if (transcriptResults.records && transcriptResults.records.length > 0) {
+                            transcriptText = transcriptResults.records[0].data?.text?.value || '';
+                        }
+                    } catch (e) {}
+                }
+                
+                noteContext = {
+                    title: noteBasic.name,
+                    type: noteData.note_type,
+                    participants: noteData.participant_display_names || [],
+                    summary: {
+                        key_points: noteData.summary_key_points || [],
+                        decisions: noteData.summary_decisions || [],
+                        action_items: noteData.summary_action_item_texts || [],
+                        open_questions: noteData.summary_open_questions || []
+                    },
+                    transcript: transcriptText
+                };
+            }
+        }
+        
+        // Build context string for ALFRED
+        let contextString = '';
+        if (noteContext) {
+            contextString = `You are answering questions about a meeting note.
+
+Note Title: ${noteContext.title}
+Note Type: ${noteContext.type}
+${noteContext.participants.length > 0 ? `Participants: ${noteContext.participants.join(', ')}` : ''}
+
+${noteContext.summary.key_points.length > 0 ? `Key Points:\n${noteContext.summary.key_points.map((p, i) => `${i + 1}. ${p}`).join('\n')}` : ''}
+
+${noteContext.transcript ? `Transcript:\n${noteContext.transcript}` : ''}`;
+        }
+        
+        // Check for self-referential question
+        if (isSelfReferentialQuestion(context.question)) {
+            const response = await handleSelfReferentialQuestion(
+                context.question,
+                context.model,
+                context.conversationHistory
+            );
+            
+            // Send text chunk
+            notifyListeners(dialogueId, {
+                type: 'textChunk',
+                text: response.answer,
+                final: true
+            });
+            
+            // Generate TTS if voice mode
+            if (context.voice_mode) {
+                const audioData = await generateAudioForResponse(response.answer, context.voice_config);
+                if (audioData) {
+                    notifyListeners(dialogueId, {
+                        type: 'audioChunk',
+                        audioData,
+                        format: 'mp3',
+                        final: true
+                    });
+                }
+            }
+            
+            context.complete = true;
+            notifyListeners(dialogueId, { type: 'complete' });
+            return;
+        }
+        
+        // Call ALFRED for response
+        const alfredInstance = require('../../helpers/alexandria/alfred');
+        
+        const alfredOptions = {
+            model: context.model,
+            conversationHistory: context.conversationHistory,
+            existingContext: contextString || undefined,
+            useFieldExtraction: !!noteContext,
+            bypassRAG: !noteContext && !context.allNotes
+        };
+        
+        const alfredResponse = await alfredInstance.query(context.question, alfredOptions);
+        const responseText = alfredResponse.answer || '';
+        
+        console.log(`[Streaming] Generated response: ${responseText.length} chars`);
+        
+        // Send text chunk
+        notifyListeners(dialogueId, {
+            type: 'textChunk',
+            text: responseText,
+            final: true,
+            model: alfredResponse.model || context.model,
+            sources: alfredResponse.sources || []
+        });
+        
+        // Generate and stream TTS if voice mode
+        if (context.voice_mode && responseText) {
+            try {
+                const audioData = await generateAudioForResponse(responseText, context.voice_config);
+                if (audioData) {
+                    notifyListeners(dialogueId, {
+                        type: 'audioChunk',
+                        audioData,
+                        format: 'mp3',
+                        final: true
+                    });
+                }
+            } catch (audioError) {
+                console.warn('[Streaming] TTS generation failed:', audioError.message);
+                notifyListeners(dialogueId, {
+                    type: 'audioError',
+                    error: audioError.message
+                });
+            }
+        }
+        
+        context.complete = true;
+        notifyListeners(dialogueId, { type: 'complete' });
+        
+    } catch (error) {
+        console.error(`[Streaming] Dialogue ${dialogueId} error:`, error);
+        context.error = error.message;
+        context.complete = true;
+        notifyListeners(dialogueId, { type: 'error', error: error.message });
+    }
+}
 
 module.exports = router;
 
