@@ -1039,6 +1039,182 @@
             border-style: solid;
         }
 
+        /* User Info & Auth */
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-email {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .logout-btn {
+            padding: 6px 12px;
+            background: var(--bg-panel);
+            color: var(--red);
+            border: 1px solid rgba(255, 92, 92, 0.5);
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            transition: all var(--transition-fast);
+        }
+
+        .logout-btn:hover {
+            background: var(--red);
+            color: white;
+        }
+
+        /* Auth Modal */
+        .auth-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 15, 20, 0.95);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .auth-modal.hidden {
+            display: none;
+        }
+
+        .auth-card {
+            background: var(--bg-panel);
+            padding: 32px;
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 380px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid var(--border-strong);
+        }
+
+        .auth-title {
+            font-family: "Press Start 2P", monospace;
+            font-size: 12px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            text-align: center;
+            margin-bottom: 24px;
+            color: var(--accent-cyan);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: var(--text-secondary);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            background: var(--bg-elevated);
+            font-size: 14px;
+            font-family: inherit;
+            color: var(--text-primary);
+            outline: none;
+            transition: all var(--transition-fast);
+        }
+
+        .form-input:focus {
+            border-color: var(--accent-cyan);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .primary-button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--secondary-purple));
+            border: none;
+            border-radius: var(--radius-sm);
+            color: var(--bg-primary);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-family: inherit;
+        }
+
+        .primary-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(95, 252, 249, 0.3);
+        }
+
+        .auth-toggle {
+            text-align: center;
+            margin-top: 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .auth-toggle a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .auth-toggle a:hover {
+            text-decoration: underline;
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-panel);
+            border: 1px solid var(--border-strong);
+            border-radius: 999px;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 2000;
+            box-shadow: var(--shadow-soft);
+            animation: slideUp 0.3s ease;
+        }
+
+        .toast.hidden {
+            display: none;
+        }
+
+        .toast.success {
+            border-color: var(--green);
+        }
+
+        .toast.error {
+            border-color: var(--red);
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
         /* ===============================
            LOADING STATES
         =============================== */
@@ -1073,9 +1249,13 @@
         <div class="app-logo">
             <span class="app-logo-text">Alfred's Notes</span>
         </div>
-        <div class="connection-status">
-            <span class="status-dot" id="connectionDot"></span>
-            <span id="connectionText">Connecting...</span>
+        <div class="user-info">
+            <div class="connection-status">
+                <span class="status-dot" id="connectionDot"></span>
+                <span id="connectionText">Connecting...</span>
+            </div>
+            <span id="userEmail" class="user-email">Loading...</span>
+            <button class="logout-btn" onclick="alfredNotesApp.logout()">Logout</button>
         </div>
     </header>
 
@@ -1377,6 +1557,47 @@
         </button>
     </nav>
 
+    <!-- Auth Modal -->
+    <div class="auth-modal" id="authModal">
+        <div class="auth-card">
+            <h2 class="auth-title">Welcome to Alfred's Notes</h2>
+            <div id="loginForm">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="loginEmail" placeholder="Enter your email">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="loginPassword" placeholder="Enter your password">
+                </div>
+                <button class="primary-button" onclick="alfredNotesApp.login()">Login</button>
+                <div class="auth-toggle">
+                    Don't have an account? <a href="#" onclick="alfredNotesApp.showRegister(); return false;">Register</a>
+                </div>
+            </div>
+            <div id="registerForm" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="registerEmail" placeholder="Enter your email">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="registerPassword" placeholder="Choose a password">
+                </div>
+                <button class="primary-button" onclick="alfredNotesApp.register()">Register</button>
+                <div class="auth-toggle">
+                    Already have an account? <a href="#" onclick="alfredNotesApp.showLogin(); return false;">Login</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast hidden" id="toast">
+        <span id="toastIcon">✓</span>
+        <span id="toastMessage">Success!</span>
+    </div>
+
     <script>
         /**
          * Alfred's Notes Mac Client Application
@@ -1408,14 +1629,17 @@
                 dialogueEventSource: null,
                 // Connection state
                 backendConnected: false,
-                voiceProcessorConnected: false
+                voiceProcessorConnected: false,
+                // Auth state
+                jwtToken: localStorage.getItem('alfred_jwt_token'),
+                userEmail: localStorage.getItem('alfred_user_email')
             },
 
             // Configuration
             config: {
                 backendUrl: localStorage.getItem('backend_url') || 'https://api.oip.onl',
                 voiceProcessorUrl: localStorage.getItem('voice_processor_url') || 'http://localhost:8765',
-                token: localStorage.getItem('auth_token') || ''
+                token: localStorage.getItem('alfred_jwt_token') || ''
             },
 
             // Initialize
@@ -1424,6 +1648,19 @@
                 
                 // Load saved settings
                 this.loadSettings();
+                
+                // Set up auth event listeners first (for Enter key on login forms)
+                this.setupAuthEventListeners();
+                
+                // Check authentication first
+                if (!this.state.jwtToken) {
+                    this.showAuthModal();
+                    return;
+                }
+                
+                // Hide auth modal and continue initialization
+                this.hideAuthModal();
+                this.loadUserInfo();
                 
                 // Check connections
                 await this.checkConnections();
@@ -1439,6 +1676,28 @@
                 
                 // Update UI with loaded settings
                 this.updateSettingsUI();
+            },
+
+            // Setup auth-related event listeners (called before auth check)
+            setupAuthEventListeners() {
+                // Enter key for login/register forms
+                ['loginEmail', 'loginPassword'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.addEventListener('keypress', (e) => {
+                            if (e.key === 'Enter') this.login();
+                        });
+                    }
+                });
+
+                ['registerEmail', 'registerPassword'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.addEventListener('keypress', (e) => {
+                            if (e.key === 'Enter') this.register();
+                        });
+                    }
+                });
             },
 
             // Load settings from localStorage
@@ -2536,6 +2795,154 @@
                 const names = this.state.participants.filter(p => p.name).map(p => p.name);
                 const roles = this.state.participants.filter(p => p.role).map(p => p.role);
                 return { names, roles };
+            },
+
+            // ========================================
+            // AUTHENTICATION
+            // ========================================
+
+            async login() {
+                const email = document.getElementById('loginEmail').value.trim();
+                const password = document.getElementById('loginPassword').value;
+
+                if (!email || !password) {
+                    this.showToast('Please enter email and password', 'error');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${this.config.backendUrl}/api/user/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.state.jwtToken = data.token;
+                        this.state.userEmail = email;
+                        this.config.token = data.token;
+                        localStorage.setItem('alfred_jwt_token', data.token);
+                        localStorage.setItem('alfred_user_email', email);
+                        
+                        this.hideAuthModal();
+                        this.showToast('Logged in successfully', 'success');
+                        
+                        // Continue initialization
+                        this.loadUserInfo();
+                        await this.checkConnections();
+                        this.setupEventListeners();
+                        await this.loadNotes();
+                        this.initAudioContext();
+                        this.updateSettingsUI();
+                    } else {
+                        this.showToast(data.error || 'Login failed', 'error');
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    this.showToast('Login failed: ' + error.message, 'error');
+                }
+            },
+
+            async register() {
+                const email = document.getElementById('registerEmail').value.trim();
+                const password = document.getElementById('registerPassword').value;
+
+                if (!email || !password) {
+                    this.showToast('Please enter email and password', 'error');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${this.config.backendUrl}/api/user/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.state.jwtToken = data.token;
+                        this.state.userEmail = email;
+                        this.config.token = data.token;
+                        localStorage.setItem('alfred_jwt_token', data.token);
+                        localStorage.setItem('alfred_user_email', email);
+                        
+                        this.hideAuthModal();
+                        this.showToast('Account created successfully', 'success');
+                        
+                        // Continue initialization
+                        this.loadUserInfo();
+                        await this.checkConnections();
+                        this.setupEventListeners();
+                        await this.loadNotes();
+                        this.initAudioContext();
+                        this.updateSettingsUI();
+                    } else {
+                        this.showToast(data.error || 'Registration failed', 'error');
+                    }
+                } catch (error) {
+                    console.error('Registration error:', error);
+                    this.showToast('Registration failed: ' + error.message, 'error');
+                }
+            },
+
+            logout() {
+                this.state.jwtToken = null;
+                this.state.userEmail = null;
+                this.config.token = '';
+                this.state.notes = [];
+                localStorage.removeItem('alfred_jwt_token');
+                localStorage.removeItem('alfred_user_email');
+                this.showAuthModal();
+                this.showToast('Logged out successfully', 'success');
+            },
+
+            showAuthModal() {
+                const modal = document.getElementById('authModal');
+                if (modal) modal.classList.remove('hidden');
+            },
+
+            hideAuthModal() {
+                const modal = document.getElementById('authModal');
+                if (modal) modal.classList.add('hidden');
+            },
+
+            showLogin() {
+                document.getElementById('loginForm').style.display = 'block';
+                document.getElementById('registerForm').style.display = 'none';
+            },
+
+            showRegister() {
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('registerForm').style.display = 'block';
+            },
+
+            loadUserInfo() {
+                const userEmailEl = document.getElementById('userEmail');
+                if (userEmailEl) {
+                    userEmailEl.textContent = this.state.userEmail || 'User';
+                }
+            },
+
+            // Toast notifications
+            showToast(message, type = 'success') {
+                const toast = document.getElementById('toast');
+                const toastIcon = document.getElementById('toastIcon');
+                const toastMessage = document.getElementById('toastMessage');
+                
+                if (!toast) return;
+                
+                toastMessage.textContent = message;
+                toastIcon.textContent = type === 'success' ? '✓' : '✗';
+                toast.className = `toast ${type}`;
+                
+                // Auto-hide after 3 seconds
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 3000);
             }
         };
 
