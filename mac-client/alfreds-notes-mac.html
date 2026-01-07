@@ -152,7 +152,34 @@
         }
 
         .nav-icon {
-            font-size: 24px;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .icon-nav {
+            width: 24px;
+            height: 24px;
+            filter: brightness(0) saturate(100%) invert(85%) sepia(15%) saturate(200%) hue-rotate(180deg);
+            transition: filter var(--transition-fast);
+        }
+
+        .nav-item.active .icon-nav {
+            filter: brightness(0) saturate(100%) invert(82%) sepia(51%) saturate(2450%) hue-rotate(125deg) brightness(102%) contrast(97%);
+        }
+
+        .icon-template {
+            width: 32px;
+            height: 32px;
+            filter: brightness(0) saturate(100%) invert(82%) sepia(51%) saturate(2450%) hue-rotate(125deg) brightness(102%) contrast(97%);
+        }
+
+        .icon-record {
+            width: 64px;
+            height: 64px;
+            filter: brightness(0) saturate(100%) invert(82%) sepia(51%) saturate(2450%) hue-rotate(125deg) brightness(102%) contrast(97%);
         }
 
         .nav-label {
@@ -772,6 +799,246 @@
             outline: none;
         }
 
+        .setting-label-group {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .setting-description {
+            font-size: 11px;
+            color: var(--text-tertiary);
+        }
+
+        .setting-value.full-width {
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        .full-input {
+            width: 100%;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            font-family: inherit;
+        }
+
+        .full-input:focus {
+            border-color: var(--accent-cyan);
+        }
+
+        .setting-item {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .setting-value-text {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .test-btn {
+            background: var(--bg-elevated);
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .test-btn:hover {
+            background: rgba(95, 252, 249, 0.1);
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            transition: 0.3s;
+            border-radius: 24px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 2px;
+            bottom: 2px;
+            background-color: var(--text-tertiary);
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+        }
+
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+            background-color: var(--bg-primary);
+        }
+
+        /* Duration Toggle */
+        .duration-toggle {
+            display: flex;
+            background: var(--bg-elevated);
+            border-radius: 999px;
+            padding: 4px;
+            gap: 4px;
+            max-width: 400px;
+            margin: 0 auto 8px;
+        }
+
+        .duration-btn {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            background: none;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all var(--transition-fast);
+        }
+
+        .duration-btn.active {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--secondary-purple));
+            color: var(--bg-primary);
+        }
+
+        /* Participants Section */
+        .participants-section {
+            width: 100%;
+            max-width: 520px;
+            margin-top: 24px;
+        }
+
+        .participant-entry {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 10px 12px;
+            transition: all var(--transition-fast);
+        }
+
+        .participant-entry:hover {
+            border-color: rgba(95, 252, 249, 0.4);
+        }
+
+        .participant-field {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .participant-label {
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .participant-input {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+            font-size: 13px;
+            color: var(--text-primary);
+            font-family: inherit;
+            outline: none;
+            transition: all var(--transition-fast);
+        }
+
+        .participant-input:focus {
+            border-color: var(--accent-cyan);
+            background: var(--bg-panel);
+        }
+
+        .participant-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .remove-participant-btn {
+            background: transparent;
+            border: 1px solid rgba(255, 92, 92, 0.3);
+            color: var(--red);
+            border-radius: var(--radius-sm);
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all var(--transition-fast);
+        }
+
+        .remove-participant-btn:hover {
+            background: rgba(255, 92, 92, 0.15);
+            border-color: var(--red);
+        }
+
+        .add-participant-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-panel);
+            border: 1px dashed var(--border-strong);
+            border-radius: var(--radius-md);
+            color: var(--accent-cyan);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all var(--transition-fast);
+            margin-top: 10px;
+        }
+
+        .add-participant-btn:hover {
+            background: rgba(95, 252, 249, 0.08);
+            border-color: var(--accent-cyan);
+            border-style: solid;
+        }
+
         /* ===============================
            LOADING STATES
         =============================== */
@@ -815,7 +1082,7 @@
     <!-- Main Content -->
     <main class="app-content">
         <!-- Chat View -->
-        <section id="chatView" class="view chat-view active">
+        <section id="chatView" class="view chat-view">
             <div class="chat-header">
                 <div class="chat-toggle-row">
                     <div class="chat-toggle">
@@ -825,9 +1092,14 @@
                     </div>
                 </div>
                 <div id="noteContext" class="note-context-indicator hidden">
-                    <span>📝</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                    </svg>
                     <span id="noteContextTitle">No note selected</span>
-                    <button onclick="alfredNotesApp.clearNoteContext()">✕</button>
+                    <button onclick="alfredNotesApp.clearNoteContext()">×</button>
                 </div>
             </div>
             
@@ -840,7 +1112,12 @@
             <div class="chat-input-area">
                 <input type="text" id="chatInput" class="chat-input" placeholder="Ask Alfred anything..." />
                 <button class="voice-btn" id="voiceBtn" onclick="alfredNotesApp.toggleVoiceInput()">
-                    🎤
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                    </svg>
                 </button>
             </div>
 
@@ -861,44 +1138,77 @@
         </section>
 
         <!-- Capture View -->
-        <section id="captureView" class="view capture-view">
+        <section id="captureView" class="view capture-view active">
             <div class="capture-status">
                 <h2 id="captureStatusText">Ready to Record</h2>
                 <div class="capture-timer" id="captureTimer">00:00:00</div>
             </div>
             
             <button class="record-button" id="recordBtn" onclick="alfredNotesApp.toggleRecording()">
-                <span class="record-button-icon">🎙️</span>
+                <span class="record-button-icon">
+                    <img src="/icons/noun-microphone-7208171.svg" alt="Record" class="icon-record">
+                </span>
             </button>
             
             <div class="template-selector">
-                <div class="template-title">Note Type</div>
+                <div class="template-title">Select Template</div>
                 <div class="template-grid">
                     <div class="template-card selected" data-type="MEETING">
-                        <div class="template-icon">👥</div>
+                        <div class="template-icon">
+                            <img src="/icons/noun-group-7945444.svg" alt="Meeting" class="icon-template">
+                        </div>
                         <div class="template-name">Meeting</div>
                     </div>
                     <div class="template-card" data-type="ONE_ON_ONE">
-                        <div class="template-icon">🤝</div>
+                        <div class="template-icon">
+                            <img src="/icons/noun-partner-4253508.svg" alt="1:1" class="icon-template">
+                        </div>
                         <div class="template-name">1:1</div>
                     </div>
                     <div class="template-card" data-type="STANDUP">
-                        <div class="template-icon">🏃</div>
+                        <div class="template-icon">
+                            <img src="/icons/noun-checklist-8032577.svg" alt="Standup" class="icon-template">
+                        </div>
                         <div class="template-name">Standup</div>
                     </div>
                     <div class="template-card" data-type="IDEA">
-                        <div class="template-icon">💡</div>
-                        <div class="template-name">Idea</div>
+                        <div class="template-icon">
+                            <img src="/icons/noun-innovation-7945253.svg" alt="Idea" class="icon-template">
+                        </div>
+                        <div class="template-name">Idea / Brain Dump</div>
                     </div>
                     <div class="template-card" data-type="REFLECTION">
-                        <div class="template-icon">🪞</div>
-                        <div class="template-name">Reflection</div>
+                        <div class="template-icon">
+                            <img src="/icons/noun-thinking-5552685.svg" alt="Reflection" class="icon-template">
+                        </div>
+                        <div class="template-name">Daily Reflection</div>
                     </div>
-                    <div class="template-card" data-type="OTHER">
-                        <div class="template-icon">📝</div>
-                        <div class="template-name">Other</div>
+                    <div class="template-card" data-type="INTERVIEW">
+                        <div class="template-icon">
+                            <img src="/icons/noun-training-7945372.svg" alt="Interview" class="icon-template">
+                        </div>
+                        <div class="template-name">Interview / Lecture</div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Meeting Duration Toggle -->
+            <div class="template-selector" id="durationSection">
+                <div class="template-title">Meeting Duration</div>
+                <div class="duration-toggle">
+                    <button class="duration-btn active" data-duration="short" onclick="alfredNotesApp.setDuration('short')">Short (&lt;60 min)</button>
+                    <button class="duration-btn" data-duration="long" onclick="alfredNotesApp.setDuration('long')">Long (60+ min)</button>
+                </div>
+                <div class="setting-description">Use "Long" for meetings over 60 minutes to avoid processing timeouts</div>
+            </div>
+
+            <!-- Participants Section -->
+            <div class="participants-section" id="participantsSection">
+                <div class="template-title">Participants (Optional)</div>
+                <div id="participantsList">
+                    <!-- Participant entries will be dynamically added here -->
+                </div>
+                <button class="add-participant-btn" onclick="alfredNotesApp.addParticipant()">+ Add Participant</button>
             </div>
             
             <div class="live-transcript" id="liveTranscript"></div>
@@ -908,13 +1218,18 @@
         <section id="libraryView" class="view library-view">
             <div class="library-header">
                 <div class="search-bar">
-                    <span>🔍</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
                     <input type="text" id="searchInput" placeholder="Search notes..." oninput="alfredNotesApp.searchNotes(this.value)" />
                 </div>
             </div>
             <div id="notesList" class="notes-list">
                 <div class="empty-state">
-                    <div class="empty-state-icon">📚</div>
+                    <div class="empty-state-icon">
+                        <img src="/icons/noun-notebook-7945455.svg" alt="Notes" style="width: 48px; height: 48px; filter: brightness(0) saturate(100%) invert(50%) sepia(0%) saturate(0%) hue-rotate(0deg);">
+                    </div>
                     <p>No notes yet. Start recording to create your first note!</p>
                 </div>
             </div>
@@ -923,20 +1238,62 @@
         <!-- Settings View -->
         <section id="settingsView" class="view settings-view">
             <div class="settings-section">
-                <div class="settings-title">Voice Settings</div>
+                <div class="settings-title">Alfred Backend</div>
+                <div class="setting-item">
+                    <div class="setting-label-group">
+                        <span class="setting-label">Backend API URL</span>
+                        <span class="setting-description">The URL of your Alfred/Alexandria server</span>
+                    </div>
+                    <div class="setting-value full-width">
+                        <input type="text" id="backendUrl" class="full-input" placeholder="https://api.oip.onl" />
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-label-group">
+                        <span class="setting-label">Voice Processor URL</span>
+                        <span class="setting-description">Local unified voice processor for STT</span>
+                    </div>
+                    <div class="setting-value full-width">
+                        <input type="text" id="voiceProcessorUrl" class="full-input" value="http://localhost:8765" />
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <span class="setting-label">Test Connection</span>
+                    <div class="setting-value">
+                        <button class="test-btn" onclick="alfredNotesApp.testConnections()">Test</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-title">Voice Response</div>
                 <div class="setting-item">
                     <span class="setting-label">TTS Engine</span>
                     <div class="setting-value">
                         <select id="ttsEngine">
+                            <option value="kokoro">Kokoro TTS (High quality, fast)</option>
                             <option value="elevenlabs">ElevenLabs</option>
                             <option value="local">Local TTS</option>
                         </select>
                     </div>
                 </div>
                 <div class="setting-item">
-                    <span class="setting-label">Voice ID</span>
+                    <span class="setting-label">Voice Selection</span>
                     <div class="setting-value">
-                        <input type="text" id="voiceId" value="onwK4e9ZLuTAKqWW03F9" />
+                        <select id="voiceId">
+                            <option value="af_heart">English (American)</option>
+                            <option value="bf_emma">English (British)</option>
+                            <option value="onwK4e9ZLuTAKqWW03F9">ElevenLabs Default</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <span class="setting-label">Auto-play Responses</span>
+                    <div class="setting-value">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="autoPlayAudio" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
                     </div>
                 </div>
             </div>
@@ -955,22 +1312,38 @@
                 <div class="setting-item">
                     <span class="setting-label">Queue Enhanced Transcript</span>
                     <div class="setting-value">
-                        <input type="checkbox" id="queueEnhanced" checked />
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="queueEnhanced" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
                     </div>
                 </div>
             </div>
             
             <div class="settings-section">
-                <div class="settings-title">AI Model</div>
+                <div class="settings-title">LLM Model</div>
                 <div class="setting-item">
-                    <span class="setting-label">Model</span>
+                    <span class="setting-label">Select the model for summarization</span>
                     <div class="setting-value">
                         <select id="aiModel">
-                            <option value="llama3.2:3b">Llama 3.2 (3B)</option>
-                            <option value="llama3:8b">Llama 3 (8B)</option>
-                            <option value="parallel" selected>Parallel</option>
+                            <option value="parallel">Parallel (All Models)</option>
+                            <option value="llama3.2:3b" selected>Llama 3.2 3B (Fast, good quality)</option>
+                            <option value="gpt-4o-mini">GPT-4o Mini</option>
+                            <option value="grok-beta">Grok Beta</option>
                         </select>
                     </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-title">About</div>
+                <div class="setting-item">
+                    <span class="setting-label">Alfred Meeting Notes</span>
+                    <span class="setting-value-text">Version 1.0.0</span>
+                </div>
+                <div class="setting-item">
+                    <span class="setting-label">Backend API</span>
+                    <span class="setting-value-text" id="backendApiDisplay">Not configured</span>
                 </div>
             </div>
         </section>
@@ -978,20 +1351,28 @@
 
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
-        <button class="nav-item active" data-view="chat" onclick="alfredNotesApp.showView('chat')">
-            <span class="nav-icon">💬</span>
-            <span class="nav-label">Chat</span>
-        </button>
-        <button class="nav-item" data-view="capture" onclick="alfredNotesApp.showView('capture')">
-            <span class="nav-icon">🎙️</span>
-            <span class="nav-label">Capture</span>
+        <button class="nav-item active" data-view="capture" onclick="alfredNotesApp.showView('capture')">
+            <div class="nav-icon">
+                <img src="/icons/noun-home-8131209.svg" alt="Home" class="icon-nav">
+            </div>
+            <span class="nav-label">Home</span>
         </button>
         <button class="nav-item" data-view="library" onclick="alfredNotesApp.showView('library')">
-            <span class="nav-icon">📚</span>
-            <span class="nav-label">Library</span>
+            <div class="nav-icon">
+                <img src="/icons/noun-notebook-7945455.svg" alt="Notes" class="icon-nav">
+            </div>
+            <span class="nav-label">Notes</span>
+        </button>
+        <button class="nav-item" data-view="chat" onclick="alfredNotesApp.showView('chat')">
+            <div class="nav-icon">
+                <img src="/icons/alfred-buttler.png" alt="Alfred" class="icon-nav">
+            </div>
+            <span class="nav-label">Alfred</span>
         </button>
         <button class="nav-item" data-view="settings" onclick="alfredNotesApp.showView('settings')">
-            <span class="nav-icon">⚙️</span>
+            <div class="nav-icon">
+                <img src="/icons/noun-setting-4468047.svg" alt="Settings" class="icon-nav">
+            </div>
             <span class="nav-label">Settings</span>
         </button>
     </nav>
@@ -1004,7 +1385,7 @@
         const alfredNotesApp = {
             // State
             state: {
-                currentView: 'chat',
+                currentView: 'capture',
                 chatMode: 'direct', // direct | allNotes | noteSpecific
                 selectedNoteDid: null,
                 selectedNoteTitle: null,
@@ -1013,6 +1394,8 @@
                 recordingTimer: null,
                 liveTranscript: '',
                 selectedNoteType: 'MEETING',
+                selectedDuration: 'short',
+                participants: [],
                 conversationHistory: [],
                 notes: [],
                 isVoiceListening: false,
@@ -1030,14 +1413,17 @@
 
             // Configuration
             config: {
-                backendUrl: 'http://localhost:3005',
-                voiceProcessorUrl: 'http://localhost:8765',
+                backendUrl: localStorage.getItem('backend_url') || 'https://api.oip.onl',
+                voiceProcessorUrl: localStorage.getItem('voice_processor_url') || 'http://localhost:8765',
                 token: localStorage.getItem('auth_token') || ''
             },
 
             // Initialize
             async init() {
                 console.log('🚀 Initializing Alfred\'s Notes Mac Client');
+                
+                // Load saved settings
+                this.loadSettings();
                 
                 // Check connections
                 await this.checkConnections();
@@ -1050,6 +1436,73 @@
                 
                 // Initialize Web Audio API
                 this.initAudioContext();
+                
+                // Update UI with loaded settings
+                this.updateSettingsUI();
+            },
+
+            // Load settings from localStorage
+            loadSettings() {
+                const savedBackendUrl = localStorage.getItem('backend_url');
+                const savedVoiceProcessorUrl = localStorage.getItem('voice_processor_url');
+                
+                if (savedBackendUrl) {
+                    this.config.backendUrl = savedBackendUrl;
+                }
+                if (savedVoiceProcessorUrl) {
+                    this.config.voiceProcessorUrl = savedVoiceProcessorUrl;
+                }
+            },
+
+            // Update settings UI
+            updateSettingsUI() {
+                const backendUrlInput = document.getElementById('backendUrl');
+                const voiceProcessorUrlInput = document.getElementById('voiceProcessorUrl');
+                const backendApiDisplay = document.getElementById('backendApiDisplay');
+                
+                if (backendUrlInput) {
+                    backendUrlInput.value = this.config.backendUrl;
+                }
+                if (voiceProcessorUrlInput) {
+                    voiceProcessorUrlInput.value = this.config.voiceProcessorUrl;
+                }
+                if (backendApiDisplay) {
+                    backendApiDisplay.textContent = this.config.backendUrl;
+                }
+            },
+
+            // Save settings
+            saveSettings() {
+                const backendUrl = document.getElementById('backendUrl').value;
+                const voiceProcessorUrl = document.getElementById('voiceProcessorUrl').value;
+                
+                if (backendUrl) {
+                    this.config.backendUrl = backendUrl;
+                    localStorage.setItem('backend_url', backendUrl);
+                }
+                if (voiceProcessorUrl) {
+                    this.config.voiceProcessorUrl = voiceProcessorUrl;
+                    localStorage.setItem('voice_processor_url', voiceProcessorUrl);
+                }
+                
+                this.updateSettingsUI();
+                this.checkConnections();
+            },
+
+            // Test connections
+            async testConnections() {
+                const testBtn = document.querySelector('.test-btn');
+                testBtn.textContent = 'Testing...';
+                
+                await this.checkConnections();
+                
+                testBtn.textContent = this.state.backendConnected && this.state.voiceProcessorConnected 
+                    ? '✓ Connected' 
+                    : 'Test';
+                
+                setTimeout(() => {
+                    testBtn.textContent = 'Test';
+                }, 2000);
             },
 
             // Check backend and voice processor connections
@@ -1112,6 +1565,17 @@
                         this.state.selectedNoteType = card.dataset.type;
                     });
                 });
+
+                // Settings URL inputs - save on blur
+                const backendUrlInput = document.getElementById('backendUrl');
+                const voiceProcessorUrlInput = document.getElementById('voiceProcessorUrl');
+                
+                if (backendUrlInput) {
+                    backendUrlInput.addEventListener('blur', () => this.saveSettings());
+                }
+                if (voiceProcessorUrlInput) {
+                    voiceProcessorUrlInput.addEventListener('blur', () => this.saveSettings());
+                }
             },
 
             // Initialize Web Audio API
@@ -1813,6 +2277,9 @@
                 try {
                     statusText.textContent = 'Uploading & Processing...';
                     
+                    // Get participants data
+                    const { names, roles } = this.getParticipantsData();
+                    
                     const formData = new FormData();
                     formData.append('audio', audioBlob, `note_${Date.now()}.webm`);
                     formData.append('start_time', new Date(this.state.recordingStartTime).toISOString());
@@ -1823,6 +2290,14 @@
                     formData.append('initial_transcript_source', 'mlx_whisper_realtime');
                     formData.append('model', document.getElementById('aiModel').value);
                     formData.append('queue_enhanced_transcript', document.getElementById('queueEnhanced').checked ? 'true' : 'false');
+                    
+                    // Add participants if provided
+                    if (names.length > 0) {
+                        formData.append('participant_display_names', JSON.stringify(names));
+                    }
+                    if (roles.length > 0) {
+                        formData.append('participant_roles', JSON.stringify(roles));
+                    }
                     
                     const response = await fetch(`${this.config.backendUrl}/api/notes/from-audio-hybrid`, {
                         method: 'POST',
@@ -1938,7 +2413,9 @@
                 if (this.state.notes.length === 0) {
                     container.innerHTML = `
                         <div class="empty-state">
-                            <div class="empty-state-icon">📚</div>
+                            <div class="empty-state-icon">
+                                <img src="/icons/noun-notebook-7945455.svg" alt="Notes" style="width: 48px; height: 48px; filter: brightness(0) saturate(100%) invert(50%) sepia(0%) saturate(0%) hue-rotate(0deg);">
+                            </div>
                             <p>No notes yet. Start recording to create your first note!</p>
                         </div>
                     `;
@@ -1995,6 +2472,70 @@
             // Open note for chat
             openNote(noteDid, noteTitle) {
                 this.setNoteContext(noteDid, noteTitle);
+            },
+
+            // Duration management
+            setDuration(duration) {
+                this.state.selectedDuration = duration;
+                document.querySelectorAll('.duration-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.duration === duration);
+                });
+            },
+
+            // Participant Management
+            addParticipant() {
+                const participantId = Date.now();
+                this.state.participants.push({ id: participantId, name: '', role: '' });
+                this.renderParticipants();
+            },
+
+            removeParticipant(id) {
+                this.state.participants = this.state.participants.filter(p => p.id !== id);
+                this.renderParticipants();
+            },
+
+            updateParticipant(id, field, value) {
+                const participant = this.state.participants.find(p => p.id === id);
+                if (participant) {
+                    participant[field] = value;
+                }
+            },
+
+            renderParticipants() {
+                const container = document.getElementById('participantsList');
+                if (!container) return;
+
+                container.innerHTML = this.state.participants.map(p => `
+                    <div class="participant-entry">
+                        <div class="participant-field">
+                            <div class="participant-label">Name</div>
+                            <input 
+                                type="text" 
+                                class="participant-input" 
+                                placeholder="John Doe" 
+                                value="${p.name}"
+                                oninput="alfredNotesApp.updateParticipant(${p.id}, 'name', this.value)"
+                            >
+                        </div>
+                        <div class="participant-field">
+                            <div class="participant-label">Role</div>
+                            <input 
+                                type="text" 
+                                class="participant-input" 
+                                placeholder="CEO" 
+                                value="${p.role}"
+                                oninput="alfredNotesApp.updateParticipant(${p.id}, 'role', this.value)"
+                            >
+                        </div>
+                        <button class="remove-participant-btn" onclick="alfredNotesApp.removeParticipant(${p.id})" title="Remove participant">×</button>
+                    </div>
+                `).join('');
+            },
+
+            getParticipantsData() {
+                const names = this.state.participants.filter(p => p.name).map(p => p.name);
+                const roles = this.state.participants.filter(p => p.role).map(p => p.role);
+                return { names, roles };
             }
         };
 
