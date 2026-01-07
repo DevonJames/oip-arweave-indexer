@@ -148,6 +148,7 @@ COPY routes/alexandria ./routes/alexandria
 # Copy services (alexandria only)
 COPY services/chunkingService.js ./services/chunkingService.js
 COPY services/notesRecordsService.js ./services/notesRecordsService.js
+COPY services/notesJobService.js ./services/notesJobService.js
 COPY services/sttService.js ./services/sttService.js
 COPY services/summarizationService.js ./services/summarizationService.js
 
