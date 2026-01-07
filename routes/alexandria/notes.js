@@ -2781,12 +2781,23 @@ router.post('/converse-stream', authenticateToken, async (req, res) => {
 /**
  * GET /api/notes/stream
  * SSE endpoint for streaming responses
+ * Accepts token via query parameter since EventSource doesn't support custom headers
  */
 router.get('/stream', (req, res) => {
-    const { dialogueId } = req.query;
+    const { dialogueId, token } = req.query;
     
     if (!dialogueId) {
         return res.status(400).json({ error: 'dialogueId is required' });
+    }
+    
+    // Validate token from query parameter (EventSource can't send headers)
+    if (token) {
+        try {
+            const jwt = require('jsonwebtoken');
+            jwt.verify(token, process.env.JWT_SECRET);
+        } catch (err) {
+            return res.status(401).json({ error: 'Invalid token' });
+        }
     }
     
     const context = dialogueContexts.get(dialogueId);
@@ -2794,11 +2805,13 @@ router.get('/stream', (req, res) => {
         return res.status(404).json({ error: 'Dialogue not found' });
     }
 
-    // Set up SSE
+    // Set up SSE with CORS headers
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('X-Accel-Buffering', 'no'); // Important for nginx proxying
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
     res.flushHeaders();
 
     // Send any existing chunks immediately

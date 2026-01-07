@@ -1977,7 +1977,12 @@
 
             // Connect to SSE stream
             connectToStream(dialogueId, messageId) {
-                const streamUrl = `${this.config.backendUrl}/api/notes/stream?dialogueId=${dialogueId}`;
+                // EventSource doesn't support custom headers, so we pass the token as a query parameter
+                const token = localStorage.getItem('jwt_token');
+                let streamUrl = `${this.config.backendUrl}/api/notes/stream?dialogueId=${dialogueId}`;
+                if (token) {
+                    streamUrl += `&token=${encodeURIComponent(token)}`;
+                }
                 
                 const eventSource = new EventSource(streamUrl);
                 this.state.dialogueEventSource = eventSource;
