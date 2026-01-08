@@ -682,6 +682,9 @@ class UnifiedVoiceProcessor:
             # Preprocess audio
             audio_data = self._preprocess_audio(audio_bytes)
             
+            # Get or create session
+            session = self._get_or_create_session(session_id)
+            
             # Create frame object
             frame = AudioFrame(
                 data=audio_data,
@@ -692,10 +695,11 @@ class UnifiedVoiceProcessor:
             )
             
             # Process synchronously for real-time feedback
-            result = self._process_pipeline_frame(frame)
+            result = self._process_frame_unified(frame, session)
             
             # Update metrics
             self.pipeline_state['frames_processed'] += 1
+            self._update_session_state(session, result)
             
             # Return the actual processing results for real-time feedback
             return {
@@ -1093,7 +1097,7 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="Unified Voice Processor")
-    parser.add_argument("--port", type=int, default=8015, help="Port to run the service on")
+    parser.add_argument("--port", type=int, default=8765, help="Port to run the service on")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to")
     args = parser.parse_args()
     

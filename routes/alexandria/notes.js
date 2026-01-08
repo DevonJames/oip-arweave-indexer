@@ -2692,6 +2692,163 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 /**
+ * POST /api/notes/converse-stream-inline
+ * Streaming voice conversation with INLINE SSE response (no separate GET needed)
+ * This bypasses nginx auth issues since the POST includes the Authorization header
+ */
+router.post('/converse-stream-inline', authenticateToken, async (req, res) => {
+    try {
+        const {
+            noteDid,
+            question,
+            model = 'llama3.2:3b',
+            conversationHistory = [],
+            includeRelated = true,
+            maxRelated = 5,
+            allNotes = false,
+            voice_mode = true,
+            voice_config = {}
+        } = req.body;
+
+        console.log(`\n${'='.repeat(80)}`);
+        console.log(`[ALFRED Notes Stream Inline] Starting inline streaming conversation`);
+        console.log(`[ALFRED Notes Stream Inline] Question: "${question}"`);
+        console.log(`[ALFRED Notes Stream Inline] Voice mode: ${voice_mode}`);
+        console.log(`${'='.repeat(80)}\n`);
+
+        if (!question) {
+            return res.status(400).json({
+                success: false,
+                error: 'Question is required'
+            });
+        }
+
+        // Set up SSE headers directly on POST response
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.flushHeaders();
+
+        const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
+        const voiceSettings = {
+            engine: voice_config.engine || 'elevenlabs',
+            voice_id: voice_config.voice_id || 'onwK4e9ZLuTAKqWW03F9',
+            speed: voice_config.speed || 1
+        };
+
+        // Helper to send SSE data
+        const sendSSE = (data) => {
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+        };
+
+        try {
+            // Send initial acknowledgment
+            sendSSE({ type: 'started', timestamp: Date.now() });
+
+            let contextData = null;
+            let answer = '';
+
+            // Get note context if needed
+            if (noteDid) {
+                const oipClient = getOIPClient(req);
+                const noteResponse = await oipClient.getRecords({ did: noteDid });
+                if (noteResponse.records?.length > 0) {
+                    contextData = noteResponse.records[0];
+                    sendSSE({ type: 'context', noteDid, noteTitle: contextData?.data?.title || 'Note' });
+                }
+            } else if (allNotes) {
+                sendSSE({ type: 'context', mode: 'allNotes' });
+            }
+
+            // Generate response using Alfred
+            const alfredInstance = require('../../helpers/alexandria/alfred');
+            const alfredOptions = {
+                model: model,
+                conversationHistory: conversationHistory,
+                useFieldExtraction: false,
+                bypassRAG: !noteDid && !allNotes
+            };
+
+            // Add context if we have a note
+            if (contextData) {
+                alfredOptions.context = {
+                    note: contextData.data,
+                    transcript: contextData.data?.transcript,
+                    summary: contextData.data?.summary
+                };
+            }
+
+            const alfredResponse = await alfredInstance.query(question, alfredOptions);
+            answer = alfredResponse.answer || 'I could not generate a response.';
+
+            // Stream text in chunks for more natural feel
+            const words = answer.split(' ');
+            let accumulated = '';
+            const chunkSize = 5; // Send 5 words at a time
+            
+            for (let i = 0; i < words.length; i += chunkSize) {
+                const chunk = words.slice(i, i + chunkSize).join(' ');
+                accumulated += (accumulated ? ' ' : '') + chunk;
+                sendSSE({ 
+                    type: 'textChunk', 
+                    text: chunk,
+                    accumulated: accumulated,
+                    final: i + chunkSize >= words.length
+                });
+                // Small delay for streaming effect
+                await new Promise(r => setTimeout(r, 50));
+            }
+
+            // Generate audio if voice mode enabled
+            if (voice_mode) {
+                sendSSE({ type: 'audioGenerating' });
+                
+                try {
+                    const audioData = await generateAudioForResponse(answer, {
+                        engine: voiceSettings.engine,
+                        voice_id: voiceSettings.voice_id,
+                        speed: voiceSettings.speed
+                    });
+                    
+                    if (audioData) {
+                        sendSSE({ 
+                            type: 'audioChunk', 
+                            audio_data: audioData,
+                            format: 'mp3',
+                            final: true
+                        });
+                    }
+                } catch (audioErr) {
+                    console.error('[Stream Inline] Audio generation failed:', audioErr);
+                    sendSSE({ type: 'audioError', error: audioErr.message });
+                }
+            }
+
+            // Send completion
+            sendSSE({ type: 'complete', answer: answer });
+            
+        } catch (processingError) {
+            console.error('[Stream Inline] Processing error:', processingError);
+            sendSSE({ type: 'error', error: processingError.message });
+        }
+
+        res.end();
+
+    } catch (error) {
+        console.error('[ALFRED Notes Stream Inline] ❌ Error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                error: 'Failed to start streaming conversation',
+                details: error.message
+            });
+        }
+    }
+});
+
+/**
  * POST /api/notes/converse-stream
  * Initialize streaming voice conversation about notes
  * Returns dialogueId for SSE connection
