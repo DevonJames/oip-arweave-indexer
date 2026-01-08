@@ -677,7 +677,7 @@ class UnifiedVoiceProcessor:
     # Public API methods
     
     async def process_audio_frame(self, session_id: str, audio_bytes: bytes) -> Dict:
-        """Process single audio frame through unified pipeline"""
+        """Process single audio frame through unified pipeline - SYNCHRONOUS for real-time results"""
         try:
             # Preprocess audio
             audio_data = self._preprocess_audio(audio_bytes)
@@ -691,14 +691,33 @@ class UnifiedVoiceProcessor:
                 session_id=session_id
             )
             
-            # Add to processing queue
-            try:
-                self.frame_queue.put_nowait(frame)
-            except:
-                logger.warning(f"Frame queue full for session {session_id}")
-                return {"error": "processing_queue_full"}
+            # Process synchronously for real-time feedback
+            result = self._process_pipeline_frame(frame)
             
-            return {"status": "queued", "frame_index": frame.frame_index}
+            # Update metrics
+            self.pipeline_state['frames_processed'] += 1
+            
+            # Return the actual processing results for real-time feedback
+            return {
+                "status": "processed",
+                "frame_index": result.frame_index,
+                "session_id": session_id,
+                # VAD results
+                "has_speech": result.has_speech,
+                "speech_confidence": result.speech_confidence,
+                "speech_state": result.speech_state,
+                # STT results - THE KEY REAL-TIME DATA
+                "partial_text": result.partial_text,
+                "final_text": result.final_text,
+                "stt_confidence": result.stt_confidence,
+                "transcription_complete": result.transcription_complete,
+                # Smart Turn results
+                "interruption_probability": result.interruption_probability,
+                "is_interruption": result.is_interruption,
+                "can_interrupt": result.can_interrupt,
+                # Performance
+                "processing_time_ms": result.processing_time_ms
+            }
             
         except Exception as e:
             logger.error(f"Frame processing error: {e}")

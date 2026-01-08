@@ -1627,6 +1627,10 @@
                 audioSource: null,
                 currentAudio: null,
                 dialogueEventSource: null,
+                // Voice input state
+                voiceStream: null,
+                voiceRecorder: null,
+                voiceChunks: [],
                 // Connection state
                 backendConnected: false,
                 voiceProcessorConnected: false,
@@ -1918,13 +1922,105 @@
                     content: message
                 });
                 
-                // Check if voice mode is enabled
-                const voiceMode = true; // Always use voice mode in Mac client
+                // Check if auto-play (voice mode) is enabled - use streaming for voice
+                const autoPlayEnabled = document.getElementById('autoPlayAudio')?.checked ?? true;
                 
-                if (voiceMode) {
+                if (autoPlayEnabled) {
+                    // Use streaming mode for voice responses
                     await this.sendStreamingMessage(message);
                 } else {
+                    // Use non-streaming for text-only responses
                     await this.sendSyncMessage(message);
+                }
+            },
+            
+            // Send message without streaming (uses /api/notes/converse)
+            async sendSyncMessage(message) {
+                const model = document.getElementById('aiModel').value;
+                const voiceConfig = {
+                    engine: document.getElementById('ttsEngine')?.value || 'elevenlabs',
+                    voice_id: document.getElementById('voiceId')?.value || 'onwK4e9ZLuTAKqWW03F9'
+                };
+                
+                // Check if auto-play is enabled
+                const autoPlayEnabled = document.getElementById('autoPlayAudio')?.checked ?? true;
+                
+                // Show loading indicator
+                const messageId = `msg-${Date.now()}`;
+                this.addMessageToChat('assistant', 'Thinking...', messageId, true);
+                
+                // Start Alfred visualization if audio will be played
+                if (autoPlayEnabled) {
+                    this.startAlfredVisualization();
+                }
+                
+                try {
+                    const requestBody = {
+                        question: message,
+                        model: model,
+                        conversationHistory: this.state.conversationHistory.slice(-10)
+                    };
+                    
+                    // Add audio parameters if auto-play is enabled
+                    if (autoPlayEnabled) {
+                        requestBody.return_audio = true;
+                        requestBody.engine = voiceConfig.engine;
+                        requestBody.voice_id = voiceConfig.voice_id;
+                        requestBody.speed = 1;
+                    }
+                    
+                    // Add note context based on chat mode
+                    if (this.state.chatMode === 'noteSpecific' && this.state.selectedNoteDid) {
+                        requestBody.noteDid = this.state.selectedNoteDid;
+                    } else if (this.state.chatMode === 'allNotes') {
+                        requestBody.allNotes = true;
+                    }
+                    
+                    console.log('🎤 Sending request:', { model, engine: voiceConfig.engine, audioEnabled: autoPlayEnabled });
+                    
+                    const response = await fetch(`${this.config.backendUrl}/api/notes/converse`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.config.token}`
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        const answer = data.answer || 'No response';
+                        
+                        // Update message with response
+                        this.updateMessage(messageId, answer, false);
+                        
+                        // Add to conversation history
+                        this.state.conversationHistory.push({
+                            role: 'assistant',
+                            content: answer
+                        });
+                        
+                        // Play audio if available and auto-play is enabled
+                        if (data.audio_data && autoPlayEnabled) {
+                            console.log('🔊 Playing audio response');
+                            this.playAudioChunk(data.audio_data, 'mp3');
+                        } else if (autoPlayEnabled) {
+                            console.log('⚠️ No audio in response:', { has_audio: data.has_audio, engine: data.engine_used });
+                            this.stopAlfredVisualization();
+                        }
+                    } else {
+                        this.updateMessage(messageId, `Error: ${data.error || 'Unknown error'}`, false);
+                        if (autoPlayEnabled) this.stopAlfredVisualization();
+                    }
+                } catch (error) {
+                    console.error('Chat error:', error);
+                    this.updateMessage(messageId, `Error: ${error.message}`, false);
+                    if (autoPlayEnabled) this.stopAlfredVisualization();
                 }
             },
 
@@ -1978,10 +2074,9 @@
             // Connect to SSE stream
             connectToStream(dialogueId, messageId) {
                 // EventSource doesn't support custom headers, so we pass the token as a query parameter
-                const token = localStorage.getItem('jwt_token');
                 let streamUrl = `${this.config.backendUrl}/api/notes/stream?dialogueId=${dialogueId}`;
-                if (token) {
-                    streamUrl += `&token=${encodeURIComponent(token)}`;
+                if (this.config.token) {
+                    streamUrl += `&token=${encodeURIComponent(this.config.token)}`;
                 }
                 
                 const eventSource = new EventSource(streamUrl);
@@ -2213,13 +2308,22 @@
                 }
             },
 
-            // Start voice input (uses unified voice processor)
+            // Start REAL-TIME voice input using M-series hardware via unified voice processor
             async startVoiceInput() {
                 const voiceBtn = document.getElementById('voiceBtn');
                 const chatInput = document.getElementById('chatInput');
                 
+                // Check if voice processor is connected
+                if (!this.state.voiceProcessorConnected) {
+                    this.showToast('Voice processor not running. Start it with: python mac-client/unified_voice_processor.py', 'error');
+                    console.error('❌ Voice processor not connected at:', this.config.voiceProcessorUrl);
+                    return;
+                }
+                
                 try {
-                    // Request microphone access
+                    console.log('🎤 Starting REAL-TIME voice input with MLX Whisper...');
+                    
+                    // Request microphone access with optimal settings for real-time STT
                     const stream = await navigator.mediaDevices.getUserMedia({
                         audio: {
                             channelCount: 1,
@@ -2232,12 +2336,14 @@
                     this.state.voiceStream = stream;
                     this.state.voiceSessionId = `voice_${Date.now()}`;
                     this.state.voiceTranscript = '';
+                    this.state.voiceFinalText = '';
                     
-                    // Set up AudioContext for streaming
+                    // Set up AudioContext for real-time streaming to voice processor
                     this.state.voiceAudioContext = new AudioContext({ sampleRate: 16000 });
                     const source = this.state.voiceAudioContext.createMediaStreamSource(stream);
                     
-                    const bufferSize = 4096;
+                    // Use ScriptProcessor for frame-by-frame audio processing
+                    const bufferSize = 4096; // ~256ms at 16kHz
                     this.state.voiceScriptProcessor = this.state.voiceAudioContext.createScriptProcessor(bufferSize, 1, 1);
                     
                     this.state.voiceScriptProcessor.onaudioprocess = async (e) => {
@@ -2245,14 +2351,14 @@
                         
                         const inputData = e.inputBuffer.getChannelData(0);
                         
-                        // Convert to Int16
+                        // Convert Float32 to Int16 for voice processor
                         const int16Data = new Int16Array(inputData.length);
                         for (let i = 0; i < inputData.length; i++) {
                             int16Data[i] = Math.max(-32768, Math.min(32767, Math.floor(inputData[i] * 32768)));
                         }
                         
-                        // Stream to voice processor
-                        await this.processVoiceFrame(int16Data.buffer);
+                        // Send to voice processor for REAL-TIME transcription
+                        await this.processVoiceFrameRealtime(int16Data.buffer);
                     };
                     
                     source.connect(this.state.voiceScriptProcessor);
@@ -2260,18 +2366,19 @@
                     
                     voiceBtn.classList.add('listening');
                     this.state.isVoiceListening = true;
-                    chatInput.placeholder = 'Listening...';
+                    chatInput.placeholder = 'Listening... (speak now)';
                     
-                    console.log('🎤 Voice input started');
+                    console.log('🎤 Real-time voice input started - MLX Whisper processing on M-series');
                     
                 } catch (error) {
                     console.error('Failed to start voice input:', error);
+                    this.showToast('Microphone access denied', 'error');
                 }
             },
 
-            // Process voice frame for STT
-            async processVoiceFrame(audioBuffer) {
-                if (!this.state.voiceProcessorConnected) return;
+            // Process voice frame in REAL-TIME using MLX Whisper on M-series hardware
+            async processVoiceFrameRealtime(audioBuffer) {
+                if (!this.state.voiceProcessorConnected || !this.state.isVoiceListening) return;
                 
                 try {
                     const formData = new FormData();
@@ -2288,40 +2395,53 @@
                         const result = await response.json();
                         const chatInput = document.getElementById('chatInput');
                         
-                        // Update input with transcription
+                        // REAL-TIME transcription feedback
                         if (result.final_text) {
-                            this.state.voiceTranscript += result.final_text + ' ';
-                            chatInput.value = this.state.voiceTranscript;
+                            // Final text from completed speech segment
+                            this.state.voiceFinalText += result.final_text + ' ';
+                            chatInput.value = this.state.voiceFinalText;
+                            console.log(`🎤 Final: "${result.final_text}"`);
                             
-                            // Check for speech end to auto-send
-                            if (result.speech_state === 'speech_end' && this.state.voiceTranscript.trim()) {
-                                // Small delay to ensure final words are captured
+                            // Auto-send when speech ends (speech_state === 'speech_end')
+                            if (result.speech_state === 'speech_end' && this.state.voiceFinalText.trim()) {
+                                console.log('🎤 Speech ended - auto-sending message');
                                 setTimeout(() => {
                                     if (!this.state.isVoiceListening) return;
+                                    const text = this.state.voiceFinalText.trim();
                                     this.stopVoiceInput();
-                                    this.sendMessage(this.state.voiceTranscript.trim());
                                     chatInput.value = '';
-                                }, 500);
+                                    this.sendMessage(text);
+                                }, 300);
                             }
                         } else if (result.partial_text) {
-                            chatInput.value = this.state.voiceTranscript + result.partial_text;
+                            // Show partial transcription as user speaks (real-time feedback!)
+                            chatInput.value = this.state.voiceFinalText + result.partial_text;
+                        }
+                        
+                        // Visual feedback for speech detection
+                        if (result.has_speech) {
+                            chatInput.classList.add('speech-detected');
+                        } else {
+                            chatInput.classList.remove('speech-detected');
                         }
                     }
                 } catch (error) {
-                    console.debug('Voice frame processing failed:', error.message);
+                    // Don't spam console with frame errors
+                    console.debug('Voice frame error:', error.message);
                 }
             },
 
-            // Stop voice input
-            stopVoiceInput() {
+            // Stop voice input and optionally send accumulated transcript
+            stopVoiceInput(sendMessage = false) {
                 const voiceBtn = document.getElementById('voiceBtn');
                 const chatInput = document.getElementById('chatInput');
                 
                 this.state.isVoiceListening = false;
                 voiceBtn.classList.remove('listening');
+                chatInput.classList.remove('speech-detected');
                 chatInput.placeholder = 'Ask Alfred anything...';
                 
-                // Clean up
+                // Clean up audio processing
                 if (this.state.voiceScriptProcessor) {
                     this.state.voiceScriptProcessor.disconnect();
                     this.state.voiceScriptProcessor = null;
@@ -2334,6 +2454,19 @@
                     this.state.voiceStream.getTracks().forEach(track => track.stop());
                     this.state.voiceStream = null;
                 }
+                
+                // Send accumulated transcript if requested (manual stop)
+                if (sendMessage && this.state.voiceFinalText && this.state.voiceFinalText.trim()) {
+                    const text = this.state.voiceFinalText.trim();
+                    chatInput.value = '';
+                    this.sendMessage(text);
+                }
+                
+                // Clear voice state
+                this.state.voiceFinalText = '';
+                this.state.voiceTranscript = '';
+                
+                console.log('🎤 Voice input stopped');
                 
                 console.log('🎤 Voice input stopped');
             },
