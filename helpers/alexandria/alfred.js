@@ -21,9 +21,13 @@ class ALFRED {
         
         // Define which models are cloud-hosted vs self-hosted
         this.cloudModels = {
-            // XAI Models (Grok) - Updated to current models
+            // XAI Models (Grok) - All available xAI models
             'grok-4': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' },
             'grok-4-fast': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' },
+            'grok-4-fast-reasoning': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' },
+            'grok-2': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' },
+            'grok-2-latest': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' },
+            'grok-2-mini': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' },
             'grok-beta': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' }, // Legacy fallback
 
             // OpenAI Models
@@ -391,10 +395,6 @@ class ALFRED {
                 // For question analysis, use a reliable local model instead of parallel processing
                 modelToUse = this.defaultModel; // Use default model instead of hardcoded llama2:7b
                 console.log(`[ALFRED] 🔄 'parallel' model detected, using ${modelToUse} for question analysis`);
-            } else if (modelToUse === 'grok-2') {
-                // Handle invalid grok-2 model name, use grok-4 instead
-                modelToUse = 'grok-4';
-                console.log(`[ALFRED] 🔄 Invalid 'grok-2' model, using ${modelToUse} for question analysis`);
             } else if (!this.isCloudModel(modelToUse) && !modelToUse.includes(':')) {
                 // If it's not a cloud model and doesn't look like an Ollama model, use default
                 console.log(`[ALFRED] ⚠️ Unknown model '${modelToUse}', falling back to ${this.defaultModel}`);

@@ -281,7 +281,7 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
             calendar_event_id,
             calendar_start_time,
             calendar_end_time,
-            model = 'parallel', // LLM model selection (supports 'parallel', 'gpt-4o-mini', 'grok-beta', etc.)
+            model = 'grok-4-fast-reasoning', // LLM model selection (supports 'grok-4-fast-reasoning', 'gpt-4o-mini', 'grok-beta', etc.)
             addToWebServer = 'false',
             addToBitTorrent = 'false',
             addToIPFS = 'false',
@@ -928,7 +928,7 @@ router.post('/from-audio-hybrid', authenticateToken, upload.single('audio'), asy
             calendar_event_id,
             calendar_start_time,
             calendar_end_time,
-            model = 'parallel',
+            model = 'grok-4-fast-reasoning',
             addToWebServer = 'false',
             addToBitTorrent = 'false',
             addToIPFS = 'false',
@@ -2747,17 +2747,107 @@ router.post('/converse-stream-inline', authenticateToken, async (req, res) => {
             // Send initial acknowledgment
             sendSSE({ type: 'started', timestamp: Date.now() });
 
-            let contextData = null;
             let answer = '';
+            let contextString = null;
 
-            // Get note context if needed
+            // ========================================
+            // NOTE-SPECIFIC RAG MODE (same as /converse endpoint)
+            // ========================================
             if (noteDid) {
-                const oipClient = getOIPClient(req);
-                const noteResponse = await oipClient.getRecords({ did: noteDid });
-                if (noteResponse.records?.length > 0) {
-                    contextData = noteResponse.records[0];
-                    sendSSE({ type: 'context', noteDid, noteTitle: contextData?.data?.title || 'Note' });
+                console.log(`[Stream Inline RAG] Building note-specific context for: ${noteDid}`);
+                
+                // Step 1: Fetch note record with embedded references
+                const noteResults = await getRecords({
+                    source: 'gun',
+                    did: noteDid,
+                    limit: 1,
+                    resolveDepth: 1
+                }, req);
+
+                if (!noteResults.records || noteResults.records.length === 0) {
+                    sendSSE({ type: 'error', error: 'Note not found' });
+                    res.end();
+                    return;
                 }
+
+                const noteRecord = noteResults.records[0];
+                const noteData = noteRecord.data?.notes || {};
+                const noteBasic = noteRecord.data?.basic || {};
+                
+                console.log(`[Stream Inline RAG] ✅ Found note: "${noteBasic.name}"`);
+                sendSSE({ type: 'context', noteDid, noteTitle: noteBasic.name || 'Note' });
+
+                // Step 2: Extract transcript
+                let transcriptText = '';
+                const transcriptData = noteData.transcript_full_text;
+                
+                if (transcriptData) {
+                    if (typeof transcriptData === 'object' && transcriptData.data?.text?.value) {
+                        transcriptText = transcriptData.data.text.value;
+                    } else if (typeof transcriptData === 'string') {
+                        try {
+                            const transcriptResults = await getRecords({
+                                source: 'gun',
+                                did: transcriptData,
+                                limit: 1
+                            }, req);
+                            if (transcriptResults.records?.length > 0) {
+                                transcriptText = transcriptResults.records[0].data?.text?.value || '';
+                            }
+                        } catch (e) {
+                            console.warn('[Stream Inline RAG] Failed to fetch transcript:', e.message);
+                        }
+                    }
+                }
+                console.log(`[Stream Inline RAG] Transcript: ${transcriptText.length} chars`);
+
+                // Step 3: Get chunks (simplified - use embedded if available)
+                const chunkDids = noteData.chunk_ids || [];
+                let chunks = [];
+                if (chunkDids.length > 0 && typeof chunkDids[0] === 'object' && chunkDids[0].data) {
+                    chunks = chunkDids;
+                }
+
+                // Step 4: Build context string (same format as /converse)
+                let noteDateStr = 'Unknown';
+                try {
+                    if (noteData.created_at) {
+                        const noteDate = new Date(noteData.created_at);
+                        if (!isNaN(noteDate.getTime())) {
+                            noteDateStr = noteDate.toISOString();
+                        }
+                    }
+                } catch (e) {}
+
+                const keyPoints = noteData.summary_key_points || [];
+                const decisions = noteData.summary_decisions || [];
+                const actionTexts = noteData.summary_action_item_texts || [];
+                const actionAssignees = noteData.summary_action_item_assignees || [];
+                const actionDueDates = noteData.summary_action_item_due_texts || [];
+                const participants = noteData.participant_display_names || [];
+
+                contextString = `You are answering questions about a specific meeting note.
+
+Note Title: ${noteBasic.name}
+Note Type: ${noteData.note_type || 'UNKNOWN'}
+Date: ${noteDateStr}
+${participants.length > 0 ? `Participants: ${participants.join(', ')}` : ''}
+
+${keyPoints.length > 0 ? `Key Points from Summary:
+${keyPoints.map((point, i) => `${i + 1}. ${point}`).join('\n')}` : ''}
+
+${decisions.length > 0 ? `Decisions Made:
+${decisions.map((decision, i) => `${i + 1}. ${decision}`).join('\n')}` : ''}
+
+${actionTexts.length > 0 ? `Action Items:
+${actionTexts.map((text, i) => 
+    `${i + 1}. ${text} (Assignee: ${actionAssignees[i] || 'unassigned'}, Due: ${actionDueDates[i] || 'no date'})`
+).join('\n')}` : ''}
+
+${transcriptText ? `Full Transcript:
+${transcriptText}` : ''}`;
+
+                console.log(`[Stream Inline RAG] Context built: ${contextString.length} chars`);
             } else if (allNotes) {
                 sendSSE({ type: 'context', mode: 'allNotes' });
             }
@@ -2771,13 +2861,10 @@ router.post('/converse-stream-inline', authenticateToken, async (req, res) => {
                 bypassRAG: !noteDid && !allNotes
             };
 
-            // Add context if we have a note
-            if (contextData) {
-                alfredOptions.context = {
-                    note: contextData.data,
-                    transcript: contextData.data?.transcript,
-                    summary: contextData.data?.summary
-                };
+            // Add pre-built context for note-specific mode
+            if (contextString) {
+                alfredOptions.existingContext = contextString;
+                alfredOptions.pinnedJsonData = { noteSpecific: true };
             }
 
             const alfredResponse = await alfredInstance.query(question, alfredOptions);

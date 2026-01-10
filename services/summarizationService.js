@@ -220,7 +220,7 @@ JSON RESPONSE:`;
         
         // Determine API based on model
         const openaiModels = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'];
-        const xaiModels = ['grok-2', 'grok-2-mini', 'grok-4', 'grok-4-fast', 'grok-beta'];
+        const xaiModels = ['grok-2', 'grok-2-mini', 'grok-2-latest', 'grok-4', 'grok-4-fast', 'grok-4-fast-reasoning', 'grok-beta'];
         
         let apiUrl, apiKey;
         
@@ -244,7 +244,15 @@ JSON RESPONSE:`;
 
         try {
             if (apiKey) {
-                // OpenAI/XAI format
+                // For xAI models, use structured output
+                if (xaiModels.includes(model)) {
+                    const structuredResult = await this._callGrokWithStructuredOutput(prompt, model, effectiveTimeout);
+                    if (structuredResult && structuredResult.response) {
+                        return structuredResult.response;
+                    }
+                }
+                
+                // OpenAI/XAI format (fallback)
                 const response = await axios.post(apiUrl, {
                     model: model,
                     messages: [
@@ -412,17 +420,17 @@ JSON RESPONSE:`;
         
         const requests = [];
         
-        // OpenAI request
+        // Grok request (primary - use grok-4-fast-reasoning for best results)
+        if (process.env.XAI_API_KEY) {
+            requests.push(this._callGrokWithStructuredOutput(prompt, 'grok-4-fast-reasoning', effectiveTimeout));
+        }
+        
+        // OpenAI request (backup)
         if (process.env.OPENAI_API_KEY) {
             requests.push(this._callOpenAI(prompt, 'gpt-4o-mini', effectiveTimeout));
         }
         
-        // Grok request  
-        if (process.env.XAI_API_KEY) {
-            requests.push(this._callGrok(prompt, 'grok-2', effectiveTimeout));
-        }
-        
-        // Ollama requests
+        // Ollama requests (fallback for local)
         requests.push(this._callOllama(prompt, 'mistral:latest', effectiveTimeout));
         const defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
         requests.push(this._callOllama(prompt, defaultModel, effectiveTimeout));
@@ -523,6 +531,113 @@ JSON RESPONSE:`;
         } catch (error) {
             console.warn(`[Summarization] XAI ${modelName} failed:`, error.message);
             return null;
+        }
+    }
+
+    /**
+     * Call Grok/XAI API with Structured Output (JSON Schema)
+     * Uses grok-4-fast-reasoning with response_format for guaranteed JSON structure
+     * @private
+     */
+    async _callGrokWithStructuredOutput(prompt, modelName, timeout = null) {
+        try {
+            const axios = require('axios');
+            const effectiveTimeout = timeout || BASE_LLM_TIMEOUT_MS;
+            
+            // Define JSON schema for structured output
+            const jsonSchema = {
+                name: "note_summary",
+                schema: {
+                    type: "object",
+                    properties: {
+                        key_points: { 
+                            type: "array", 
+                            items: { type: "string" },
+                            description: "Main discussion points and topics covered (3-7 items)"
+                        },
+                        decisions: { 
+                            type: "array", 
+                            items: { type: "string" },
+                            description: "Decisions made during the conversation"
+                        },
+                        action_items: { 
+                            type: "array", 
+                            items: { 
+                                type: "object",
+                                properties: {
+                                    text: { type: "string", description: "Action item description" },
+                                    assignee: { type: "string", description: "Person responsible (or 'unassigned')" },
+                                    due_text: { type: "string", description: "Due date/time (or 'no date')" }
+                                },
+                                required: ["text", "assignee", "due_text"]
+                            },
+                            description: "Action items identified with assignees and due dates"
+                        },
+                        open_questions: { 
+                            type: "array", 
+                            items: { type: "string" },
+                            description: "Unresolved questions or issues"
+                        },
+                        sentiment_overall: { 
+                            type: "string", 
+                            enum: ["POSITIVE", "NEGATIVE", "NEUTRAL", "MIXED"],
+                            description: "Overall sentiment of the conversation"
+                        },
+                        topics: { 
+                            type: "array", 
+                            items: { type: "string" },
+                            description: "High-level topics discussed (3-5 items)"
+                        },
+                        keywords: { 
+                            type: "array", 
+                            items: { type: "string" },
+                            description: "Specific terms or concepts mentioned (5-10 items)"
+                        },
+                        tags: { 
+                            type: "array", 
+                            items: { type: "string" },
+                            description: "Short lowercase labels with underscores for search/filtering (5-10 items)"
+                        }
+                    },
+                    required: ["key_points", "decisions", "action_items", "open_questions", "sentiment_overall", "topics", "keywords", "tags"]
+                }
+            };
+
+            console.log(`🤖 [Summarization] Calling ${modelName} with structured output...`);
+            
+            const response = await axios.post('https://api.x.ai/v1/chat/completions', {
+                model: modelName,
+                messages: [
+                    { 
+                        role: 'system', 
+                        content: 'You are a helpful assistant that summarizes meeting notes and conversations. Analyze the transcript carefully and provide comprehensive, accurate summaries.' 
+                    },
+                    { role: 'user', content: prompt }
+                ],
+                temperature: 0.3,
+                max_tokens: 4000,
+                response_format: {
+                    type: "json_schema",
+                    json_schema: jsonSchema
+                }
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                timeout: effectiveTimeout
+            });
+            
+            console.log(`✅ [Summarization] ${modelName} responded with structured output`);
+            
+            return {
+                response: response.data.choices[0].message.content,
+                source: `xai-${modelName}-structured`
+            };
+        } catch (error) {
+            console.warn(`[Summarization] XAI ${modelName} structured output failed:`, error.message);
+            // Fall back to regular call without structured output
+            return this._callGrok(prompt, modelName, timeout);
         }
     }
 

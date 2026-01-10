@@ -1004,6 +1004,98 @@
             overflow-y: auto;
         }
 
+        /* Grid layout for note sections */
+        .note-grid-row {
+            display: grid;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .note-grid-row.split-70-30 {
+            grid-template-columns: 70% 30%;
+        }
+
+        .note-grid-row.split-50-50 {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .note-grid-row.full-width {
+            grid-template-columns: 1fr;
+        }
+
+        @media (max-width: 768px) {
+            .note-grid-row.split-70-30,
+            .note-grid-row.split-50-50 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Collapsible transcript section */
+        .transcript-section {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .transcript-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            cursor: pointer;
+            transition: background var(--transition-fast);
+        }
+
+        .transcript-header:hover {
+            background: rgba(95, 252, 249, 0.05);
+        }
+
+        .transcript-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .transcript-toggle-icon {
+            transition: transform 0.2s ease;
+            color: var(--text-tertiary);
+        }
+
+        .transcript-section.expanded .transcript-toggle-icon {
+            transform: rotate(90deg);
+        }
+
+        .transcript-content {
+            display: none;
+            padding: 0 18px 18px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .transcript-section.expanded .transcript-content {
+            display: block;
+        }
+
+        .transcript-text {
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 12px;
+            background: var(--bg-elevated);
+            border-radius: var(--radius-sm);
+            margin-top: 12px;
+        }
+
+        .transcript-loading {
+            color: var(--text-tertiary);
+            font-style: italic;
+            padding: 20px;
+            text-align: center;
+        }
+
         .note-detail-actions {
             display: flex;
             gap: 12px;
@@ -1066,6 +1158,30 @@
             font-weight: 700;
             margin-bottom: 8px;
             color: var(--text-primary);
+        }
+
+        .note-detail-title-input {
+            width: 100%;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 4px 0;
+            font-family: inherit;
+            outline: none;
+            transition: all var(--transition-fast);
+        }
+
+        .note-detail-title-input:hover {
+            border-bottom-color: var(--border-subtle);
+        }
+
+        .note-detail-title-input:focus {
+            border-bottom-color: var(--accent-cyan);
+            background: rgba(95, 252, 249, 0.05);
         }
 
         .note-detail-meta {
@@ -1902,12 +2018,23 @@
                     </svg>
                     Fill Missing Analysis
                 </button>
+                <button class="action-btn" onclick="alfredNotesApp.reAnalyzeNote()" style="border-color: rgba(255, 107, 203, 0.4); color: var(--accent-pink);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 4v6h-6"/>
+                        <path d="M1 20v-6h6"/>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/>
+                        <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>
+                    </svg>
+                    Re-Analyze (Overwrite)
+                </button>
             </div>
 
             <div class="note-detail-header">
-                <h1 class="note-detail-title" id="noteDetailTitle">Note Title</h1>
+                <input type="text" class="note-detail-title-input" id="noteDetailTitle" value="Note Title" 
+                       onblur="alfredNotesApp.saveNoteName()" 
+                       onkeypress="if(event.key === 'Enter') { this.blur(); }">
                 <div class="note-detail-meta">
-                    <span id="noteDetailDate">
+                    <span id="noteDetailDateTime">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
                             <line x1="16" y1="2" x2="16" y2="6"/>
@@ -1933,6 +2060,13 @@
                         </svg>
                         Meeting
                     </span>
+                    <span id="noteDetailDevice">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                            <line x1="12" y1="18" x2="12.01" y2="18"/>
+                        </svg>
+                        Device
+                    </span>
                     <span id="noteDetailStatus">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
@@ -1940,34 +2074,81 @@
                         </svg>
                         Initial
                     </span>
+                    <span id="noteDetailSentiment">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                            <line x1="9" y1="9" x2="9.01" y2="9"/>
+                            <line x1="15" y1="9" x2="15.01" y2="9"/>
+                        </svg>
+                        Neutral
+                    </span>
                 </div>
             </div>
 
-            <div class="summary-section">
-                <h2 class="summary-heading">Key Summary</h2>
-                <ul class="summary-list" id="keySummary">
-                    <li>Loading...</li>
-                </ul>
+            <!-- Participants Section (only shown if participants exist) -->
+            <div class="summary-section" id="participantsSection" style="display: none;">
+                <h2 class="summary-heading">Participants</h2>
+                <div id="participantsList" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                </div>
             </div>
 
-            <div class="summary-section">
-                <h2 class="summary-heading">Action Items</h2>
-                <ul class="summary-list" id="actionItems">
-                    <li>Loading...</li>
-                </ul>
+            <!-- Row 1: Key Summary (70%) | Decisions Made (30%) -->
+            <div class="note-grid-row split-70-30">
+                <div class="summary-section" style="margin-bottom: 0;">
+                    <h2 class="summary-heading">Key Summary</h2>
+                    <ul class="summary-list" id="keySummary">
+                        <li>Loading...</li>
+                    </ul>
+                </div>
+                <div class="summary-section" id="decisionsSection" style="margin-bottom: 0;">
+                    <h2 class="summary-heading">Decisions Made</h2>
+                    <ul class="summary-list" id="decisionsList">
+                        <li>Loading...</li>
+                    </ul>
+                </div>
             </div>
 
-            <div class="summary-section">
-                <h2 class="summary-heading">Open Questions</h2>
-                <ul class="summary-list" id="openQuestions">
-                    <li>Loading...</li>
-                </ul>
+            <!-- Row 2: Action Items (50%) | Open Questions (50%) -->
+            <div class="note-grid-row split-50-50">
+                <div class="summary-section" style="margin-bottom: 0;">
+                    <h2 class="summary-heading">Action Items</h2>
+                    <ul class="summary-list" id="actionItems">
+                        <li>Loading...</li>
+                    </ul>
+                </div>
+                <div class="summary-section" style="margin-bottom: 0;">
+                    <h2 class="summary-heading">Open Questions</h2>
+                    <ul class="summary-list" id="openQuestions">
+                        <li>Loading...</li>
+                    </ul>
+                </div>
             </div>
 
+            <!-- Topics & Keywords (full width) -->
             <div class="summary-section">
                 <h2 class="summary-heading">Topics & Keywords</h2>
                 <div id="topicsKeywords" style="display: flex; flex-wrap: wrap; gap: 8px;">
                     <span style="padding: 4px 10px; background: var(--bg-chip); border-radius: 999px; font-size: 12px; color: var(--text-secondary);">Loading...</span>
+                </div>
+            </div>
+
+            <!-- Row 3: Collapsible Transcript Section -->
+            <div class="transcript-section" id="transcriptSection">
+                <div class="transcript-header" onclick="alfredNotesApp.toggleTranscript()">
+                    <div class="transcript-header-left">
+                        <svg class="transcript-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                        <h2 class="summary-heading" style="margin: 0;">Transcript</h2>
+                        <span id="transcriptWordCount" style="font-size: 11px; color: var(--text-tertiary); margin-left: 8px;"></span>
+                    </div>
+                    <span style="font-size: 11px; color: var(--text-tertiary);">Click to expand</span>
+                </div>
+                <div class="transcript-content">
+                    <div id="transcriptText" class="transcript-text">
+                        <span class="transcript-loading">Loading transcript...</span>
+                    </div>
                 </div>
             </div>
 
@@ -2183,6 +2364,9 @@
                 selectedDuration: 'short',
                 selectedAudioFile: null, // For audio file upload
                 currentNote: null, // Currently viewed note
+                currentTranscriptDid: null, // DID of current note's transcript
+                transcriptLoaded: false, // Whether transcript has been fetched
+                originalNoteName: null, // Track original name for change detection
                 participants: [],
                 conversationHistory: [],
                 notes: [],
@@ -3953,33 +4137,67 @@
 
                 const basic = this.state.currentNote.data?.basic || {};
                 const noteData = this.state.currentNote.data?.notes || {};
+                const audioData = this.state.currentNote.data?.audio || {};
 
-                // Title
-                document.getElementById('noteDetailTitle').textContent = basic.name || 'Untitled Note';
+                // Title (editable input)
+                const titleInput = document.getElementById('noteDetailTitle');
+                titleInput.value = basic.name || 'Untitled Note';
+                this.state.originalNoteName = basic.name || 'Untitled Note'; // Track original for change detection
                 
-                // Date
-                const dateEl = document.getElementById('noteDetailDate');
-                const dateText = basic.date ? new Date(basic.date * 1000).toLocaleDateString() : 'Unknown';
-                dateEl.innerHTML = `
+                // Date and Time
+                const dateTimeEl = document.getElementById('noteDetailDateTime');
+                let dateTimeText = 'Unknown';
+                if (basic.date) {
+                    const dateObj = new Date(basic.date * 1000);
+                    const dateText = dateObj.toLocaleDateString();
+                    const timeText = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    dateTimeText = `${dateText} at ${timeText}`;
+                } else if (noteData.created_at) {
+                    const dateObj = new Date(noteData.created_at);
+                    const dateText = dateObj.toLocaleDateString();
+                    const timeText = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    dateTimeText = `${dateText} at ${timeText}`;
+                }
+                dateTimeEl.innerHTML = `
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
                         <line x1="16" y1="2" x2="16" y2="6"/>
                         <line x1="8" y1="2" x2="8" y2="6"/>
                         <line x1="3" y1="10" x2="21" y2="10"/>
                     </svg>
-                    ${dateText}
+                    ${dateTimeText}
                 `;
                 
-                // Duration
+                // Duration - try multiple sources: audio.durationSec, created_at/ended_at, start_time/end_time
                 const durationEl = document.getElementById('noteDetailDuration');
-                const startTime = noteData.start_time ? new Date(noteData.start_time) : null;
-                const endTime = noteData.end_time ? new Date(noteData.end_time) : null;
                 let durationText = 'Unknown';
-                if (startTime && endTime) {
+                
+                // Priority 1: audio.durationSec (most accurate)
+                if (audioData.durationSec) {
+                    const secs = audioData.durationSec;
+                    const mins = Math.floor(secs / 60);
+                    const remainingSecs = Math.round(secs % 60);
+                    durationText = mins >= 60 
+                        ? `${Math.floor(mins / 60)}h ${mins % 60}m` 
+                        : `${mins}m ${remainingSecs}s`;
+                }
+                // Priority 2: created_at/ended_at
+                else if (noteData.created_at && noteData.ended_at) {
+                    const startTime = new Date(noteData.created_at);
+                    const endTime = new Date(noteData.ended_at);
                     const diffMs = endTime - startTime;
                     const diffMins = Math.round(diffMs / 60000);
                     durationText = diffMins < 60 ? `${diffMins}m` : `${Math.floor(diffMins / 60)}h ${diffMins % 60}m`;
                 }
+                // Priority 3: start_time/end_time (legacy)
+                else if (noteData.start_time && noteData.end_time) {
+                    const startTime = new Date(noteData.start_time);
+                    const endTime = new Date(noteData.end_time);
+                    const diffMs = endTime - startTime;
+                    const diffMins = Math.round(diffMs / 60000);
+                    durationText = diffMins < 60 ? `${diffMins}m` : `${Math.floor(diffMins / 60)}h ${diffMins % 60}m`;
+                }
+                
                 durationEl.innerHTML = `
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"/>
@@ -3997,18 +4215,79 @@
                     </svg>
                     ${noteData.note_type || 'Meeting'}
                 `;
+
+                // Device type
+                const deviceEl = document.getElementById('noteDetailDevice');
+                const deviceType = noteData.device_type || 'Unknown';
+                const deviceIcon = deviceType === 'IPHONE' ? '📱' : deviceType === 'MAC' ? '💻' : deviceType === 'WATCH' ? '⌚' : '📱';
+                deviceEl.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                        <line x1="12" y1="18" x2="12.01" y2="18"/>
+                    </svg>
+                    ${deviceType}
+                `;
                 
                 // Transcription status
                 const statusEl = document.getElementById('noteDetailStatus');
                 const status = noteData.transcription_status || 'initial';
-                const statusIcon = status === 'enhanced' ? '✓' : '⏳';
                 statusEl.innerHTML = `
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
                         <polyline points="22 4 12 14.01 9 11.01"/>
                     </svg>
-                    ${status === 'enhanced' ? 'Enhanced' : 'Initial'}
+                    ${status.toLowerCase() === 'enhanced' ? 'Enhanced' : 'Initial'}
                 `;
+
+                // Sentiment
+                const sentimentEl = document.getElementById('noteDetailSentiment');
+                const sentiment = (noteData.sentiment_overall || 'unknown').toLowerCase();
+                const sentimentColors = {
+                    positive: 'var(--green)',
+                    negative: 'var(--red)',
+                    neutral: 'var(--text-secondary)',
+                    mixed: 'var(--secondary-purple)',
+                    unknown: 'var(--text-tertiary)'
+                };
+                const sentimentEmoji = {
+                    positive: '😊',
+                    negative: '😔',
+                    neutral: '😐',
+                    mixed: '🤔',
+                    unknown: '❓'
+                };
+                sentimentEl.innerHTML = `
+                    <span style="color: ${sentimentColors[sentiment] || sentimentColors.unknown}">
+                        ${sentimentEmoji[sentiment] || '❓'} ${sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}
+                    </span>
+                `;
+
+                // Participants Section
+                const participantsSection = document.getElementById('participantsSection');
+                const participantsList = document.getElementById('participantsList');
+                const participantNames = noteData.participant_display_names || [];
+                const participantRoles = noteData.participant_roles || [];
+                
+                if (participantNames.length > 0 || participantRoles.length > 0) {
+                    participantsSection.style.display = 'block';
+                    const participants = participantNames.map((name, i) => {
+                        const role = participantRoles[i] || '';
+                        return { name, role };
+                    });
+                    
+                    // If we only have roles without names
+                    if (participantNames.length === 0 && participantRoles.length > 0) {
+                        participantRoles.forEach(role => participants.push({ name: '', role }));
+                    }
+                    
+                    participantsList.innerHTML = participants.map(p => `
+                        <span style="padding: 6px 12px; background: var(--bg-chip); border: 1px solid var(--border-subtle); border-radius: 999px; font-size: 12px; color: var(--text-primary);">
+                            ${this.escapeHtml(p.name || 'Unknown')}${p.role ? ` <span style="color: var(--text-tertiary)">(${this.escapeHtml(p.role)})</span>` : ''}
+                        </span>
+                    `).join('');
+                } else {
+                    participantsSection.style.display = 'none';
+                }
 
                 // Key Summary
                 const keySummary = document.getElementById('keySummary');
@@ -4019,15 +4298,40 @@
                         : '<li style="color: var(--text-tertiary)">No key points available</li>';
                 }
 
-                // Action Items
+                // Decisions
+                const decisionsSection = document.getElementById('decisionsSection');
+                const decisionsList = document.getElementById('decisionsList');
+                if (decisionsList) {
+                    const decisions = noteData.summary_decisions || [];
+                    if (decisions.length > 0) {
+                        decisionsSection.style.display = 'block';
+                        decisionsList.innerHTML = decisions.map(d => `<li>${this.escapeHtml(d)}</li>`).join('');
+                    } else {
+                        decisionsList.innerHTML = '<li style="color: var(--text-tertiary)">No decisions recorded</li>';
+                    }
+                }
+
+                // Action Items (with assignees AND due dates)
                 const actionItems = document.getElementById('actionItems');
                 if (actionItems) {
                     const actions = noteData.summary_action_item_texts || [];
                     const assignees = noteData.summary_action_item_assignees || [];
+                    const dueDates = noteData.summary_action_item_due_texts || [];
+                    
                     actionItems.innerHTML = actions.length > 0
                         ? actions.map((action, i) => {
-                            const assignee = assignees[i] ? ` (${assignees[i]})` : '';
-                            return `<li>${this.escapeHtml(action)}${assignee}</li>`;
+                            const assignee = assignees[i] && assignees[i] !== 'unassigned' ? assignees[i] : null;
+                            const dueDate = dueDates[i] && dueDates[i] !== 'no date' ? dueDates[i] : null;
+                            
+                            let meta = '';
+                            if (assignee || dueDate) {
+                                const parts = [];
+                                if (assignee) parts.push(`👤 ${assignee}`);
+                                if (dueDate) parts.push(`📅 ${dueDate}`);
+                                meta = ` <span style="color: var(--text-tertiary); font-size: 11px;">${parts.join(' • ')}</span>`;
+                            }
+                            
+                            return `<li>${this.escapeHtml(action)}${meta}</li>`;
                         }).join('')
                         : '<li style="color: var(--text-tertiary)">No action items</li>';
                 }
@@ -4058,6 +4362,175 @@
                         topicsKeywords.innerHTML = '<span style="padding: 4px 10px; background: var(--bg-chip); border-radius: 999px; font-size: 12px; color: var(--text-tertiary);">No topics or keywords</span>';
                     }
                 }
+
+                // Reset transcript section (collapsed by default)
+                const transcriptSection = document.getElementById('transcriptSection');
+                const transcriptText = document.getElementById('transcriptText');
+                const transcriptWordCount = document.getElementById('transcriptWordCount');
+                
+                transcriptSection.classList.remove('expanded');
+                transcriptText.innerHTML = '<span class="transcript-loading">Click to load transcript...</span>';
+                transcriptWordCount.textContent = '';
+                
+                // Store transcript DID for lazy loading
+                this.state.currentTranscriptDid = noteData.transcript_full_text || null;
+                this.state.transcriptLoaded = false;
+            },
+
+            // Toggle transcript section and load if needed
+            async toggleTranscript() {
+                const section = document.getElementById('transcriptSection');
+                const isExpanding = !section.classList.contains('expanded');
+                
+                section.classList.toggle('expanded');
+                
+                // Load transcript on first expand
+                if (isExpanding && !this.state.transcriptLoaded && this.state.currentTranscriptDid) {
+                    await this.loadTranscript();
+                }
+            },
+
+            // Load transcript text from GUN
+            async loadTranscript() {
+                const transcriptText = document.getElementById('transcriptText');
+                const transcriptWordCount = document.getElementById('transcriptWordCount');
+                
+                if (!this.state.currentTranscriptDid) {
+                    transcriptText.innerHTML = '<span style="color: var(--text-tertiary);">No transcript available for this note.</span>';
+                    return;
+                }
+
+                transcriptText.innerHTML = '<span class="transcript-loading">Loading transcript...</span>';
+
+                try {
+                    console.log('📄 Fetching transcript:', this.state.currentTranscriptDid);
+                    
+                    const response = await fetch(
+                        `${this.config.backendUrl}/api/records?recordType=text&source=gun&did=${this.state.currentTranscriptDid}`,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${this.config.token}`
+                            }
+                        }
+                    );
+
+                    const data = await response.json();
+                    const text = data.records?.[0]?.data?.text?.value;
+
+                    if (text) {
+                        this.state.transcriptLoaded = true;
+                        transcriptText.textContent = text;
+                        
+                        // Show word count
+                        const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
+                        transcriptWordCount.textContent = `(${wordCount.toLocaleString()} words)`;
+                        
+                        console.log('✅ Transcript loaded:', wordCount, 'words');
+                    } else {
+                        transcriptText.innerHTML = '<span style="color: var(--text-tertiary);">Transcript text not found.</span>';
+                    }
+                } catch (error) {
+                    console.error('❌ Failed to load transcript:', error);
+                    transcriptText.innerHTML = `<span style="color: var(--red);">Failed to load transcript: ${error.message}</span>`;
+                }
+            },
+
+            // Save note name when changed
+            async saveNoteName() {
+                const titleInput = document.getElementById('noteDetailTitle');
+                const newName = titleInput.value.trim();
+                
+                // Check if name actually changed
+                if (!newName || newName === this.state.originalNoteName) {
+                    // Reset to original if empty
+                    if (!newName) {
+                        titleInput.value = this.state.originalNoteName;
+                    }
+                    return;
+                }
+
+                if (!this.state.currentNote) {
+                    this.showToast('No note loaded', 'error');
+                    return;
+                }
+
+                try {
+                    console.log('💾 Saving note name change:', this.state.originalNoteName, '→', newName);
+                    
+                    // Extract localId from DID
+                    const noteDid = this.state.currentNote.oip?.did || this.state.currentNote.did;
+                    const localId = noteDid ? noteDid.split(':').pop() : null;
+                    
+                    if (!localId) {
+                        this.showToast('Could not save: invalid note ID', 'error');
+                        return;
+                    }
+
+                    // Update local state
+                    this.state.currentNote.data.basic.name = newName;
+                    this.state.originalNoteName = newName;
+
+                    // Build complete note update
+                    const noteUpdate = {
+                        basic: {
+                            ...this.state.currentNote.data.basic,
+                            name: newName,
+                            date: Math.floor(Date.now() / 1000)
+                        },
+                        notes: {
+                            ...this.state.currentNote.data.notes,
+                            last_modified: new Date().toISOString()
+                        }
+                    };
+
+                    // Preserve audio data if present
+                    if (this.state.currentNote.data.audio) {
+                        noteUpdate.audio = this.state.currentNote.data.audio;
+                    }
+
+                    // Preserve accessControl if present
+                    if (this.state.currentNote.data.accessControl) {
+                        noteUpdate.accessControl = {
+                            ...this.state.currentNote.data.accessControl,
+                            last_modified_timestamp: Math.floor(Date.now() / 1000)
+                        };
+                    }
+
+                    // Save to GUN
+                    const saveResponse = await fetch(
+                        `${this.config.backendUrl}/api/records/newRecord?recordType=notes&storage=gun&localId=${localId}`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${this.config.token}`
+                            },
+                            body: JSON.stringify(noteUpdate)
+                        }
+                    );
+
+                    if (saveResponse.ok) {
+                        console.log('✅ Note name saved to GUN');
+                        this.showToast('Note name updated', 'success');
+                        
+                        // Update in local notes list cache
+                        const noteIndex = this.state.notes.findIndex(n => 
+                            (n.oip?.did || n.did) === noteDid
+                        );
+                        if (noteIndex !== -1) {
+                            this.state.notes[noteIndex].data.basic.name = newName;
+                            this.saveNotesToStorage();
+                            this.renderNotesList();
+                        }
+                    } else {
+                        const errorText = await saveResponse.text();
+                        console.error('❌ Failed to save note name:', errorText);
+                        this.showToast('Failed to save name change', 'error');
+                    }
+                } catch (error) {
+                    console.error('❌ Error saving note name:', error);
+                    this.showToast(`Save failed: ${error.message}`, 'error');
+                }
             },
 
             // Escape HTML to prevent XSS
@@ -4067,7 +4540,7 @@
                 return div.innerHTML;
             },
 
-            // Fill in missing analysis using LLM
+            // Fill in missing analysis using LLM with structured output
             async fillMissingAnalysis() {
                 if (!this.state.currentNote) {
                     this.showToast('No note loaded', 'error');
@@ -4145,52 +4618,54 @@
                     console.log('📋 Fields to fill:', fieldsToFill);
 
                     // Build the prompt for the LLM
-                    const prompt = `Analyze this transcript and provide the following missing fields as a JSON object.
+                    const prompt = `Analyze this transcript and extract structured information.
 
 TRANSCRIPT:
 ${transcriptText}
 
 ${participantsFormatted ? `PARTICIPANTS: ${participantsFormatted}\n` : ''}
 
-MISSING FIELDS TO FILL: ${fieldsToFill.join(', ')}
+Instructions:
+- summary_key_points: Extract 3-7 key discussion points
+- summary_decisions: List any decisions that were made
+- summary_action_item_texts: List action items identified
+- summary_action_item_assignees: For each action item, provide the assignee (use "unassigned" if unclear)
+- summary_open_questions: List any unresolved questions
+- topics_auto: Extract 3-5 main topics discussed
+- keywords_auto: Extract 5-10 relevant keywords`;
 
-Provide a JSON object with ONLY these fields:
-- summary_key_points: array of key discussion points (3-7 items)
-- summary_decisions: array of decisions made (if any)
-- summary_action_item_texts: array of action items identified
-- summary_action_item_assignees: array of assignees (parallel to action_item_texts, use "unassigned" if unclear)
-- summary_open_questions: array of unresolved questions
-- topics_auto: array of topics discussed (3-5 items)
-- keywords_auto: array of keywords (5-10 items)
+                    // JSON schema for structured output (guaranteed format from xAI)
+                    const jsonSchema = {
+                        name: "transcript_analysis",
+                        schema: {
+                            type: "object",
+                            properties: {
+                                summary_key_points: { type: "array", items: { type: "string" } },
+                                summary_decisions: { type: "array", items: { type: "string" } },
+                                summary_action_item_texts: { type: "array", items: { type: "string" } },
+                                summary_action_item_assignees: { type: "array", items: { type: "string" } },
+                                summary_open_questions: { type: "array", items: { type: "string" } },
+                                topics_auto: { type: "array", items: { type: "string" } },
+                                keywords_auto: { type: "array", items: { type: "string" } }
+                            },
+                            required: ["summary_key_points", "topics_auto", "keywords_auto"]
+                        }
+                    };
 
-Return ONLY the JSON object, nothing else:`;
-
-                    // Determine which LLM to use based on user preference
-                    const selectedModel = document.getElementById('aiModel')?.value || 'grok-2-mini';
-                    let processingMode = 'llm'; // Default: race all models
-                    
-                    // Map model selection to processing_mode
-                    if (selectedModel === 'gpt-4o-mini') {
-                        processingMode = 'llm-gpt-4o-mini';
-                    } else if (selectedModel === 'grok-beta' || selectedModel === 'grok-2' || selectedModel === 'grok-2-mini') {
-                        processingMode = `llm-${selectedModel}`;
-                    } else if (selectedModel.startsWith('llama') || selectedModel.includes(':')) {
-                        processingMode = `llm-${selectedModel}`;
-                    }
-                    // 'parallel' stays as 'llm' to race all models
-
-                    // Call LLM via voice/chat endpoint with direct LLM mode (bypasses RAG)
-                    console.log(`🤖 Calling LLM for analysis (mode: ${processingMode})...`);
-                    const llmResponse = await fetch(`${this.config.backendUrl}/api/voice/chat`, {
+                    // Call /api/alfred/generate with structured output
+                    console.log('🤖 Calling /api/alfred/generate with structured output (grok-4-fast-reasoning)...');
+                    const llmResponse = await fetch(`${this.config.backendUrl}/api/alfred/generate`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${this.config.token}`
                         },
                         body: JSON.stringify({
-                            text: prompt,
-                            processing_mode: processingMode,
-                            return_audio: false  // Text only, no TTS
+                            prompt: prompt,
+                            model: 'grok-4-fast-reasoning',
+                            json_schema: jsonSchema,
+                            temperature: 0.3,  // Lower temperature for more consistent structured output
+                            max_tokens: 14000
                         })
                     });
 
@@ -4209,41 +4684,336 @@ Return ONLY the JSON object, nothing else:`;
                     let analysis;
 
                     try {
-                        // Try to parse JSON from response (check multiple possible response fields)
-                        const responseText = llmData.response_text || llmData.response || llmData.answer || '';
+                        // With structured output, response should be valid JSON directly
+                        const responseText = llmData.response || '';
                         console.log('📝 LLM response received, length:', responseText.length);
+                        console.log('📝 Model used:', llmData.model);
                         
-                        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-                        if (jsonMatch) {
-                            analysis = JSON.parse(jsonMatch[0]);
-                        } else {
-                            throw new Error('No JSON found in response');
-                        }
+                        // Parse the JSON response (structured output guarantees valid JSON)
+                        analysis = JSON.parse(responseText);
                     } catch (parseError) {
                         console.error('❌ Failed to parse LLM response:', parseError);
-                        console.log('Raw response:', llmData.response_text || llmData.response || llmData.answer);
+                        console.log('Raw response:', llmData.response);
                         this.showToast('Failed to parse analysis results', 'error');
                         return;
                     }
 
                     console.log('✅ Analysis received:', Object.keys(analysis));
 
-                    // Update the current note with new analysis
+                    // Update the current note with new analysis (local state first)
                     for (const [field, value] of Object.entries(analysis)) {
                         if (fieldsToFill.includes(field) && value) {
                             this.state.currentNote.data.notes[field] = value;
                         }
                     }
 
-                    // Re-render the note detail view
+                    // Re-render the note detail view immediately
                     this.renderNoteDetail();
+
+                    // ========================================
+                    // SAVE UPDATED NOTE BACK TO GUN STORAGE
+                    // Pattern: Use localId to update existing record (like FitnessAlly userFitnessProfile)
+                    // ========================================
                     
-                    this.showToast(`Filled in ${Object.keys(analysis).length} missing field(s)`, 'success');
-                    console.log('✅ Missing analysis fields filled successfully');
+                    // Extract localId (noteHash) from the DID
+                    // DID format: did:gun:647f79c2a338:2c6fa7ebe009d9b8e1da82ee8a3ffa0b76cf04a5f97d6a8e54bc88777feee119
+                    // localId is the last part after the last colon
+                    const noteDid = this.state.currentNote.oip?.did || this.state.currentNote.did;
+                    const localId = noteDid ? noteDid.split(':').pop() : null;
+                    
+                    if (!localId) {
+                        console.warn('⚠️ Could not extract localId from DID, skipping GUN save');
+                        this.showToast(`Analysis updated locally (${Object.keys(analysis).length} fields). Could not save to backend.`, 'warning');
+                        return;
+                    }
+
+                    console.log('💾 Saving updated note to GUN with localId:', localId);
+
+                    // Build complete note update (preserve all existing fields, update analysis)
+                    const noteUpdate = {
+                        basic: {
+                            ...this.state.currentNote.data.basic,
+                            // Update modification timestamp
+                            date: Math.floor(Date.now() / 1000)
+                        },
+                        notes: {
+                            // Spread existing note data (preserves transcript, participants, etc.)
+                            ...this.state.currentNote.data.notes,
+                            // Updated analysis fields are already merged above
+                            // Update last_modified timestamp
+                            last_modified: new Date().toISOString()
+                        }
+                    };
+
+                    // If accessControl exists, preserve it with updated timestamp
+                    if (this.state.currentNote.data.accessControl) {
+                        noteUpdate.accessControl = {
+                            ...this.state.currentNote.data.accessControl,
+                            last_modified_timestamp: Math.floor(Date.now() / 1000)
+                        };
+                    }
+
+                    // Save to GUN using localId to update existing record (not create duplicate)
+                    const saveResponse = await fetch(
+                        `${this.config.backendUrl}/api/records/newRecord?recordType=notes&storage=gun&localId=${localId}`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${this.config.token}`
+                            },
+                            body: JSON.stringify(noteUpdate)
+                        }
+                    );
+
+                    if (saveResponse.ok) {
+                        const saveResult = await saveResponse.json();
+                        console.log('✅ Note saved to GUN:', saveResult.did || saveResult);
+                        this.showToast(`Filled ${Object.keys(analysis).length} fields and saved to backend`, 'success');
+                        
+                        // Update local notes cache
+                        this.saveNotesToStorage();
+                    } else {
+                        const errorText = await saveResponse.text();
+                        console.error('❌ Failed to save note to GUN:', errorText);
+                        this.showToast(`Analysis updated locally but failed to save: ${saveResponse.status}`, 'warning');
+                    }
+
+                    console.log('✅ Missing analysis fields filled and persisted successfully');
 
                 } catch (error) {
                     console.error('❌ Error filling missing analysis:', error);
                     this.showToast(`Failed to fill analysis: ${error.message}`, 'error');
+                }
+            },
+
+            // Re-analyze note - OVERWRITES all analysis fields (not just missing)
+            async reAnalyzeNote() {
+                if (!this.state.currentNote) {
+                    this.showToast('No note loaded', 'error');
+                    return;
+                }
+
+                // Confirm before overwriting
+                if (!confirm('This will overwrite ALL existing analysis fields (key points, decisions, action items, topics, keywords, sentiment). Continue?')) {
+                    return;
+                }
+
+                try {
+                    console.log('🔄 Re-analyzing note (overwriting all fields)...');
+                    this.showToast('Re-analyzing note content...', 'info');
+
+                    const noteData = this.state.currentNote.data?.notes || {};
+                    
+                    // Check if transcript DID exists
+                    const transcriptDid = noteData.transcript_full_text;
+                    if (!transcriptDid) {
+                        this.showToast('No transcript available for this note', 'error');
+                        return;
+                    }
+
+                    // Fetch the transcript
+                    console.log('📄 Fetching transcript:', transcriptDid);
+                    const transcriptResponse = await fetch(`${this.config.backendUrl}/api/records?recordType=text&source=gun&did=${transcriptDid}`, {
+                        headers: {
+                            'Authorization': `Bearer ${this.config.token}`
+                        }
+                    });
+
+                    const transcriptData = await transcriptResponse.json();
+                    const transcriptText = transcriptData.records?.[0]?.data?.text?.value;
+                    
+                    if (!transcriptText) {
+                        this.showToast('Could not retrieve transcript text', 'error');
+                        return;
+                    }
+
+                    console.log('✅ Transcript retrieved, length:', transcriptText.length);
+
+                    // Format participants
+                    const participantNames = noteData.participant_display_names || [];
+                    const participantRoles = noteData.participant_roles || [];
+                    
+                    let participantsFormatted = '';
+                    if (participantNames.length > 0) {
+                        participantsFormatted = participantNames.map((name, idx) => {
+                            const role = participantRoles[idx] || '';
+                            return role ? `${name} (${role})` : name;
+                        }).join(', ');
+                    } else if (participantRoles.length > 0) {
+                        participantsFormatted = participantRoles.join(', ');
+                    }
+
+                    // Build the prompt for the LLM - request ALL fields
+                    const prompt = `Analyze this transcript and extract structured information. Provide a complete analysis.
+
+TRANSCRIPT:
+${transcriptText}
+
+${participantsFormatted ? `PARTICIPANTS: ${participantsFormatted}\n` : ''}
+
+Instructions:
+- summary_key_points: Extract 3-7 key discussion points
+- summary_decisions: List any decisions that were made (empty array if none)
+- summary_action_item_texts: List action items identified
+- summary_action_item_assignees: For each action item, provide the assignee (use "unassigned" if unclear)
+- summary_action_item_due_texts: For each action item, provide the due date text (use "no date" if unclear)
+- summary_open_questions: List any unresolved questions or topics needing follow-up
+- topics_auto: Extract 3-5 main topics discussed
+- keywords_auto: Extract 5-10 relevant keywords
+- sentiment_overall: One of "positive", "negative", "neutral", or "mixed"`;
+
+                    // JSON schema for structured output - ALL analysis fields
+                    const jsonSchema = {
+                        name: "transcript_full_analysis",
+                        schema: {
+                            type: "object",
+                            properties: {
+                                summary_key_points: { type: "array", items: { type: "string" } },
+                                summary_decisions: { type: "array", items: { type: "string" } },
+                                summary_action_item_texts: { type: "array", items: { type: "string" } },
+                                summary_action_item_assignees: { type: "array", items: { type: "string" } },
+                                summary_action_item_due_texts: { type: "array", items: { type: "string" } },
+                                summary_open_questions: { type: "array", items: { type: "string" } },
+                                topics_auto: { type: "array", items: { type: "string" } },
+                                keywords_auto: { type: "array", items: { type: "string" } },
+                                sentiment_overall: { type: "string", enum: ["positive", "negative", "neutral", "mixed"] }
+                            },
+                            required: ["summary_key_points", "topics_auto", "keywords_auto", "sentiment_overall"]
+                        }
+                    };
+
+                    // Call /api/alfred/generate with structured output
+                    console.log('🤖 Calling /api/alfred/generate for full re-analysis (grok-4-fast-reasoning)...');
+                    const llmResponse = await fetch(`${this.config.backendUrl}/api/alfred/generate`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.config.token}`
+                        },
+                        body: JSON.stringify({
+                            prompt: prompt,
+                            model: 'grok-4-fast-reasoning',
+                            json_schema: jsonSchema,
+                            temperature: 0.3,
+                            max_tokens: 14000
+                        })
+                    });
+
+                    if (!llmResponse.ok) {
+                        const errorText = await llmResponse.text();
+                        console.error('LLM response error:', errorText);
+                        throw new Error(`LLM request failed: ${llmResponse.status} ${llmResponse.statusText}`);
+                    }
+
+                    const llmData = await llmResponse.json();
+                    
+                    if (!llmData.success) {
+                        throw new Error(llmData.error || 'LLM request failed');
+                    }
+                    
+                    let analysis;
+
+                    try {
+                        const responseText = llmData.response || '';
+                        console.log('📝 LLM response received, length:', responseText.length);
+                        console.log('📝 Model used:', llmData.model);
+                        
+                        analysis = JSON.parse(responseText);
+                    } catch (parseError) {
+                        console.error('❌ Failed to parse LLM response:', parseError);
+                        console.log('Raw response:', llmData.response);
+                        this.showToast('Failed to parse analysis results', 'error');
+                        return;
+                    }
+
+                    console.log('✅ Full analysis received:', Object.keys(analysis));
+
+                    // OVERWRITE all analysis fields (not checking if empty)
+                    const analysisFields = [
+                        'summary_key_points',
+                        'summary_decisions', 
+                        'summary_action_item_texts',
+                        'summary_action_item_assignees',
+                        'summary_action_item_due_texts',
+                        'summary_open_questions',
+                        'topics_auto',
+                        'keywords_auto',
+                        'sentiment_overall'
+                    ];
+
+                    for (const field of analysisFields) {
+                        if (analysis[field] !== undefined) {
+                            this.state.currentNote.data.notes[field] = analysis[field];
+                        }
+                    }
+
+                    // Re-render the note detail view immediately
+                    this.renderNoteDetail();
+
+                    // ========================================
+                    // SAVE UPDATED NOTE BACK TO GUN STORAGE
+                    // ========================================
+                    
+                    const noteDid = this.state.currentNote.oip?.did || this.state.currentNote.did;
+                    const localId = noteDid ? noteDid.split(':').pop() : null;
+                    
+                    if (!localId) {
+                        console.warn('⚠️ Could not extract localId from DID, skipping GUN save');
+                        this.showToast(`Re-analysis complete locally. Could not save to backend.`, 'warning');
+                        return;
+                    }
+
+                    console.log('💾 Saving re-analyzed note to GUN with localId:', localId);
+
+                    const noteUpdate = {
+                        basic: {
+                            ...this.state.currentNote.data.basic,
+                            date: Math.floor(Date.now() / 1000)
+                        },
+                        notes: {
+                            ...this.state.currentNote.data.notes,
+                            last_modified: new Date().toISOString(),
+                            last_analysis_model: 'grok-4-fast-reasoning',
+                            last_analysis_date: new Date().toISOString()
+                        }
+                    };
+
+                    if (this.state.currentNote.data.accessControl) {
+                        noteUpdate.accessControl = {
+                            ...this.state.currentNote.data.accessControl,
+                            last_modified_timestamp: Math.floor(Date.now() / 1000)
+                        };
+                    }
+
+                    const saveResponse = await fetch(
+                        `${this.config.backendUrl}/api/records/newRecord?recordType=notes&storage=gun&localId=${localId}`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${this.config.token}`
+                            },
+                            body: JSON.stringify(noteUpdate)
+                        }
+                    );
+
+                    if (saveResponse.ok) {
+                        const saveResult = await saveResponse.json();
+                        console.log('✅ Re-analyzed note saved to GUN:', saveResult.did || saveResult);
+                        this.showToast(`Re-analysis complete! ${Object.keys(analysis).length} fields updated and saved.`, 'success');
+                        this.saveNotesToStorage();
+                    } else {
+                        const errorText = await saveResponse.text();
+                        console.error('❌ Failed to save note to GUN:', errorText);
+                        this.showToast(`Re-analysis done locally but failed to save: ${saveResponse.status}`, 'warning');
+                    }
+
+                    console.log('✅ Note re-analysis complete');
+
+                } catch (error) {
+                    console.error('❌ Error re-analyzing note:', error);
+                    this.showToast(`Failed to re-analyze: ${error.message}`, 'error');
                 }
             },
 
