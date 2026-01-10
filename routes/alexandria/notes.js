@@ -1977,244 +1977,237 @@ router.post('/converse', authenticateToken, async (req, res) => {
         }
         
         // ========================================
-        // MODE 1: All Notes Search (no specific noteDid)
+        // MODE 1: All Notes Mode - Full Context Search
+        // Uses grok-4-fast-reasoning's 2M token context window
+        // Fetches ALL user notes with transcripts and passes to LLM
         // ========================================
         if (!noteDid && allNotes) {
-            console.log('[ALFRED Notes All Notes Mode] Extracting search parameters from question...');
+            console.log('[ALFRED Notes All Notes Mode] Fetching ALL user notes with transcripts...');
             
-            // Get today's date for the prompt
-            const today = new Date();
-            const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
-            
-            // Use LLM to extract date range, attendee names, and primary subject from the question
-            const extractionPrompt = `You are helping extract structured information from a user's question about their meeting notes.
-
-Today's date is: ${todayStr}
-
-User's question: "${question}"
-
-Please extract the following information and respond ONLY with a JSON object (no markdown, no explanation):
-
-{
-  "dateRange": {
-    "hasDate": true/false,
-    "startDate": "YYYY-MM-DD" or null,
-    "endDate": "YYYY-MM-DD" or null
-  },
-  "attendees": ["Name1", "Name2"] or [],
-  "primarySubject": "main topic or subject they're asking about"
-}
-
-Rules:
-- If they mention a specific date, use that for both startDate and endDate
-- If they mention "last week", calculate the date range
-- If they mention "yesterday", calculate that date (${todayStr} minus 1 day)
-- If they mention "today", use today's date (${todayStr})
-- If they mention a date range like "last month", calculate the range
-- If no date mentioned, set hasDate to false and dates to null
-- Extract any person names mentioned as attendees (not generic terms like "we" or "the team")
-- The primarySubject should be the main topic they're asking about (2-5 words)
-- Respond with ONLY the JSON object, no markdown code blocks`;
-
             try {
-                console.log('[ALFRED Notes] Calling LLM directly to extract search parameters...');
-                
-                // Call LLM directly without RAG to avoid searching for records
                 const axios = require('axios');
-                let extractionResponse;
                 
-                // Try Ollama first
-                try {
-                    const ollamaResponse = await axios.post('http://localhost:11434/api/generate', {
-                        model: model,
-                        prompt: extractionPrompt,
-                        stream: false
-                    }, { timeout: 30000 });
-                    
-                    extractionResponse = { answer: ollamaResponse.data.response };
-                } catch (ollamaError) {
-                    console.warn('[ALFRED Notes] Ollama unavailable, falling back to simpler extraction');
-                    // Fallback: do simple extraction ourselves
-                    extractionResponse = { answer: null };
-                }
+                // Fetch all user's notes with resolved transcripts
+                // Uses resolveDepth=1 and resolveFieldName to get transcript_full_text embedded
+                const allNotesResults = await getRecords({
+                    source: 'gun',
+                    recordType: 'notes',
+                    resolveDepth: 1,
+                    resolveFieldName: 'notes.transcript_full_text',
+                    limit: 100 // Get up to 100 notes
+                }, req);
                 
-                console.log('[ALFRED Notes] LLM extraction response:', extractionResponse.answer ? extractionResponse.answer.substring(0, 200) : 'null');
+                const notes = allNotesResults.records || [];
+                console.log(`[ALFRED Notes All Notes Mode] Found ${notes.length} notes`);
                 
-                // Parse the LLM response to extract structured data
-                let extractedInfo;
-                if (extractionResponse.answer) {
-                    try {
-                        // Try to parse the response as JSON
-                        const jsonMatch = extractionResponse.answer.match(/\{[\s\S]*\}/);
-                        if (jsonMatch) {
-                            extractedInfo = JSON.parse(jsonMatch[0]);
-                        } else {
-                            throw new Error('No JSON found in response');
-                        }
-                    } catch (parseError) {
-                        console.warn('[ALFRED Notes] Failed to parse LLM extraction, using fallback:', parseError.message);
-                        extractedInfo = null;
-                    }
-                }
-                
-                // Fallback: Simple keyword-based extraction if LLM failed
-                if (!extractedInfo) {
-                    console.log('[ALFRED Notes] Using simple keyword-based extraction');
-                    const questionLower = question.toLowerCase();
-                    
-                    // Extract date information
-                    let dateRange = { hasDate: false, startDate: null, endDate: null };
-                    
-                    if (questionLower.includes('today')) {
-                        dateRange = {
-                            hasDate: true,
-                            startDate: todayStr,
-                            endDate: todayStr
-                        };
-                    } else if (questionLower.includes('yesterday')) {
-                        const yesterday = new Date(today);
-                        yesterday.setDate(yesterday.getDate() - 1);
-                        const yesterdayStr = yesterday.toISOString().split('T')[0];
-                        dateRange = {
-                            hasDate: true,
-                            startDate: yesterdayStr,
-                            endDate: yesterdayStr
-                        };
-                    } else if (questionLower.includes('last week')) {
-                        const weekAgo = new Date(today);
-                        weekAgo.setDate(weekAgo.getDate() - 7);
-                        const weekAgoStr = weekAgo.toISOString().split('T')[0];
-                        dateRange = {
-                            hasDate: true,
-                            startDate: weekAgoStr,
-                            endDate: todayStr
-                        };
-                    }
-                    
-                    // Simple subject extraction (remove common words)
-                    const words = question.split(/\s+/).filter(w => 
-                        w.length > 3 && 
-                        !['what', 'when', 'where', 'who', 'how', 'did', 'the', 'was', 'were', 'are', 'about', 'from', 'meeting', 'today', 'yesterday'].includes(w.toLowerCase())
-                    );
-                    const primarySubject = words.slice(0, 5).join(' ');
-                    
-                    extractedInfo = {
-                        dateRange,
-                        attendees: [],
-                        primarySubject: primarySubject || question.substring(0, 50)
-                    };
-                }
-                
-                console.log('[ALFRED Notes] Extracted info:');
-                console.log(`  - Date Range: ${extractedInfo.dateRange.hasDate ? `${extractedInfo.dateRange.startDate} to ${extractedInfo.dateRange.endDate}` : 'none'}`);
-                console.log(`  - Attendees: ${extractedInfo.attendees.length > 0 ? extractedInfo.attendees.join(', ') : 'none'}`);
-                console.log(`  - Primary Subject: ${extractedInfo.primarySubject}`);
-                
-                // Build search parameters
-                const searchParams = {
-                    noteSearchQuery: extractedInfo.primarySubject,
-                    limit: 10
-                };
-                
-                // Add date filtering if dates were extracted
-                if (extractedInfo.dateRange.hasDate) {
-                    if (extractedInfo.dateRange.startDate) {
-                        // Convert to Unix timestamp (start of day)
-                        const startDate = new Date(extractedInfo.dateRange.startDate + 'T00:00:00Z');
-                        searchParams.dateStart = Math.floor(startDate.getTime() / 1000);
-                    }
-                    if (extractedInfo.dateRange.endDate) {
-                        // Convert to Unix timestamp (end of day)
-                        const endDate = new Date(extractedInfo.dateRange.endDate + 'T23:59:59Z');
-                        searchParams.dateEnd = Math.floor(endDate.getTime() / 1000);
-                    }
-                }
-                
-                // Add attendee filtering if attendees were extracted
-                if (extractedInfo.attendees.length > 0) {
-                    searchParams.noteAttendees = extractedInfo.attendees.join(',');
-                }
-                
-                console.log('[ALFRED Notes] Searching notes with parameters:', searchParams);
-                
-                // Search for matching notes via oipClient
-                const searchResults = await getRecords(searchParams, req);
-                
-                console.log(`[ALFRED Notes] Found ${searchResults.searchResults} matching notes`);
-                
-                if (searchResults.searchResults === 0) {
+                if (notes.length === 0) {
                     return res.json({
                         success: true,
-                        answer: `I couldn't find any notes matching your search criteria. ${extractedInfo.dateRange.hasDate ? `I looked for notes from ${extractedInfo.dateRange.startDate} to ${extractedInfo.dateRange.endDate}` : 'Try providing a date range or more specific details about the meeting.'} ${extractedInfo.attendees.length > 0 ? `with attendees: ${extractedInfo.attendees.join(', ')}` : ''}`,
-                        context: {
-                            mode: 'allNotes',
-                            searchQuery: extractedInfo.primarySubject,
-                            dateRange: extractedInfo.dateRange,
-                            attendees: extractedInfo.attendees,
-                            resultsFound: 0
-                        },
+                        answer: "I don't have any notes to search through yet. Try recording a meeting or note first!",
+                        context: { mode: 'allNotes', notesCount: 0 },
                         model: model,
                         sources: []
                     });
                 }
                 
-                // Get the top-ranked note
-                const topNote = searchResults.records[0];
-                const searchScores = topNote.searchScores;
+                // Build comprehensive context from all notes
+                let allNotesContext = `You are answering a question by searching through the user's notes and meeting transcripts.
+Today's date is: ${new Date().toISOString().split('T')[0]}
+
+The user has ${notes.length} notes. Here they are:\n\n`;
                 
-                // Debug: Log the full note structure
-                console.log('[ALFRED Notes] Top note structure:', {
-                    hasDid: !!topNote.did,
-                    hasOip: !!topNote.oip,
-                    oipDid: topNote.oip?.did,
-                    oipDidTx: topNote.oip?.didTx,
-                    name: topNote.data?.basic?.name
-                });
+                let totalTranscriptChars = 0;
+                const noteSummaries = [];
                 
-                // The DID should be in note.did (set by elasticsearch.js from oip.did)
-                // If not there, try oip.did directly
-                const topNoteDid = topNote.did || topNote.oip?.did || topNote.oip?.didTx;
-                
-                if (!topNoteDid) {
-                    console.error('[ALFRED Notes] Error: Top note has no DID!');
-                    console.error('Note object keys:', Object.keys(topNote));
-                    console.error('Note.oip keys:', topNote.oip ? Object.keys(topNote.oip) : 'no oip');
-                    return res.status(500).json({
-                        success: false,
-                        error: 'Found matching note but it has no DID',
-                        details: 'Internal error: note record missing DID field'
+                for (let i = 0; i < notes.length; i++) {
+                    const note = notes[i];
+                    const noteBasic = note.data?.basic || {};
+                    const noteData = note.data?.notes || {};
+                    const noteDid = note.oip?.did || note.did;
+                    
+                    // Extract transcript text
+                    let transcriptText = '';
+                    const transcriptData = noteData.transcript_full_text;
+                    if (transcriptData) {
+                        if (typeof transcriptData === 'object' && transcriptData.data?.text?.value) {
+                            transcriptText = transcriptData.data.text.value;
+                        } else if (typeof transcriptData === 'string' && transcriptData.length > 100) {
+                            // Might be raw text (unlikely but handle it)
+                            transcriptText = transcriptData;
+                        }
+                    }
+                    
+                    totalTranscriptChars += transcriptText.length;
+                    
+                    // Format note date
+                    let noteDateStr = 'Unknown date';
+                    if (noteBasic.date) {
+                        try {
+                            noteDateStr = new Date(noteBasic.date * 1000).toLocaleDateString('en-US', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                            });
+                        } catch (e) {}
+                    } else if (noteData.created_at) {
+                        try {
+                            noteDateStr = new Date(noteData.created_at).toLocaleDateString('en-US', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                            });
+                        } catch (e) {}
+                    }
+                    
+                    // Build note entry
+                    allNotesContext += `${'='.repeat(60)}
+NOTE ${i + 1}: ${noteBasic.name || 'Untitled Note'}
+Date: ${noteDateStr}
+Type: ${noteData.note_type || 'UNKNOWN'}
+${noteData.participant_display_names?.length > 0 ? `Participants: ${noteData.participant_display_names.join(', ')}` : ''}
+`;
+                    
+                    // Add summary info if available
+                    const keyPoints = noteData.summary_key_points || [];
+                    const decisions = noteData.summary_decisions || [];
+                    const actionItems = noteData.summary_action_item_texts || [];
+                    
+                    if (keyPoints.length > 0) {
+                        allNotesContext += `\nKey Points:\n${keyPoints.map(p => `  - ${p}`).join('\n')}\n`;
+                    }
+                    if (decisions.length > 0) {
+                        allNotesContext += `\nDecisions:\n${decisions.map(d => `  - ${d}`).join('\n')}\n`;
+                    }
+                    if (actionItems.length > 0) {
+                        const assignees = noteData.summary_action_item_assignees || [];
+                        allNotesContext += `\nAction Items:\n${actionItems.map((a, idx) => `  - ${a}${assignees[idx] ? ` (${assignees[idx]})` : ''}`).join('\n')}\n`;
+                    }
+                    
+                    // Add transcript
+                    if (transcriptText) {
+                        allNotesContext += `\nFull Transcript:\n${transcriptText}\n`;
+                    } else {
+                        allNotesContext += `\n[No transcript available for this note]\n`;
+                    }
+                    
+                    // Track note info for sources
+                    noteSummaries.push({
+                        did: noteDid,
+                        title: noteBasic.name || 'Untitled',
+                        date: noteDateStr,
+                        type: noteData.note_type
                     });
                 }
                 
-                console.log('[ALFRED Notes] Top note selected:', topNote.data?.basic?.name);
-                console.log(`  - DID: ${topNoteDid}`);
-                console.log(`  - Final Score: ${searchScores.finalScore}`);
-                console.log(`  - Chunk Score: ${searchScores.chunkScore} (${searchScores.chunkCount} chunks)`);
-                console.log(`  - Attendee Score: ${searchScores.attendeeScore} (${searchScores.attendeeMatches} matches)`);
+                allNotesContext += `\n${'='.repeat(60)}\n`;
                 
-                // Now proceed to RAG mode with the top note
-                // We'll use the existing RAG logic below by setting noteDid
-                // and falling through to the RAG section
-                console.log('[ALFRED Notes] Proceeding to RAG mode with top-ranked note...');
+                console.log(`[ALFRED Notes All Notes Mode] Context built:`);
+                console.log(`  - Notes: ${notes.length}`);
+                console.log(`  - Total transcript chars: ${totalTranscriptChars.toLocaleString()}`);
+                console.log(`  - Total context chars: ${allNotesContext.length.toLocaleString()}`);
                 
-                // Override noteDid with the top result and continue to RAG mode below
-                req.body.noteDid = topNoteDid;
+                // Build the prompt
+                const allNotesPrompt = `${allNotesContext}
+
+USER QUESTION: ${question}
+
+Please search through all the notes above and answer the user's question.
+- If the answer is found in a specific note, mention which note (by title and date)
+- If multiple notes are relevant, summarize information from all of them
+- If no notes contain relevant information, say so clearly
+- Be specific and cite details from the transcripts when possible
+
+ANSWER:`;
                 
-                // Add search context to be included in the response
-                req.searchContext = {
-                    mode: 'allNotes',
-                    searchQuery: extractedInfo.primarySubject,
-                    dateRange: extractedInfo.dateRange,
-                    attendees: extractedInfo.attendees,
-                    totalResults: searchResults.searchResults,
-                    topNoteScore: searchScores
+                console.log(`[ALFRED Notes All Notes Mode] Calling grok-4-fast-reasoning with full context...`);
+                
+                // Call grok-4-fast-reasoning directly (2M token context window)
+                let answer = '';
+                try {
+                    const grokResponse = await axios.post('https://api.x.ai/v1/chat/completions', {
+                        model: 'grok-4-fast-reasoning',
+                        messages: [
+                            { 
+                                role: 'system', 
+                                content: 'You are ALFRED, an AI assistant helping users search through their meeting notes and transcripts. Be helpful, specific, and cite your sources.' 
+                            },
+                            { role: 'user', content: allNotesPrompt }
+                        ],
+                        temperature: 0.3,
+                        max_tokens: 4000
+                    }, {
+                        headers: {
+                            'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 120000 // 2 minute timeout for large context
+                    });
+                    
+                    answer = grokResponse.data.choices[0].message.content;
+                    console.log(`[ALFRED Notes All Notes Mode] ✅ Response received (${answer.length} chars)`);
+                } catch (grokError) {
+                    console.error('[ALFRED Notes All Notes Mode] grok-4-fast-reasoning failed:', grokError.message);
+                    
+                    // Fallback to OpenAI if available
+                    if (process.env.OPENAI_API_KEY) {
+                        try {
+                            console.log('[ALFRED Notes All Notes Mode] Falling back to GPT-4...');
+                            const openaiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+                                model: 'gpt-4o',
+                                messages: [
+                                    { role: 'system', content: 'You are ALFRED, an AI assistant helping users search through their meeting notes.' },
+                                    { role: 'user', content: allNotesPrompt }
+                                ],
+                                temperature: 0.3,
+                                max_tokens: 4000
+                            }, {
+                                headers: {
+                                    'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                timeout: 120000
+                            });
+                            
+                            answer = openaiResponse.data.choices[0].message.content;
+                        } catch (openaiError) {
+                            throw new Error(`Both grok-4-fast-reasoning and GPT-4 failed: ${grokError.message}, ${openaiError.message}`);
+                        }
+                    } else {
+                        throw grokError;
+                    }
+                }
+                
+                // Generate audio if requested
+                let audioData = null;
+                if (req.body.return_audio) {
+                    audioData = await generateAudioForResponse(answer, req.body);
+                }
+                
+                const response = {
+                    success: true,
+                    answer: answer,
+                    context: {
+                        mode: 'allNotes',
+                        notesSearched: notes.length,
+                        totalTranscriptChars: totalTranscriptChars,
+                        notes: noteSummaries.slice(0, 10) // Include first 10 notes as sources
+                    },
+                    model: 'grok-4-fast-reasoning',
+                    sources: noteSummaries
                 };
                 
-                // Continue to RAG mode with the selected note
-                // (Don't return here, let it fall through to the RAG logic below)
+                if (audioData) {
+                    response.audio_data = audioData;
+                    response.has_audio = true;
+                    response.engine_used = req.body.engine || 'elevenlabs';
+                }
+                
+                return res.json(response);
                 
             } catch (error) {
-                console.error('[ALFRED Notes] Error in all notes search:', error);
+                console.error('[ALFRED Notes All Notes Mode] Error:', error);
                 return res.status(500).json({
                     success: false,
                     error: 'Failed to search notes',
@@ -2849,26 +2842,136 @@ ${transcriptText}` : ''}`;
 
                 console.log(`[Stream Inline RAG] Context built: ${contextString.length} chars`);
             } else if (allNotes) {
-                sendSSE({ type: 'context', mode: 'allNotes' });
+                // ========================================
+                // ALL NOTES MODE - Full Context Search
+                // Fetch ALL user notes and pass to grok-4-fast-reasoning
+                // ========================================
+                console.log(`[Stream Inline All Notes] Fetching ALL user notes with transcripts...`);
+                sendSSE({ type: 'context', mode: 'allNotes', status: 'fetching' });
+                
+                const allNotesResults = await getRecords({
+                    source: 'gun',
+                    recordType: 'notes',
+                    resolveDepth: 1,
+                    resolveFieldName: 'notes.transcript_full_text',
+                    limit: 100
+                }, req);
+                
+                const notes = allNotesResults.records || [];
+                console.log(`[Stream Inline All Notes] Found ${notes.length} notes`);
+                sendSSE({ type: 'context', mode: 'allNotes', notesCount: notes.length });
+                
+                if (notes.length === 0) {
+                    answer = "I don't have any notes to search through yet. Try recording a meeting or note first!";
+                } else {
+                    // Build context from all notes
+                    let allNotesContext = `You are answering a question by searching through the user's notes and meeting transcripts.
+Today's date is: ${new Date().toISOString().split('T')[0]}
+
+The user has ${notes.length} notes. Here they are:\n\n`;
+                    
+                    let totalTranscriptChars = 0;
+                    
+                    for (let i = 0; i < notes.length; i++) {
+                        const note = notes[i];
+                        const noteBasic = note.data?.basic || {};
+                        const noteData = note.data?.notes || {};
+                        
+                        // Extract transcript
+                        let transcriptText = '';
+                        const transcriptData = noteData.transcript_full_text;
+                        if (transcriptData && typeof transcriptData === 'object' && transcriptData.data?.text?.value) {
+                            transcriptText = transcriptData.data.text.value;
+                            totalTranscriptChars += transcriptText.length;
+                        }
+                        
+                        // Format date
+                        let noteDateStr = 'Unknown date';
+                        if (noteBasic.date) {
+                            try { noteDateStr = new Date(noteBasic.date * 1000).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); } catch (e) {}
+                        }
+                        
+                        allNotesContext += `${'='.repeat(60)}
+NOTE ${i + 1}: ${noteBasic.name || 'Untitled Note'}
+Date: ${noteDateStr}
+Type: ${noteData.note_type || 'UNKNOWN'}
+${noteData.participant_display_names?.length > 0 ? `Participants: ${noteData.participant_display_names.join(', ')}` : ''}
+`;
+                        
+                        // Add summaries
+                        const keyPoints = noteData.summary_key_points || [];
+                        const decisions = noteData.summary_decisions || [];
+                        if (keyPoints.length > 0) allNotesContext += `\nKey Points:\n${keyPoints.map(p => `  - ${p}`).join('\n')}\n`;
+                        if (decisions.length > 0) allNotesContext += `\nDecisions:\n${decisions.map(d => `  - ${d}`).join('\n')}\n`;
+                        
+                        // Add transcript
+                        if (transcriptText) {
+                            allNotesContext += `\nFull Transcript:\n${transcriptText}\n`;
+                        }
+                    }
+                    
+                    console.log(`[Stream Inline All Notes] Context: ${notes.length} notes, ${totalTranscriptChars.toLocaleString()} transcript chars`);
+                    
+                    // Call grok-4-fast-reasoning directly
+                    const axios = require('axios');
+                    const allNotesPrompt = `${allNotesContext}
+
+${'='.repeat(60)}
+
+USER QUESTION: ${question}
+
+Please search through all the notes above and answer the user's question.
+- If the answer is found in a specific note, mention which note (by title and date)
+- Be specific and cite details from the transcripts when possible
+
+ANSWER:`;
+
+                    try {
+                        console.log(`[Stream Inline All Notes] Calling grok-4-fast-reasoning...`);
+                        const grokResponse = await axios.post('https://api.x.ai/v1/chat/completions', {
+                            model: 'grok-4-fast-reasoning',
+                            messages: [
+                                { role: 'system', content: 'You are ALFRED, an AI assistant helping users search through their meeting notes. Be helpful and specific.' },
+                                { role: 'user', content: allNotesPrompt }
+                            ],
+                            temperature: 0.3,
+                            max_tokens: 4000
+                        }, {
+                            headers: {
+                                'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
+                                'Content-Type': 'application/json'
+                            },
+                            timeout: 120000
+                        });
+                        
+                        answer = grokResponse.data.choices[0].message.content;
+                        console.log(`[Stream Inline All Notes] ✅ Response: ${answer.length} chars`);
+                    } catch (grokError) {
+                        console.error('[Stream Inline All Notes] grok failed:', grokError.message);
+                        answer = `I encountered an error searching your notes: ${grokError.message}. Please try again.`;
+                    }
+                }
             }
 
-            // Generate response using Alfred
-            const alfredInstance = require('../../helpers/alexandria/alfred');
-            const alfredOptions = {
-                model: model,
-                conversationHistory: conversationHistory,
-                useFieldExtraction: false,
-                bypassRAG: !noteDid && !allNotes
-            };
+            // Generate response using Alfred (for non-allNotes, non-noteDid cases)
+            if (!answer) {
+                const alfredInstance = require('../../helpers/alexandria/alfred');
+                const alfredOptions = {
+                    model: model,
+                    conversationHistory: conversationHistory,
+                    useFieldExtraction: false,
+                    bypassRAG: !noteDid && !allNotes
+                };
 
-            // Add pre-built context for note-specific mode
-            if (contextString) {
-                alfredOptions.existingContext = contextString;
-                alfredOptions.pinnedJsonData = { noteSpecific: true };
+                // Add pre-built context for note-specific mode
+                if (contextString) {
+                    alfredOptions.existingContext = contextString;
+                    alfredOptions.pinnedJsonData = { noteSpecific: true };
+                }
+
+                const alfredResponse = await alfredInstance.query(question, alfredOptions);
+                answer = alfredResponse.answer || 'I could not generate a response.';
             }
-
-            const alfredResponse = await alfredInstance.query(question, alfredOptions);
-            answer = alfredResponse.answer || 'I could not generate a response.';
 
             // Send full text immediately (no artificial delay for voice mode)
             sendSSE({ 
