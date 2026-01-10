@@ -3619,6 +3619,119 @@ router.post('/rag', async (req, res) => {
 });
 
 /**
+ * POST /api/voice/generate (also mounted at /api/alfred/generate)
+ * Simple LLM generation endpoint for direct prompt → response
+ * Used by frontend features like "Fill Missing Analysis"
+ */
+router.post('/generate', async (req, res) => {
+    const timestamp = new Date().toISOString();
+    const requestId = `gen-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`[${timestamp}] 🎯 [ROUTE: /api/alfred/generate] POST Request (ID: ${requestId})`);
+    console.log(`${'='.repeat(80)}`);
+    
+    try {
+        const { 
+            prompt, 
+            model = 'grok-beta',
+            temperature = 0.7,
+            max_tokens = 2000
+        } = req.body;
+
+        // Log full request details
+        console.log(`[${requestId}] 📥 REQUEST DETAILS:`);
+        console.log(`[${requestId}]   - Model: ${model}`);
+        console.log(`[${requestId}]   - Temperature: ${temperature}`);
+        console.log(`[${requestId}]   - Max Tokens: ${max_tokens}`);
+        console.log(`[${requestId}]   - Prompt Length: ${prompt ? prompt.length : 0} chars`);
+        console.log(`[${requestId}]   - Prompt Preview: ${prompt ? prompt.substring(0, 500) : '(empty)'}${prompt && prompt.length > 500 ? '...' : ''}`);
+        console.log(`[${requestId}]   - Full Body Keys: ${Object.keys(req.body).join(', ')}`);
+
+        if (!prompt || !prompt.trim()) {
+            console.log(`[${requestId}] ❌ ERROR: Prompt is required`);
+            return res.status(400).json({ error: 'Prompt is required' });
+        }
+
+        let response;
+        let modelUsed = model;
+        const ollamaBaseUrl = process.env.OLLAMA_HOST || 'http://ollama:11434';
+        
+        // Check if using a cloud model (grok, gpt, claude) or local ollama
+        if (model.includes('grok') || model.includes('gpt') || model.includes('claude')) {
+            console.log(`[${requestId}] 🌐 Using cloud model via alfred helper: ${model}`);
+            
+            // Use the alfred helper which handles cloud models
+            const alfredOptions = {
+                model: model,
+                useFieldExtraction: false,
+                bypassRAG: true  // Skip RAG search, just do direct LLM call
+            };
+            
+            const alfredResponse = await alfred.query(prompt, alfredOptions);
+            response = alfredResponse.answer;
+            modelUsed = alfredResponse.model || model;
+            
+            console.log(`[${requestId}] ✅ Cloud model response received`);
+        } else {
+            // Use local Ollama for other models
+            console.log(`[${requestId}] 🖥️ Using local Ollama: ${ollamaBaseUrl}/api/generate`);
+            
+            try {
+                const ollamaResponse = await axiosInstance.post(`${ollamaBaseUrl}/api/generate`, {
+                    model: model,
+                    prompt: prompt,
+                    stream: false,
+                    options: {
+                        temperature: temperature,
+                        num_predict: max_tokens
+                    }
+                }, { timeout: 120000 });
+                
+                response = ollamaResponse.data.response;
+                console.log(`[${requestId}] ✅ Ollama response received`);
+            } catch (ollamaError) {
+                console.error(`[${requestId}] ⚠️ Ollama error: ${ollamaError.message}`);
+                console.log(`[${requestId}] 🔄 Falling back to grok-beta via alfred helper`);
+                
+                // Fallback to alfred helper if Ollama fails
+                const alfredResponse = await alfred.query(prompt, { 
+                    model: 'grok-beta', 
+                    bypassRAG: true 
+                });
+                response = alfredResponse.answer;
+                modelUsed = 'grok-beta (fallback)';
+            }
+        }
+
+        // Log full response details
+        console.log(`[${requestId}] 📤 RESPONSE DETAILS:`);
+        console.log(`[${requestId}]   - Success: true`);
+        console.log(`[${requestId}]   - Model Used: ${modelUsed}`);
+        console.log(`[${requestId}]   - Response Length: ${response.length} chars`);
+        console.log(`[${requestId}]   - Response Preview: ${response.substring(0, 500)}${response.length > 500 ? '...' : ''}`);
+        console.log(`${'='.repeat(80)}\n`);
+
+        res.json({
+            success: true,
+            response: response,
+            model: modelUsed,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error(`[${requestId}] ❌ FATAL ERROR: ${error.message}`);
+        console.error(`[${requestId}] Stack: ${error.stack}`);
+        console.log(`${'='.repeat(80)}\n`);
+        
+        res.status(500).json({
+            error: 'Generation failed',
+            details: error.message
+        });
+    }
+});
+
+/**
  * GET /api/voice/adaptive-diagnostics/:sessionId
  * Get adaptive streaming diagnostics for a session
  */
