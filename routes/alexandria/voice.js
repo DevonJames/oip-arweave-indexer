@@ -3622,6 +3622,8 @@ router.post('/rag', async (req, res) => {
  * POST /api/voice/generate (also mounted at /api/alfred/generate)
  * Simple LLM generation endpoint for direct prompt → response
  * Used by frontend features like "Fill Missing Analysis"
+ * 
+ * Supports structured outputs via json_schema parameter for guaranteed JSON format
  */
 router.post('/generate', async (req, res) => {
     const timestamp = new Date().toISOString();
@@ -3634,9 +3636,10 @@ router.post('/generate', async (req, res) => {
     try {
         const { 
             prompt, 
-            model = 'grok-beta',
+            model = 'grok-2-latest',  // Updated to valid model
             temperature = 0.7,
-            max_tokens = 2000
+            max_tokens = 2000,
+            json_schema = null  // Optional: pass JSON schema for structured outputs
         } = req.body;
 
         // Log full request details
@@ -3644,6 +3647,7 @@ router.post('/generate', async (req, res) => {
         console.log(`[${requestId}]   - Model: ${model}`);
         console.log(`[${requestId}]   - Temperature: ${temperature}`);
         console.log(`[${requestId}]   - Max Tokens: ${max_tokens}`);
+        console.log(`[${requestId}]   - JSON Schema: ${json_schema ? 'provided' : 'none'}`);
         console.log(`[${requestId}]   - Prompt Length: ${prompt ? prompt.length : 0} chars`);
         console.log(`[${requestId}]   - Prompt Preview: ${prompt ? prompt.substring(0, 500) : '(empty)'}${prompt && prompt.length > 500 ? '...' : ''}`);
         console.log(`[${requestId}]   - Full Body Keys: ${Object.keys(req.body).join(', ')}`);
@@ -3655,52 +3659,143 @@ router.post('/generate', async (req, res) => {
 
         let response;
         let modelUsed = model;
-        const ollamaBaseUrl = process.env.OLLAMA_HOST || 'http://ollama:11434';
         
-        // Check if using a cloud model (grok, gpt, claude) or local ollama
-        if (model.includes('grok') || model.includes('gpt') || model.includes('claude')) {
-            console.log(`[${requestId}] 🌐 Using cloud model via alfred helper: ${model}`);
+        // Direct LLM calls with optional structured output support
+        if (model.includes('grok')) {
+            console.log(`[${requestId}] 🌐 Calling xAI API with model: ${model}`);
             
-            // Use the alfred helper which handles cloud models
-            const alfredOptions = {
+            if (!process.env.XAI_API_KEY) {
+                throw new Error('XAI_API_KEY not configured');
+            }
+            
+            // Build request body
+            const requestBody = {
                 model: model,
-                useFieldExtraction: false,
-                bypassRAG: true  // Skip RAG search, just do direct LLM call
+                messages: [{ role: 'user', content: prompt }],
+                temperature: temperature,
+                max_tokens: max_tokens
             };
             
-            const alfredResponse = await alfred.query(prompt, alfredOptions);
-            response = alfredResponse.answer;
-            modelUsed = alfredResponse.model || model;
+            // Add structured output if JSON schema provided
+            if (json_schema) {
+                console.log(`[${requestId}] 📋 Using structured output with JSON schema`);
+                requestBody.response_format = {
+                    type: 'json_schema',
+                    json_schema: {
+                        name: json_schema.name || 'response_schema',
+                        strict: true,
+                        schema: json_schema.schema || json_schema
+                    }
+                };
+            }
             
-            console.log(`[${requestId}] ✅ Cloud model response received`);
+            const xaiResponse = await axiosInstance.post('https://api.x.ai/v1/chat/completions', 
+                requestBody, 
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 120000
+                }
+            );
+            
+            if (xaiResponse.data?.choices?.[0]?.message?.content) {
+                response = xaiResponse.data.choices[0].message.content;
+                modelUsed = `xai-${model}`;
+                console.log(`[${requestId}] ✅ xAI response received`);
+            } else {
+                throw new Error('Invalid response from xAI API');
+            }
+            
+        } else if (model.includes('gpt')) {
+            console.log(`[${requestId}] 🌐 Calling OpenAI API with model: ${model}`);
+            
+            if (!process.env.OPENAI_API_KEY) {
+                throw new Error('OPENAI_API_KEY not configured');
+            }
+            
+            // Build request body
+            const requestBody = {
+                model: model,
+                messages: [{ role: 'user', content: prompt }],
+                temperature: temperature,
+                max_tokens: max_tokens
+            };
+            
+            // Add structured output if JSON schema provided (OpenAI also supports this)
+            if (json_schema) {
+                console.log(`[${requestId}] 📋 Using structured output with JSON schema`);
+                requestBody.response_format = {
+                    type: 'json_schema',
+                    json_schema: {
+                        name: json_schema.name || 'response_schema',
+                        strict: true,
+                        schema: json_schema.schema || json_schema
+                    }
+                };
+            }
+            
+            const openaiResponse = await axiosInstance.post('https://api.openai.com/v1/chat/completions',
+                requestBody,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 120000
+                }
+            );
+            
+            if (openaiResponse.data?.choices?.[0]?.message?.content) {
+                response = openaiResponse.data.choices[0].message.content;
+                modelUsed = `openai-${model}`;
+                console.log(`[${requestId}] ✅ OpenAI response received`);
+            } else {
+                throw new Error('Invalid response from OpenAI API');
+            }
+            
+        } else if (model.includes('claude')) {
+            // Call Anthropic API directly (no existing helper for this)
+            console.log(`[${requestId}] 🌐 Calling Anthropic API with model: ${model}`);
+            
+            if (!process.env.ANTHROPIC_API_KEY) {
+                throw new Error('ANTHROPIC_API_KEY not configured');
+            }
+            
+            const anthropicResponse = await axios.post('https://api.anthropic.com/v1/messages', {
+                model: model,
+                messages: [{ role: 'user', content: prompt }],
+                max_tokens: max_tokens
+            }, {
+                headers: {
+                    'x-api-key': process.env.ANTHROPIC_API_KEY,
+                    'Content-Type': 'application/json',
+                    'anthropic-version': '2023-06-01'
+                },
+                timeout: 120000
+            });
+            
+            if (anthropicResponse.data?.content?.[0]?.text) {
+                response = anthropicResponse.data.content[0].text;
+                modelUsed = `anthropic-${model}`;
+                console.log(`[${requestId}] ✅ Anthropic response received`);
+            } else {
+                throw new Error('Invalid response from Anthropic API');
+            }
+            
         } else {
             // Use local Ollama for other models
-            console.log(`[${requestId}] 🖥️ Using local Ollama: ${ollamaBaseUrl}/api/generate`);
+            console.log(`[${requestId}] 🖥️ Using local Ollama with model: ${model}`);
             
-            try {
-                const ollamaResponse = await axiosInstance.post(`${ollamaBaseUrl}/api/generate`, {
-                    model: model,
-                    prompt: prompt,
-                    stream: false,
-                    options: {
-                        temperature: temperature,
-                        num_predict: max_tokens
-                    }
-                }, { timeout: 120000 });
-                
-                response = ollamaResponse.data.response;
+            const conversation = [{ role: 'user', content: prompt }];
+            const result = await callOllama(conversation, model);
+            if (result && result.response) {
+                response = result.response;
+                modelUsed = result.source;
                 console.log(`[${requestId}] ✅ Ollama response received`);
-            } catch (ollamaError) {
-                console.error(`[${requestId}] ⚠️ Ollama error: ${ollamaError.message}`);
-                console.log(`[${requestId}] 🔄 Falling back to grok-beta via alfred helper`);
-                
-                // Fallback to alfred helper if Ollama fails
-                const alfredResponse = await alfred.query(prompt, { 
-                    model: 'grok-beta', 
-                    bypassRAG: true 
-                });
-                response = alfredResponse.answer;
-                modelUsed = 'grok-beta (fallback)';
+            } else {
+                throw new Error('Invalid response from Ollama');
             }
         }
 
