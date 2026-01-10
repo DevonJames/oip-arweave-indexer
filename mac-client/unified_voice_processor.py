@@ -87,7 +87,8 @@ class UnifiedVoiceProcessor:
         self.frame_size = int(self.sample_rate * self.frame_duration_ms / 1000)  # 320 samples
         
         # Models
-        self.whisper_model = None
+        self.whisper_model = None  # Large model for final transcription
+        self.whisper_model_fast = None  # Tiny model for real-time partials
         self.vad_model = None
         
         # Processing pipeline
@@ -143,10 +144,15 @@ class UnifiedVoiceProcessor:
         try:
             logger.info("📥 Loading models for unified pipeline...")
             
-            # Load Whisper model
-            logger.info("Loading MLX Whisper model...")
+            # Load FAST Whisper model for real-time partials (tiny = ~10x faster)
+            logger.info("Loading MLX Whisper TINY model for real-time...")
+            self.whisper_model_fast = load_model("mlx-community/whisper-tiny-mlx")
+            logger.info("✅ MLX Whisper TINY model loaded (for fast partials)")
+            
+            # Load LARGE Whisper model for final high-quality transcription
+            logger.info("Loading MLX Whisper LARGE model for final transcription...")
             self.whisper_model = load_model("mlx-community/whisper-large-v3-mlx-4bit")
-            logger.info("✅ MLX Whisper model loaded")
+            logger.info("✅ MLX Whisper LARGE model loaded (for final quality)")
             
             # Load Silero VAD
             logger.info("Loading Silero VAD model...")
@@ -270,14 +276,37 @@ class UnifiedVoiceProcessor:
                 partial_text = self._get_partial_transcription(session['stt_buffer'])
                 stt_confidence = 0.8  # Placeholder confidence
                 
-                # Keep buffer manageable
-                if len(session['stt_buffer']) > 50:  # 1 second
-                    session['stt_buffer'] = session['stt_buffer'][-25:]  # Keep last 500ms
+                # MEETING RECORDING FIX: Accumulate text before buffer is trimmed
+                # This ensures we don't lose transcript during long recordings
+                if len(session['stt_buffer']) > 50:  # ~1 second of audio
+                    logger.info(f"📝 Buffer size {len(session['stt_buffer'])} frames, trimming and committing...")
+                    # Transcribe the portion that's about to be discarded
+                    discard_portion = session['stt_buffer'][:-25]  # All but last 500ms
+                    if discard_portion and len(discard_portion) >= 10:  # At least 200ms of audio
+                        try:
+                            committed_text = self._get_final_transcription(discard_portion)
+                            if committed_text and committed_text.strip():
+                                # Add to accumulated transcript for this session
+                                if 'accumulated_transcript' not in session:
+                                    session['accumulated_transcript'] = ''
+                                session['accumulated_transcript'] += committed_text + ' '
+                                logger.info(f"📝 Committed text to accumulated: '{committed_text}' | Total: {len(session['accumulated_transcript'])} chars")
+                            else:
+                                logger.info(f"📝 Transcription returned empty for {len(discard_portion)} frames")
+                        except Exception as e:
+                            logger.error(f"📝 Failed to transcribe discard portion: {e}")
+                    # Keep only the last 500ms for ongoing partial transcription
+                    session['stt_buffer'] = session['stt_buffer'][-25:]
             
             # Generate final transcription when speech ends
             if speech_state == 'speech_end' and session['stt_buffer']:
                 final_text = self._get_final_transcription(session['stt_buffer'])
                 transcription_complete = True
+                # Also add to accumulated transcript
+                if final_text and final_text.strip():
+                    if 'accumulated_transcript' not in session:
+                        session['accumulated_transcript'] = ''
+                    session['accumulated_transcript'] += final_text + ' '
                 session['stt_buffer'] = []  # Clear buffer
         
         # Step 3: Smart Turn / Interruption Detection
@@ -392,7 +421,7 @@ class UnifiedVoiceProcessor:
             return 'silence'
     
     def _get_partial_transcription(self, audio_buffer: List[np.ndarray]) -> str:
-        """Get partial transcription from audio buffer"""
+        """Get partial transcription from audio buffer using FAST tiny model"""
         try:
             if len(audio_buffer) < 5:  # Need at least 100ms
                 return ""
@@ -403,10 +432,10 @@ class UnifiedVoiceProcessor:
             if len(combined_audio) < self.sample_rate * 0.2:  # Less than 200ms
                 return ""
             
-            # Quick transcription with minimal processing
+            # FAST transcription using whisper-tiny (~10x faster than large)
             result = transcribe(
                 combined_audio,
-                path_or_hf_repo="mlx-community/whisper-large-v3-mlx-4bit",
+                path_or_hf_repo="mlx-community/whisper-tiny-mlx",  # TINY for speed!
                 language="en",
                 task="transcribe",
                 temperature=0.0,
@@ -422,7 +451,7 @@ class UnifiedVoiceProcessor:
             return ""
     
     def _get_final_transcription(self, audio_buffer: List[np.ndarray]) -> str:
-        """Get final transcription with full quality processing"""
+        """Get final transcription with full quality using LARGE model"""
         try:
             if not audio_buffer:
                 return ""
@@ -433,10 +462,11 @@ class UnifiedVoiceProcessor:
             if len(combined_audio) < self.sample_rate * 0.3:  # Less than 300ms
                 return ""
             
-            # Full quality transcription
+            # HIGH QUALITY transcription using whisper-large-v3 (slower but accurate)
+            logger.info(f"Final transcription: {len(combined_audio)/self.sample_rate:.1f}s of audio")
             result = transcribe(
                 combined_audio,
-                path_or_hf_repo="mlx-community/whisper-large-v3-mlx-4bit",
+                path_or_hf_repo="mlx-community/whisper-large-v3-mlx-4bit",  # LARGE for quality!
                 language="en",
                 task="transcribe",
                 temperature=0.0,
@@ -701,6 +731,13 @@ class UnifiedVoiceProcessor:
             self.pipeline_state['frames_processed'] += 1
             self._update_session_state(session, result)
             
+            # Get accumulated transcript for response
+            accumulated = session.get('accumulated_transcript', '')
+            
+            # Log if we have accumulated text to return
+            if accumulated:
+                logger.info(f"📤 Returning accumulated_transcript: {len(accumulated)} chars")
+            
             # Return the actual processing results for real-time feedback
             return {
                 "status": "processed",
@@ -715,6 +752,8 @@ class UnifiedVoiceProcessor:
                 "final_text": result.final_text,
                 "stt_confidence": result.stt_confidence,
                 "transcription_complete": result.transcription_complete,
+                # MEETING RECORDING: Full accumulated transcript for the session
+                "accumulated_transcript": accumulated,
                 # Smart Turn results
                 "interruption_probability": result.interruption_probability,
                 "is_interruption": result.is_interruption,

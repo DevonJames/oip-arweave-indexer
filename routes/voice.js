@@ -3619,6 +3619,84 @@ router.post('/rag', async (req, res) => {
 });
 
 /**
+ * POST /api/voice/generate (also mounted at /api/alfred/generate)
+ * Simple LLM generation endpoint for direct prompt → response
+ * Used by frontend features like "Fill Missing Analysis"
+ */
+router.post('/generate', async (req, res) => {
+    console.log('🎯 [ROUTE: /api/voice/generate] Processing direct LLM generation request');
+    try {
+        const { 
+            prompt, 
+            model = 'grok-beta',
+            temperature = 0.7,
+            max_tokens = 2000
+        } = req.body;
+
+        if (!prompt || !prompt.trim()) {
+            return res.status(400).json({ error: 'Prompt is required' });
+        }
+
+        console.log(`[Generate] Prompt length: ${prompt.length} chars, Model: ${model}`);
+
+        let response;
+        const ollamaBaseUrl = process.env.OLLAMA_HOST || 'http://ollama:11434';
+        
+        // Check if using a cloud model (grok, gpt, claude) or local ollama
+        if (model.includes('grok') || model.includes('gpt') || model.includes('claude')) {
+            // Use the alfred helper which handles cloud models
+            const alfredOptions = {
+                model: model,
+                useFieldExtraction: false,
+                bypassRAG: true  // Skip RAG search, just do direct LLM call
+            };
+            
+            const alfredResponse = await alfred.query(prompt, alfredOptions);
+            response = alfredResponse.answer;
+        } else {
+            // Use local Ollama for other models
+            try {
+                const ollamaResponse = await axiosInstance.post(`${ollamaBaseUrl}/api/generate`, {
+                    model: model,
+                    prompt: prompt,
+                    stream: false,
+                    options: {
+                        temperature: temperature,
+                        num_predict: max_tokens
+                    }
+                }, { timeout: 120000 });
+                
+                response = ollamaResponse.data.response;
+            } catch (ollamaError) {
+                console.error('[Generate] Ollama error:', ollamaError.message);
+                // Fallback to alfred helper if Ollama fails
+                const alfredResponse = await alfred.query(prompt, { 
+                    model: 'grok-beta', 
+                    bypassRAG: true 
+                });
+                response = alfredResponse.answer;
+            }
+        }
+
+        console.log(`[Generate] Response length: ${response.length} chars`);
+
+        res.json({
+            success: true,
+            response: response,
+            model: model,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('[Generate] Error:', error.message);
+        res.status(500).json({
+            error: 'Generation failed',
+            details: error.message
+        });
+    }
+});
+
+/**
  * GET /api/voice/adaptive-diagnostics/:sessionId
  * Get adaptive streaming diagnostics for a session
  */

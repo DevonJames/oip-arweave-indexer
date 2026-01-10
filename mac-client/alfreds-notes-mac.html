@@ -470,7 +470,7 @@
         .alfred-soundwave-overlay {
             position: absolute;
             left: 50%;
-            top: calc(33% + 25px);
+            top: calc(33% + 45px);
             transform: translate(-50%, -50%);
             opacity: 0;
             transition: opacity 0.3s ease;
@@ -623,7 +623,8 @@
         .live-transcript {
             width: 100%;
             max-width: 600px;
-            max-height: 200px;
+            min-height: 100px;  /* ~4-5 lines */
+            max-height: 120px;  /* Cap at ~5 lines, then scroll */
             overflow-y: auto;
             background: var(--bg-elevated);
             border: 1px solid var(--border-subtle);
@@ -638,6 +639,207 @@
             content: 'Live transcription will appear here...';
             color: var(--text-tertiary);
             font-style: italic;
+        }
+
+        /* Capture Mode Toggle */
+        .capture-mode-toggle {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-chip);
+            padding: 4px;
+            border-radius: 999px;
+            border: 1px solid var(--border-subtle);
+            margin-bottom: 24px;
+        }
+
+        .mode-btn {
+            padding: 10px 24px;
+            border-radius: 999px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-family: inherit;
+        }
+
+        .mode-btn.active {
+            background: var(--accent-cyan);
+            color: var(--bg-panel);
+        }
+
+        .mode-btn:hover:not(.active) {
+            color: var(--text-primary);
+            background: rgba(95, 252, 249, 0.1);
+        }
+
+        /* Upload Area */
+        .upload-section {
+            width: 100%;
+            max-width: 520px;
+            display: none;
+        }
+
+        .upload-section.active {
+            display: block;
+        }
+
+        .upload-area {
+            background: var(--bg-panel);
+            border: 2px dashed var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 48px 32px;
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            margin-bottom: 20px;
+        }
+
+        .upload-area:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(95, 252, 249, 0.05);
+        }
+
+        .upload-area.drag-over {
+            border-color: var(--accent-cyan);
+            background: rgba(95, 252, 249, 0.1);
+        }
+
+        .upload-area.has-file {
+            border-style: solid;
+            border-color: var(--accent-cyan);
+        }
+
+        .upload-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 12px;
+            opacity: 0.5;
+        }
+
+        .upload-text {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .upload-formats {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .upload-file-info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .upload-clear {
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--text-tertiary);
+            cursor: pointer;
+        }
+
+        .upload-clear:hover {
+            color: var(--accent-cyan);
+        }
+
+        /* Upload Form */
+        .upload-form {
+            display: none;
+        }
+
+        .upload-form.active {
+            display: block;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 6px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            outline: none;
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-family: inherit;
+            transition: all var(--transition-fast);
+        }
+
+        .form-input:focus {
+            border-color: var(--accent-cyan);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .form-checkbox input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .upload-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--secondary-purple));
+            color: var(--bg-panel);
+            border: none;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-family: inherit;
+            transition: all var(--transition-fast);
+            margin-top: 16px;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(95, 252, 249, 0.3);
+        }
+
+        .upload-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
         }
 
         /* ===============================
@@ -673,6 +875,40 @@
 
         .search-bar input::placeholder {
             color: var(--text-tertiary);
+        }
+
+        .refresh-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 10px;
+            padding: 8px 14px;
+            background: rgba(95, 252, 249, 0.1);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(95, 252, 249, 0.4);
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all var(--transition-fast);
+        }
+
+        .refresh-btn:hover {
+            background: rgba(95, 252, 249, 0.2);
+            border-color: var(--accent-cyan);
+        }
+
+        .refresh-btn:active {
+            transform: scale(0.98);
+        }
+
+        .refresh-btn svg {
+            transition: transform 0.3s ease;
+        }
+
+        .refresh-btn:hover svg {
+            transform: rotate(180deg);
         }
 
         .notes-list {
@@ -758,6 +994,149 @@
         .transcription-badge.enhanced {
             background: rgba(95, 252, 159, 0.2);
             color: var(--green);
+        }
+
+        /* ===============================
+           NOTE DETAIL VIEW
+        =============================== */
+        .note-detail-view {
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .note-detail-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 16px;
+            background: var(--bg-panel);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all var(--transition-fast);
+        }
+
+        .back-btn:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(95, 252, 249, 0.05);
+        }
+
+        .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 16px;
+            background: rgba(95, 252, 249, 0.1);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(95, 252, 249, 0.4);
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all var(--transition-fast);
+        }
+
+        .action-btn:hover {
+            background: rgba(95, 252, 249, 0.2);
+            border-color: var(--accent-cyan);
+        }
+
+        .note-detail-header {
+            background: var(--bg-panel);
+            padding: 18px;
+            border-radius: var(--radius-md);
+            margin-bottom: 16px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .note-detail-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .note-detail-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .note-detail-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .summary-section {
+            background: var(--bg-panel);
+            padding: 18px;
+            border-radius: var(--radius-md);
+            margin-bottom: 14px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .summary-heading {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--accent-cyan);
+        }
+
+        .summary-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .summary-list li {
+            padding-left: 18px;
+            position: relative;
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        .summary-list li:before {
+            content: "◆";
+            position: absolute;
+            left: 4px;
+            color: var(--accent-cyan);
+            font-size: 10px;
+        }
+
+        .chat-about-note-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--secondary-purple));
+            color: var(--bg-panel);
+            border: none;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all var(--transition-fast);
+            margin-top: 16px;
+        }
+
+        .chat-about-note-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(95, 252, 249, 0.3);
         }
 
         /* ===============================
@@ -1331,16 +1710,84 @@
 
         <!-- Capture View -->
         <section id="captureView" class="view capture-view active">
-            <div class="capture-status">
-                <h2 id="captureStatusText">Ready to Record</h2>
-                <div class="capture-timer" id="captureTimer">00:00:00</div>
+            <!-- Mode Toggle: Record vs Upload -->
+            <div class="capture-mode-toggle">
+                <button class="mode-btn active" data-mode="record" onclick="alfredNotesApp.switchCaptureMode('record')">🎙️ Record</button>
+                <button class="mode-btn" data-mode="upload" onclick="alfredNotesApp.switchCaptureMode('upload')">📤 Upload Audio</button>
             </div>
-            
-            <button class="record-button" id="recordBtn" onclick="alfredNotesApp.toggleRecording()">
-                <span class="record-button-icon">
-                    <img src="/icons/noun-microphone-7208171.svg" alt="Record" class="icon-record">
-                </span>
-            </button>
+
+            <!-- Record Mode -->
+            <div id="recordMode">
+                <div class="capture-status">
+                    <h2 id="captureStatusText">Ready to Record</h2>
+                    <div class="capture-timer" id="captureTimer">00:00:00</div>
+                </div>
+                
+                <button class="record-button" id="recordBtn" onclick="alfredNotesApp.toggleRecording()">
+                    <span class="record-button-icon">
+                        <img src="/icons/noun-microphone-7208171.svg" alt="Record" class="icon-record">
+                    </span>
+                </button>
+            </div>
+
+            <!-- Upload Mode -->
+            <div id="uploadMode" class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <img src="/icons/noun-microphone-7208171.svg" alt="Upload" class="upload-icon">
+                    <div class="upload-text">Click to select or drag & drop audio file</div>
+                    <div class="upload-formats">Supports: MP3, M4A, WAV, WebM, FLAC, OGG</div>
+                    <input type="file" id="audioFileInput" accept="audio/*" style="display: none;" onchange="alfredNotesApp.handleAudioFileSelect(event)">
+                </div>
+
+                <div id="uploadForm" class="upload-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Start Time</label>
+                            <input type="datetime-local" id="uploadStartTime" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">End Time</label>
+                            <input type="datetime-local" id="uploadEndTime" class="form-input">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Device Type</label>
+                        <select id="uploadDeviceType" class="form-input">
+                            <option value="MAC" selected>Mac</option>
+                            <option value="IPHONE">iPhone</option>
+                            <option value="WATCH">Apple Watch</option>
+                            <option value="OTHER">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Participant Names (comma-separated)</label>
+                            <input type="text" id="uploadParticipantNames" class="form-input" placeholder="John Doe, Jane Smith">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Participant Roles (comma-separated)</label>
+                            <input type="text" id="uploadParticipantRoles" class="form-input" placeholder="CEO, CTO">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="display: flex; gap: 16px; align-items: center;">
+                        <label class="form-checkbox">
+                            <input type="checkbox" id="uploadAddToWebServer" checked>
+                            <span>Add to Web Server</span>
+                        </label>
+                        <label class="form-checkbox">
+                            <input type="checkbox" id="uploadQueueEnhanced" checked>
+                            <span>Queue Enhanced Transcription</span>
+                        </label>
+                    </div>
+
+                    <button class="upload-btn" id="uploadBtn" onclick="alfredNotesApp.uploadAudioFile()">
+                        📤 Upload & Process
+                    </button>
+                </div>
+            </div>
             
             <div class="template-selector">
                 <div class="template-title">Select Template</div>
@@ -1416,6 +1863,15 @@
                     </svg>
                     <input type="text" id="searchInput" placeholder="Search notes..." oninput="alfredNotesApp.searchNotes(this.value)" />
                 </div>
+                <button class="refresh-btn" onclick="alfredNotesApp.refreshNotesFromBackend()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 2v6h-6"/>
+                        <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                        <path d="M3 22v-6h6"/>
+                        <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                    </svg>
+                    Refresh from Backend
+                </button>
             </div>
             <div id="notesList" class="notes-list">
                 <div class="empty-state">
@@ -1425,6 +1881,99 @@
                     <p>No notes yet. Start recording to create your first note!</p>
                 </div>
             </div>
+        </section>
+
+        <!-- Note Detail View -->
+        <section id="noteDetailView" class="view note-detail-view">
+            <div class="note-detail-actions">
+                <button class="back-btn" onclick="alfredNotesApp.showView('library')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5"/>
+                        <path d="M12 19l-7-7 7-7"/>
+                    </svg>
+                    Back to Library
+                </button>
+                <button class="action-btn" onclick="alfredNotesApp.fillMissingAnalysis()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 2v6h-6"/>
+                        <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                        <path d="M3 22v-6h6"/>
+                        <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                    </svg>
+                    Fill Missing Analysis
+                </button>
+            </div>
+
+            <div class="note-detail-header">
+                <h1 class="note-detail-title" id="noteDetailTitle">Note Title</h1>
+                <div class="note-detail-meta">
+                    <span id="noteDetailDate">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                            <line x1="16" y1="2" x2="16" y2="6"/>
+                            <line x1="8" y1="2" x2="8" y2="6"/>
+                            <line x1="3" y1="10" x2="21" y2="10"/>
+                        </svg>
+                        Loading...
+                    </span>
+                    <span id="noteDetailDuration">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        0m
+                    </span>
+                    <span id="noteDetailType">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                        Meeting
+                    </span>
+                    <span id="noteDetailStatus">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        Initial
+                    </span>
+                </div>
+            </div>
+
+            <div class="summary-section">
+                <h2 class="summary-heading">Key Summary</h2>
+                <ul class="summary-list" id="keySummary">
+                    <li>Loading...</li>
+                </ul>
+            </div>
+
+            <div class="summary-section">
+                <h2 class="summary-heading">Action Items</h2>
+                <ul class="summary-list" id="actionItems">
+                    <li>Loading...</li>
+                </ul>
+            </div>
+
+            <div class="summary-section">
+                <h2 class="summary-heading">Open Questions</h2>
+                <ul class="summary-list" id="openQuestions">
+                    <li>Loading...</li>
+                </ul>
+            </div>
+
+            <div class="summary-section">
+                <h2 class="summary-heading">Topics & Keywords</h2>
+                <div id="topicsKeywords" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <span style="padding: 4px 10px; background: var(--bg-chip); border-radius: 999px; font-size: 12px; color: var(--text-secondary);">Loading...</span>
+                </div>
+            </div>
+
+            <button class="chat-about-note-btn" onclick="alfredNotesApp.chatAboutNote()">
+                💬 Chat with Alfred about this note
+            </button>
         </section>
 
         <!-- Settings View -->
@@ -1463,8 +2012,8 @@
                     <span class="setting-label">TTS Engine</span>
                     <div class="setting-value">
                         <select id="ttsEngine">
+                            <option value="elevenlabs" selected>ElevenLabs (Recommended)</option>
                             <option value="kokoro">Kokoro TTS (High quality, fast)</option>
-                            <option value="elevenlabs">ElevenLabs</option>
                             <option value="local">Local TTS</option>
                         </select>
                     </div>
@@ -1473,9 +2022,10 @@
                     <span class="setting-label">Voice Selection</span>
                     <div class="setting-value">
                         <select id="voiceId">
-                            <option value="af_heart">English (American)</option>
-                            <option value="bf_emma">English (British)</option>
-                            <option value="onwK4e9ZLuTAKqWW03F9">ElevenLabs Default</option>
+                            <option value="onwK4e9ZLuTAKqWW03F9" selected>ElevenLabs - Adam (Default)</option>
+                            <option value="21m00Tcm4TlvDq8ikWAM">ElevenLabs - Rachel</option>
+                            <option value="af_heart">Kokoro - Heart</option>
+                            <option value="bf_emma">Kokoro - Emma</option>
                         </select>
                     </div>
                 </div>
@@ -1519,9 +2069,10 @@
                     <div class="setting-value">
                         <select id="aiModel">
                             <option value="parallel">Parallel (All Models)</option>
-                            <option value="llama3.2:3b" selected>Llama 3.2 3B (Fast, good quality)</option>
-                            <option value="gpt-4o-mini">GPT-4o Mini</option>
-                            <option value="grok-beta">Grok Beta</option>
+                            <option value="llama3.2:3b">Llama 3.2 3B (Fast, local)</option>
+                            <option value="gpt-4o-mini">GPT-4o Mini (OpenAI)</option>
+                            <option value="grok-2">Grok 2 (xAI)</option>
+                            <option value="grok-2-mini" selected>Grok 2 Mini (xAI, faster)</option>
                         </select>
                     </div>
                 </div>
@@ -1619,6 +2170,7 @@
             // State
             state: {
                 currentView: 'capture',
+                captureMode: 'record', // record | upload
                 chatMode: 'direct', // direct | allNotes | noteSpecific
                 selectedNoteDid: null,
                 selectedNoteTitle: null,
@@ -1626,8 +2178,11 @@
                 recordingStartTime: null,
                 recordingTimer: null,
                 liveTranscript: '',
+                lastPartialText: '',  // Track last partial for accumulation when recording stops
                 selectedNoteType: 'MEETING',
                 selectedDuration: 'short',
+                selectedAudioFile: null, // For audio file upload
+                currentNote: null, // Currently viewed note
                 participants: [],
                 conversationHistory: [],
                 notes: [],
@@ -1640,8 +2195,10 @@
                 currentAudio: null,
                 dialogueEventSource: null,
                 // Voice input state (hybrid approach: MediaRecorder + client-side silence detection)
+                // KEY: Stream, AudioContext, MediaRecorder persist between recordings to avoid "Thank you" hallucination
                 voiceStream: null,
                 voiceAudioContext: null,
+                voiceAudioSource: null,  // Persistent source node
                 voiceScriptProcessor: null,
                 voiceMediaRecorder: null,
                 voiceAudioChunks: [],
@@ -1688,6 +2245,9 @@
                 
                 // Set up event listeners
                 this.setupEventListeners();
+                
+                // Set up upload area events
+                this.setupUploadAreaEvents();
                 
                 // Load notes
                 await this.loadNotes();
@@ -1876,8 +2436,19 @@
                 document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
                 
-                document.getElementById(`${viewName}View`).classList.add('active');
-                document.querySelector(`.nav-item[data-view="${viewName}"]`).classList.add('active');
+                const viewEl = document.getElementById(`${viewName}View`);
+                if (viewEl) {
+                    viewEl.classList.add('active');
+                }
+                
+                // Only highlight nav item if it exists (noteDetail doesn't have one)
+                const navItem = document.querySelector(`.nav-item[data-view="${viewName}"]`);
+                if (navItem) {
+                    navItem.classList.add('active');
+                } else if (viewName === 'noteDetail') {
+                    // For note detail, keep library tab active
+                    document.querySelector('.nav-item[data-view="library"]')?.classList.add('active');
+                }
                 
                 this.state.currentView = viewName;
                 
@@ -1993,7 +2564,8 @@
                         requestBody.allNotes = true;
                     }
                     
-                    console.log('🎤 Sending request:', { model, engine: voiceConfig.engine, audioEnabled: autoPlayEnabled });
+                    console.log('🎤 Sending sync request to:', `${this.config.backendUrl}/api/notes/converse`);
+                    console.log('🎤 Request body:', JSON.stringify(requestBody, null, 2));
                     
                     const response = await fetch(`${this.config.backendUrl}/api/notes/converse`, {
                         method: 'POST',
@@ -2009,6 +2581,14 @@
                     }
                     
                     const data = await response.json();
+                    console.log('🎤 Response received:', { 
+                        success: data.success, 
+                        hasAudioData: !!data.audio_data,
+                        audioDataLength: data.audio_data?.length,
+                        has_audio: data.has_audio,
+                        engine_used: data.engine_used,
+                        answerLength: data.answer?.length
+                    });
                     
                     if (data.success) {
                         const answer = data.answer || 'No response';
@@ -2059,7 +2639,15 @@
                 this.addMessageToChat('assistant', 'Thinking...', messageId, true);
                 
                 try {
-                    console.log('🎤 Starting inline streaming request...');
+                    console.log('🎤 Starting inline streaming request to:', `${this.config.backendUrl}/api/notes/converse-stream-inline`);
+                    console.log('🎤 Request body:', JSON.stringify({
+                        question: message,
+                        noteDid: this.state.chatMode === 'noteSpecific' ? this.state.selectedNoteDid : null,
+                        allNotes: this.state.chatMode === 'allNotes',
+                        model,
+                        voice_mode: true,
+                        voice_config: voiceConfig
+                    }, null, 2));
                     
                     // POST that returns SSE stream directly (includes Auth header)
                     const response = await fetch(`${this.config.backendUrl}/api/notes/converse-stream-inline`, {
@@ -2129,8 +2717,12 @@
                                             break;
                                             
                                         case 'audioChunk':
+                                            console.log('🔊 Audio chunk received:', {
+                                                hasAudioData: !!data.audio_data,
+                                                audioDataLength: data.audio_data?.length,
+                                                format: data.format
+                                            });
                                             if (data.audio_data) {
-                                                console.log('🔊 Playing audio');
                                                 this.playAudioChunk(data.audio_data, data.format || 'mp3');
                                             }
                                             break;
@@ -2195,9 +2787,24 @@
 
             // Play audio chunk
             playAudioChunk(audioData, format) {
-                if (!audioData) return;
+                if (!audioData) {
+                    console.warn('⚠️ No audio data to play');
+                    return;
+                }
+                
+                console.log(`🔊 Playing audio chunk (${audioData.length} chars, format: ${format || 'mp3'})`);
                 
                 try {
+                    // Initialize Web Audio API if needed (like original alfreds-notes.html)
+                    if (!this.state.audioContext) {
+                        this.state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    if (!this.state.audioAnalyser) {
+                        this.state.audioAnalyser = this.state.audioContext.createAnalyser();
+                        this.state.audioAnalyser.fftSize = 64;
+                        this.state.audioAnalyser.smoothingTimeConstant = 0.8;
+                    }
+                    
                     // Decode base64 audio
                     const audioBytes = atob(audioData);
                     const audioBuffer = new Uint8Array(audioBytes.length);
@@ -2212,21 +2819,34 @@
                     this.state.currentAudio = audio;
                     
                     // Connect to analyser for visualization
-                    if (this.state.audioContext && this.state.audioAnalyser) {
-                        if (this.state.audioContext.state === 'suspended') {
-                            this.state.audioContext.resume();
+                    if (this.state.audioContext.state === 'suspended') {
+                        this.state.audioContext.resume();
+                    }
+                    
+                    // Disconnect previous source if exists
+                    if (this.state.audioSource) {
+                        try {
+                            this.state.audioSource.disconnect();
+                        } catch (e) {
+                            console.log('Previous audio source already disconnected');
                         }
-                        
+                    }
+                    
+                    try {
                         const source = this.state.audioContext.createMediaElementSource(audio);
                         source.connect(this.state.audioAnalyser);
                         this.state.audioAnalyser.connect(this.state.audioContext.destination);
                         this.state.audioSource = source;
+                    } catch (e) {
+                        console.error('Failed to connect audio source:', e);
+                        // Still try to play audio without visualization
                     }
                     
                     this.state.isStreamingAudio = true;
                     this.startSoundwaveVisualization();
                     
                     audio.onended = () => {
+                        console.log('🔊 Audio playback ended');
                         this.state.isStreamingAudio = false;
                         this.stopSoundwaveVisualization();
                         URL.revokeObjectURL(audioUrl);
@@ -2234,14 +2854,26 @@
                         // Auto-restart voice input for continuous conversation
                         if (document.getElementById('autoPlayAudio')?.checked) {
                             console.log('🎤 Auto-restarting voice input for continuous conversation...');
-                            setTimeout(() => this.startVoiceInput(), 500); // Small delay for natural flow
+                            setTimeout(() => this.startVoiceInput(), 500);
                         }
                     };
                     
-                    audio.play();
+                    audio.onerror = (e) => {
+                        console.error('🔊 Audio playback error:', e);
+                        this.state.isStreamingAudio = false;
+                        this.stopSoundwaveVisualization();
+                        URL.revokeObjectURL(audioUrl);
+                    };
+                    
+                    audio.play().catch(err => {
+                        console.error('🔊 Failed to start audio playback:', err);
+                        this.state.isStreamingAudio = false;
+                        this.stopSoundwaveVisualization();
+                    });
                     
                 } catch (error) {
-                    console.error('Failed to play audio:', error);
+                    console.error('🔊 Failed to play audio:', error);
+                    this.state.isStreamingAudio = false;
                 }
             },
 
@@ -2355,25 +2987,17 @@
                 }
             },
 
-            // Start REAL-TIME voice input using HYBRID approach:
-            // - MediaRecorder captures full audio for batch transcription
-            // - ScriptProcessor monitors energy for visual feedback + silence detection
-            // - Client-side silence detection auto-triggers transcription
-            async startVoiceInput() {
-                const voiceBtn = document.getElementById('voiceBtn');
-                const chatInput = document.getElementById('chatInput');
-                
-                // Check if voice processor is connected
-                if (!this.state.voiceProcessorConnected) {
-                    this.showToast('Voice processor not running. Start it with: python mac-client/unified_voice_processor.py', 'error');
-                    console.error('❌ Voice processor not connected at:', this.config.voiceProcessorUrl);
-                    return;
+            // Initialize persistent voice stream (called once, keeps mic warm)
+            async initVoiceStream() {
+                if (this.state.voiceStream) {
+                    console.log('🎤 Voice stream already initialized');
+                    return true;
                 }
                 
                 try {
-                    console.log('🎤 Starting HYBRID voice input with MLX Whisper...');
+                    console.log('🎤 Initializing persistent voice stream...');
                     
-                    // Request microphone access
+                    // Request microphone access ONCE and keep it
                     const stream = await navigator.mediaDevices.getUserMedia({
                         audio: {
                             channelCount: 1,
@@ -2384,15 +3008,15 @@
                     });
                     
                     this.state.voiceStream = stream;
-                    this.state.voiceFinalText = '';
-                    this.state.voiceSilenceFrames = 0;
-                    this.state.voiceHadSpeech = false; // Track if user ever spoke
                     
-                    // Set up MediaRecorder to capture audio for batch transcription
+                    // Set up AudioContext for energy monitoring (keep alive)
+                    this.state.voiceAudioContext = new AudioContext({ sampleRate: 16000 });
+                    this.state.voiceAudioSource = this.state.voiceAudioContext.createMediaStreamSource(stream);
+                    
+                    // Set up MediaRecorder ONCE (reuse for all recordings)
                     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
                         ? 'audio/webm;codecs=opus' : 'audio/webm';
                     this.state.voiceMediaRecorder = new MediaRecorder(stream, { mimeType });
-                    this.state.voiceAudioChunks = [];
                     
                     this.state.voiceMediaRecorder.ondataavailable = (e) => {
                         if (e.data.size > 0) {
@@ -2407,20 +3031,76 @@
                         }
                     };
                     
-                    // Start recording
+                    console.log('🎤 Persistent voice stream initialized - mic stays warm');
+                    return true;
+                    
+                } catch (error) {
+                    console.error('Failed to initialize voice stream:', error);
+                    this.showToast('Microphone access denied', 'error');
+                    return false;
+                }
+            },
+
+            // Start REAL-TIME voice input using HYBRID approach:
+            // - MediaRecorder captures full audio for batch transcription
+            // - ScriptProcessor monitors energy for visual feedback + silence detection
+            // - Client-side silence detection auto-triggers transcription
+            // KEY FIX: Reuses persistent stream/recorder to avoid Whisper "Thank you" hallucination
+            async startVoiceInput() {
+                const voiceBtn = document.getElementById('voiceBtn');
+                const chatInput = document.getElementById('chatInput');
+                
+                // Check if voice processor is connected
+                if (!this.state.voiceProcessorConnected) {
+                    this.showToast('Voice processor not running. Start it with: python mac-client/unified_voice_processor.py', 'error');
+                    console.error('❌ Voice processor not connected at:', this.config.voiceProcessorUrl);
+                    return;
+                }
+                
+                try {
+                    console.log('🎤 Starting HYBRID voice input with MLX Whisper...');
+                    
+                    // Initialize persistent stream if not already done
+                    if (!await this.initVoiceStream()) {
+                        return;
+                    }
+                    
+                    // Resume audio context if suspended
+                    if (this.state.voiceAudioContext && this.state.voiceAudioContext.state === 'suspended') {
+                        await this.state.voiceAudioContext.resume();
+                    }
+                    
+                    // Check if MediaRecorder is ready (not already recording)
+                    if (!this.state.voiceMediaRecorder || this.state.voiceMediaRecorder.state !== 'inactive') {
+                        console.warn('🎤 MediaRecorder not ready, state:', this.state.voiceMediaRecorder?.state);
+                        // Wait for it to become inactive
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        if (this.state.voiceMediaRecorder?.state !== 'inactive') {
+                            this.showToast('Voice recorder busy, try again', 'warning');
+                            return;
+                        }
+                    }
+                    
+                    // Reset state for new recording
+                    this.state.voiceFinalText = '';
+                    this.state.voiceSilenceFrames = 0;
+                    this.state.voiceHadSpeech = false;
+                    this.state.voiceAudioChunks = []; // Clear previous audio chunks
+                    
+                    // Start recording (reusing existing MediaRecorder)
                     this.state.voiceMediaRecorder.start();
                     
-                    // Set up AudioContext for real-time energy monitoring
-                    this.state.voiceAudioContext = new AudioContext({ sampleRate: 16000 });
-                    const source = this.state.voiceAudioContext.createMediaStreamSource(stream);
+                    // Set up ScriptProcessor for energy detection (recreate each time to avoid stale state)
+                    if (this.state.voiceScriptProcessor) {
+                        this.state.voiceScriptProcessor.disconnect();
+                    }
                     
-                    // Use ScriptProcessor for CLIENT-SIDE energy detection
                     const bufferSize = 4096; // ~256ms at 16kHz
                     this.state.voiceScriptProcessor = this.state.voiceAudioContext.createScriptProcessor(bufferSize, 1, 1);
                     
                     // Energy threshold for speech detection
-                    const SPEECH_THRESHOLD = 0.01; // Adjust based on testing
-                    const SILENCE_FRAMES_TO_SEND = 5; // ~1.3 seconds of silence (5 * 256ms)
+                    const SPEECH_THRESHOLD = 0.01;
+                    const SILENCE_FRAMES_TO_SEND = 3; // ~0.75 seconds of silence
                     
                     this.state.voiceScriptProcessor.onaudioprocess = (e) => {
                         if (!this.state.isVoiceListening) return;
@@ -2455,7 +3135,7 @@
                         }
                     };
                     
-                    source.connect(this.state.voiceScriptProcessor);
+                    this.state.voiceAudioSource.connect(this.state.voiceScriptProcessor);
                     this.state.voiceScriptProcessor.connect(this.state.voiceAudioContext.destination);
                     
                     voiceBtn.classList.add('listening');
@@ -2466,7 +3146,7 @@
                     
                 } catch (error) {
                     console.error('Failed to start voice input:', error);
-                    this.showToast('Microphone access denied', 'error');
+                    this.showToast('Voice input error', 'error');
                 }
             },
 
@@ -2519,6 +3199,7 @@
             },
 
             // Stop voice input - triggers transcription via MediaRecorder.onstop
+            // KEY FIX: Does NOT destroy stream/recorder - keeps mic warm for next recording
             stopVoiceInput(sendManually = false) {
                 const voiceBtn = document.getElementById('voiceBtn');
                 const chatInput = document.getElementById('chatInput');
@@ -2527,33 +3208,59 @@
                 voiceBtn.classList.remove('listening');
                 chatInput.classList.remove('speech-detected');
                 
-                // Clean up audio processing
+                // Disconnect ScriptProcessor but DON'T destroy AudioContext or stream
                 if (this.state.voiceScriptProcessor) {
                     this.state.voiceScriptProcessor.disconnect();
-                    this.state.voiceScriptProcessor = null;
-                }
-                if (this.state.voiceAudioContext) {
-                    this.state.voiceAudioContext.close();
-                    this.state.voiceAudioContext = null;
+                    // Will be recreated on next startVoiceInput
                 }
                 
                 // Stop MediaRecorder - this triggers onstop which transcribes
+                // DO NOT destroy MediaRecorder - it will be reused for next recording
                 if (this.state.voiceMediaRecorder && this.state.voiceMediaRecorder.state !== 'inactive') {
                     this.state.voiceMediaRecorder.stop();
                 }
                 
-                // Clean up stream
-                if (this.state.voiceStream) {
-                    this.state.voiceStream.getTracks().forEach(track => track.stop());
-                    this.state.voiceStream = null;
-                }
+                // DO NOT clean up stream - keep it alive for next recording
+                // This prevents the "Thank you" hallucination caused by mic warmup delay
                 
                 // If manual stop with no speech, just clear
                 if (sendManually && !this.state.voiceHadSpeech) {
                     chatInput.placeholder = 'Ask Alfred anything...';
                 }
                 
-                console.log('🎤 Voice input stopped');
+                console.log('🎤 Voice input stopped (mic stays warm)');
+            },
+
+            // Fully clean up voice resources (call when leaving page or disconnecting)
+            destroyVoiceStream() {
+                console.log('🎤 Destroying voice stream...');
+                
+                this.state.isVoiceListening = false;
+                
+                if (this.state.voiceScriptProcessor) {
+                    this.state.voiceScriptProcessor.disconnect();
+                    this.state.voiceScriptProcessor = null;
+                }
+                if (this.state.voiceAudioSource) {
+                    this.state.voiceAudioSource.disconnect();
+                    this.state.voiceAudioSource = null;
+                }
+                if (this.state.voiceAudioContext) {
+                    this.state.voiceAudioContext.close();
+                    this.state.voiceAudioContext = null;
+                }
+                if (this.state.voiceMediaRecorder) {
+                    if (this.state.voiceMediaRecorder.state !== 'inactive') {
+                        this.state.voiceMediaRecorder.stop();
+                    }
+                    this.state.voiceMediaRecorder = null;
+                }
+                if (this.state.voiceStream) {
+                    this.state.voiceStream.getTracks().forEach(track => track.stop());
+                    this.state.voiceStream = null;
+                }
+                
+                console.log('🎤 Voice stream destroyed');
             },
 
             // Recording management
@@ -2635,6 +3342,7 @@
                     this.state.isRecording = true;
                     this.state.recordingStartTime = Date.now();
                     this.state.liveTranscript = '';
+                    this.state.lastPartialText = '';
                     
                     // Start timer
                     this.state.recordingTimer = setInterval(() => {
@@ -2667,18 +3375,45 @@
                     if (response.ok) {
                         const result = await response.json();
                         
-                        // Update live transcript with partial or final text
+                        // DEBUG: Log every response to see what we're getting
+                        if (result.accumulated_transcript || result.partial_text || result.final_text) {
+                            console.log('📝 Voice processor response:', {
+                                accumulated: result.accumulated_transcript?.length || 0,
+                                partial: result.partial_text?.substring(0, 30) || '',
+                                final: result.final_text?.substring(0, 30) || ''
+                            });
+                        }
+                        
+                        // Use accumulated_transcript from voice processor (most reliable)
+                        // This is the full transcript accumulated during the recording session
+                        if (result.accumulated_transcript && result.accumulated_transcript.length > 0) {
+                            // Only update if we got new accumulated text
+                            if (result.accumulated_transcript.length > this.state.liveTranscript.length) {
+                                console.log('📝 ACCUMULATED TRANSCRIPT UPDATED:', result.accumulated_transcript);
+                                this.state.liveTranscript = result.accumulated_transcript;
+                            }
+                        }
+                        
+                        // Update live transcript with final or partial text
                         if (result.final_text) {
-                            this.state.liveTranscript += result.final_text + ' ';
+                            // Final text from completed speech segment - already in accumulated
+                            this.state.lastPartialText = ''; // Clear partial
+                            console.log('📝 Final text:', result.final_text, '| Accumulated:', this.state.liveTranscript.length, 'chars');
                             this.updateLiveTranscript();
                         } else if (result.partial_text) {
-                            // Show partial text differently (greyed out)
+                            // Track the current partial for display (grayed out)
+                            this.state.lastPartialText = result.partial_text;
                             this.updateLiveTranscript(result.partial_text);
+                        } else if (this.state.liveTranscript) {
+                            // Just update display with accumulated transcript
+                            this.updateLiveTranscript(this.state.lastPartialText);
                         }
+                    } else {
+                        console.warn('📝 process_frame returned:', response.status);
                     }
                 } catch (error) {
-                    // Silently fail for individual frames
-                    console.debug('Frame processing failed:', error.message);
+                    // Log errors for debugging
+                    console.warn('📝 Frame processing failed:', error.message);
                 }
             },
 
@@ -2705,7 +3440,15 @@
                 recordBtn.classList.remove('recording');
                 statusText.textContent = 'Processing...';
                 
+                // IMMEDIATELY stop sending frames
                 this.state.isRecording = false;
+                
+                // Disconnect scriptProcessor IMMEDIATELY to stop new frames from being queued
+                if (this.state.scriptProcessor) {
+                    console.log('📝 Disconnecting scriptProcessor immediately');
+                    this.state.scriptProcessor.disconnect();
+                    this.state.scriptProcessor = null;
+                }
                 
                 if (this.state.recordingTimer) {
                     clearInterval(this.state.recordingTimer);
@@ -2716,11 +3459,7 @@
                 return new Promise((resolve) => {
                     if (this.state.mediaRecorder && this.state.mediaRecorder.state !== 'inactive') {
                         this.state.mediaRecorder.onstop = async () => {
-                            // Clean up audio processing
-                            if (this.state.scriptProcessor) {
-                                this.state.scriptProcessor.disconnect();
-                                this.state.scriptProcessor = null;
-                            }
+                            // scriptProcessor already disconnected above
                             if (this.state.recordingAudioContext) {
                                 this.state.recordingAudioContext.close();
                                 this.state.recordingAudioContext = null;
@@ -2729,6 +3468,73 @@
                                 this.state.mediaStream.getTracks().forEach(track => track.stop());
                                 this.state.mediaStream = null;
                             }
+                            
+                            // Wait for accumulated transcript to STOP GROWING
+                            // Voice processor has a backlog of frames to process after recording stops
+                            console.log('📝 Waiting for transcript processing to complete...');
+                            
+                            const maxWaitTime = 120000; // 2 minutes max (for long recordings)
+                            const checkInterval = 1000; // Check every 1 second
+                            const stableThreshold = 3000; // Consider stable if no growth for 3 seconds
+                            const startTime = Date.now();
+                            let lastLength = 0;
+                            let lastGrowthTime = Date.now();
+                            
+                            while (Date.now() - startTime < maxWaitTime) {
+                                const currentLength = this.state.liveTranscript?.length || 0;
+                                
+                                if (currentLength > lastLength) {
+                                    console.log('📝 Transcript growing:', currentLength, 'chars');
+                                    lastLength = currentLength;
+                                    lastGrowthTime = Date.now();
+                                }
+                                
+                                // Check if transcript has stopped growing
+                                const timeSinceGrowth = Date.now() - lastGrowthTime;
+                                if (currentLength > 50 && timeSinceGrowth >= stableThreshold) {
+                                    console.log('📝 Transcript stable at', currentLength, 'chars (no growth for', timeSinceGrowth, 'ms)');
+                                    break;
+                                }
+                                
+                                await new Promise(resolve => setTimeout(resolve, checkInterval));
+                            }
+                            
+                            // Final check - fetch from session if we still have nothing
+                            if (!this.state.liveTranscript || this.state.liveTranscript.length < 50) {
+                                console.log('📝 Fetching transcript directly from session...');
+                                try {
+                                    const sessionResponse = await fetch(`${this.config.voiceProcessorUrl}/session/${this.state.recordingSessionId}/status`);
+                                    if (sessionResponse.ok) {
+                                        const sessionData = await sessionResponse.json();
+                                        if (sessionData.session_data?.accumulated_transcript) {
+                                            this.state.liveTranscript = sessionData.session_data.accumulated_transcript;
+                                            console.log('📝 Got transcript from session:', this.state.liveTranscript.length, 'chars');
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.log('📝 Could not fetch session status:', e.message);
+                                }
+                            }
+                            
+                            console.log('📝 Final transcript:', this.state.liveTranscript?.length || 0, 'chars');
+                            
+                            // Include any remaining partial text in the transcript
+                            // This is KEY: partial text is returned during speech, final_text only after silence
+                            console.log('📝 Final transcript state:', {
+                                accumulatedLength: this.state.liveTranscript?.length || 0,
+                                lastPartial: this.state.lastPartialText || '(none)'
+                            });
+                            
+                            if (this.state.lastPartialText) {
+                                // Only add partial if it's not already in accumulated
+                                if (!this.state.liveTranscript.includes(this.state.lastPartialText.substring(0, 20))) {
+                                    console.log('📝 Adding remaining partial text to transcript:', this.state.lastPartialText);
+                                    this.state.liveTranscript += this.state.lastPartialText + ' ';
+                                }
+                                this.state.lastPartialText = '';
+                            }
+                            
+                            console.log('📝 Final transcript for submission:', this.state.liveTranscript?.length || 0, 'chars');
                             
                             // Create audio blob
                             const audioBlob = new Blob(this.state.audioChunks, { type: 'audio/webm' });
@@ -2762,13 +3568,20 @@
                     // Get participants data
                     const { names, roles } = this.getParticipantsData();
                     
+                    // Debug: log transcript before submission
+                    console.log('📝 Submitting note with transcript:', {
+                        transcriptLength: this.state.liveTranscript?.length || 0,
+                        transcriptPreview: this.state.liveTranscript?.substring(0, 100) || '(empty)',
+                        audioSize: audioBlob.size
+                    });
+                    
                     const formData = new FormData();
                     formData.append('audio', audioBlob, `note_${Date.now()}.webm`);
                     formData.append('start_time', new Date(this.state.recordingStartTime).toISOString());
                     formData.append('end_time', new Date().toISOString());
                     formData.append('note_type', this.state.selectedNoteType);
                     formData.append('device_type', 'MAC');
-                    formData.append('initial_transcript', this.state.liveTranscript);
+                    formData.append('initial_transcript', this.state.liveTranscript || '');
                     formData.append('initial_transcript_source', 'mlx_whisper_realtime');
                     formData.append('model', document.getElementById('aiModel').value);
                     formData.append('queue_enhanced_transcript', document.getElementById('queueEnhanced').checked ? 'true' : 'false');
@@ -2795,8 +3608,9 @@
                         console.log('✅ Note created:', result.noteHash);
                         statusText.textContent = 'Note Created!';
                         
-                        // Clear transcript
+                        // Clear transcript state
                         this.state.liveTranscript = '';
+                        this.state.lastPartialText = '';
                         document.getElementById('liveTranscript').textContent = '';
                         
                         // If enhancement job was queued, show status
@@ -2866,8 +3680,68 @@
                 document.getElementById('captureTimer').textContent = formatted;
             },
 
-            // Load notes from backend
+            // Save notes to localStorage
+            saveNotesToStorage() {
+                try {
+                    const notesToSave = this.state.notes.slice(0, 200); // Limit to 200 notes to avoid storage limits
+                    localStorage.setItem('alfred_notes_cache', JSON.stringify(notesToSave));
+                    localStorage.setItem('alfred_notes_cache_time', Date.now().toString());
+                    console.log(`💾 Saved ${notesToSave.length} notes to browser storage`);
+                } catch (error) {
+                    console.warn('⚠️ Failed to save notes to storage:', error);
+                }
+            },
+
+            // Load notes from localStorage
+            loadNotesFromStorage() {
+                try {
+                    const cached = localStorage.getItem('alfred_notes_cache');
+                    if (cached) {
+                        const notes = JSON.parse(cached);
+                        const cacheTime = localStorage.getItem('alfred_notes_cache_time');
+                        console.log(`📂 Loaded ${notes.length} notes from browser storage (cached: ${cacheTime ? new Date(parseInt(cacheTime)).toLocaleString() : 'unknown'})`);
+                        return notes;
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Failed to load notes from storage:', error);
+                }
+                return [];
+            },
+
+            // Merge notes, avoiding duplicates by DID
+            mergeNotes(existingNotes, newNotes) {
+                const didSet = new Set(existingNotes.map(n => n.oip?.did || n.did).filter(Boolean));
+                const merged = [...existingNotes];
+                
+                for (const note of newNotes) {
+                    const noteDid = note.oip?.did || note.did;
+                    if (noteDid && !didSet.has(noteDid)) {
+                        merged.push(note);
+                        didSet.add(noteDid);
+                    }
+                }
+                
+                // Sort by date descending
+                merged.sort((a, b) => {
+                    const dateA = a.data?.basic?.date || a.data?.notes?.created_at || 0;
+                    const dateB = b.data?.basic?.date || b.data?.notes?.created_at || 0;
+                    return dateB - dateA;
+                });
+                
+                return merged;
+            },
+
+            // Load notes from backend (with localStorage caching)
             async loadNotes() {
+                // First, load from localStorage for instant display
+                const cachedNotes = this.loadNotesFromStorage();
+                if (cachedNotes.length > 0) {
+                    this.state.notes = cachedNotes;
+                    this.renderNotesList();
+                    console.log('📂 Displaying cached notes while fetching from backend...');
+                }
+
+                // Then fetch from backend
                 try {
                     const response = await fetch(`${this.config.backendUrl}/api/notes?limit=50`, {
                         headers: {
@@ -2880,11 +3754,24 @@
                     }
                     
                     const data = await response.json();
-                    this.state.notes = data.notes || [];
+                    const backendNotes = data.notes || [];
+                    
+                    // Merge with cached notes (in case there are notes only in cache)
+                    this.state.notes = this.mergeNotes(backendNotes, cachedNotes);
+                    
+                    // Save merged notes to storage
+                    this.saveNotesToStorage();
+                    
+                    // Re-render with merged data
                     this.renderNotesList();
+                    console.log(`✅ Loaded ${backendNotes.length} notes from backend, total: ${this.state.notes.length}`);
                     
                 } catch (error) {
-                    console.error('Failed to load notes:', error);
+                    console.error('Failed to load notes from backend:', error);
+                    // If backend fails but we have cached notes, that's okay
+                    if (cachedNotes.length > 0) {
+                        console.log('📂 Using cached notes (backend unavailable)');
+                    }
                 }
             },
 
@@ -2909,17 +3796,26 @@
                     const basicData = note.data?.basic || {};
                     const title = basicData.name || 'Untitled Note';
                     const noteType = noteData.note_type || 'OTHER';
-                    const preview = noteData.summary_key_points?.[0] || 'No summary available';
-                    const date = noteData.created_at ? new Date(noteData.created_at).toLocaleDateString() : 'Unknown date';
+                    const preview = noteData.summary_key_points?.[0] || basicData.description || 'No summary available';
+                    // Handle different date formats
+                    let date = 'Unknown date';
+                    if (basicData.date) {
+                        date = new Date(basicData.date * 1000).toLocaleDateString();
+                    } else if (noteData.created_at) {
+                        date = new Date(noteData.created_at).toLocaleDateString();
+                    }
                     const transcriptionStatus = noteData.transcription_status || 'initial';
                     
+                    // Get DID from correct location
+                    const noteDid = note.oip?.did || note.did;
+                    
                     return `
-                        <div class="note-card" onclick="alfredNotesApp.openNote('${note.did}', '${title.replace(/'/g, "\\'")}')">
+                        <div class="note-card" onclick="alfredNotesApp.viewNote('${noteDid}')">
                             <div class="note-header">
-                                <div class="note-title">${title}</div>
+                                <div class="note-title">${this.escapeHtml(title)}</div>
                                 <span class="note-badge">${noteType}</span>
                             </div>
-                            <div class="note-preview">${preview}</div>
+                            <div class="note-preview">${this.escapeHtml(preview)}</div>
                             <div class="note-meta">
                                 <span>${date}</span>
                                 <span class="transcription-badge ${transcriptionStatus}">
@@ -2951,9 +3847,420 @@
                 this.state.notes = originalNotes;
             },
 
-            // Open note for chat
-            openNote(noteDid, noteTitle) {
+            // Refresh notes from backend (syncs with GUN storage)
+            async refreshNotesFromBackend() {
+                if (!this.config.token) {
+                    this.showToast('Please login first', 'error');
+                    return;
+                }
+
+                try {
+                    console.log('🔄 Refreshing notes from backend...');
+                    this.showToast('Fetching notes from backend...', 'info');
+                    
+                    const response = await fetch(`${this.config.backendUrl}/api/records?recordType=notes&source=gun&sortBy=date:desc`, {
+                        headers: {
+                            'Authorization': `Bearer ${this.config.token}`
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    console.log('🔄 Backend response:', {
+                        recordCount: data.records?.length || 0,
+                        authenticated: data.auth?.authenticated
+                    });
+                    
+                    if (data.records && data.records.length > 0) {
+                        // Get existing DIDs to avoid duplicates
+                        const existingDids = new Set(
+                            this.state.notes.map(note => note.oip?.did || note.did).filter(Boolean)
+                        );
+
+                        // Filter out notes that already exist
+                        const newNotes = data.records.filter(note => {
+                            const noteDid = note.oip?.did || note.did;
+                            return noteDid && !existingDids.has(noteDid);
+                        });
+
+                        if (newNotes.length > 0) {
+                            // Add new notes to the beginning of the list
+                            this.state.notes = [...newNotes, ...this.state.notes];
+                            this.renderNotesList();
+                            this.saveNotesToStorage(); // Save to browser storage
+                            console.log(`✅ Added ${newNotes.length} new notes from backend`);
+                            this.showToast(`Added ${newNotes.length} new note${newNotes.length > 1 ? 's' : ''} from backend`, 'success');
+                        } else {
+                            // No new notes, but refresh the list anyway to get latest data
+                            this.state.notes = data.records;
+                            this.renderNotesList();
+                            this.saveNotesToStorage(); // Save to browser storage
+                            console.log('ℹ️ Notes list refreshed (no new notes)');
+                            this.showToast('Notes list refreshed', 'success');
+                        }
+                    } else {
+                        console.log('ℹ️ No notes returned from backend');
+                        this.showToast('No notes found on backend', 'info');
+                    }
+                } catch (error) {
+                    console.error('❌ Error refreshing notes from backend:', error);
+                    this.showToast(`Failed to refresh: ${error.message}`, 'error');
+                }
+            },
+
+            // View note details
+            async viewNote(noteDid) {
+                try {
+                    console.log('📖 Viewing note with DID:', noteDid);
+                    
+                    if (!noteDid || noteDid === 'undefined') {
+                        console.error('❌ Invalid DID:', noteDid);
+                        this.showToast('Invalid note ID', 'error');
+                        return;
+                    }
+                    
+                    this.showToast('Loading note...', 'info');
+                    
+                    const response = await fetch(`${this.config.backendUrl}/api/records?source=gun&did=${noteDid}`, {
+                        headers: {
+                            'Authorization': `Bearer ${this.config.token}`
+                        }
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.records && data.records[0]) {
+                        console.log('✅ Note loaded successfully');
+                        this.state.currentNote = data.records[0];
+                        this.renderNoteDetail();
+                        this.showView('noteDetail');
+                    } else {
+                        console.warn('⚠️ No note found with DID:', noteDid);
+                        this.showToast('Note not found', 'error');
+                    }
+                } catch (error) {
+                    console.error('❌ Error loading note:', error);
+                    this.showToast('Failed to load note', 'error');
+                }
+            },
+
+            // Render note detail view
+            renderNoteDetail() {
+                if (!this.state.currentNote) return;
+
+                const basic = this.state.currentNote.data?.basic || {};
+                const noteData = this.state.currentNote.data?.notes || {};
+
+                // Title
+                document.getElementById('noteDetailTitle').textContent = basic.name || 'Untitled Note';
+                
+                // Date
+                const dateEl = document.getElementById('noteDetailDate');
+                const dateText = basic.date ? new Date(basic.date * 1000).toLocaleDateString() : 'Unknown';
+                dateEl.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                        <line x1="16" y1="2" x2="16" y2="6"/>
+                        <line x1="8" y1="2" x2="8" y2="6"/>
+                        <line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                    ${dateText}
+                `;
+                
+                // Duration
+                const durationEl = document.getElementById('noteDetailDuration');
+                const startTime = noteData.start_time ? new Date(noteData.start_time) : null;
+                const endTime = noteData.end_time ? new Date(noteData.end_time) : null;
+                let durationText = 'Unknown';
+                if (startTime && endTime) {
+                    const diffMs = endTime - startTime;
+                    const diffMins = Math.round(diffMs / 60000);
+                    durationText = diffMins < 60 ? `${diffMins}m` : `${Math.floor(diffMins / 60)}h ${diffMins % 60}m`;
+                }
+                durationEl.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    ${durationText}
+                `;
+                
+                // Note type
+                const typeEl = document.getElementById('noteDetailType');
+                typeEl.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    ${noteData.note_type || 'Meeting'}
+                `;
+                
+                // Transcription status
+                const statusEl = document.getElementById('noteDetailStatus');
+                const status = noteData.transcription_status || 'initial';
+                const statusIcon = status === 'enhanced' ? '✓' : '⏳';
+                statusEl.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                    ${status === 'enhanced' ? 'Enhanced' : 'Initial'}
+                `;
+
+                // Key Summary
+                const keySummary = document.getElementById('keySummary');
+                if (keySummary) {
+                    const keyPoints = noteData.summary_key_points || [];
+                    keySummary.innerHTML = keyPoints.length > 0 
+                        ? keyPoints.map(point => `<li>${this.escapeHtml(point)}</li>`).join('')
+                        : '<li style="color: var(--text-tertiary)">No key points available</li>';
+                }
+
+                // Action Items
+                const actionItems = document.getElementById('actionItems');
+                if (actionItems) {
+                    const actions = noteData.summary_action_item_texts || [];
+                    const assignees = noteData.summary_action_item_assignees || [];
+                    actionItems.innerHTML = actions.length > 0
+                        ? actions.map((action, i) => {
+                            const assignee = assignees[i] ? ` (${assignees[i]})` : '';
+                            return `<li>${this.escapeHtml(action)}${assignee}</li>`;
+                        }).join('')
+                        : '<li style="color: var(--text-tertiary)">No action items</li>';
+                }
+
+                // Open Questions
+                const openQuestions = document.getElementById('openQuestions');
+                if (openQuestions) {
+                    const questions = noteData.summary_open_questions || [];
+                    openQuestions.innerHTML = questions.length > 0
+                        ? questions.map(q => `<li>${this.escapeHtml(q)}</li>`).join('')
+                        : '<li style="color: var(--text-tertiary)">No open questions</li>';
+                }
+
+                // Topics & Keywords
+                const topicsKeywords = document.getElementById('topicsKeywords');
+                if (topicsKeywords) {
+                    const topics = noteData.topics_auto || [];
+                    const keywords = noteData.keywords_auto || [];
+                    const allTags = [...topics.map(t => ({ text: t, type: 'topic' })), ...keywords.map(k => ({ text: k, type: 'keyword' }))];
+                    
+                    if (allTags.length > 0) {
+                        topicsKeywords.innerHTML = allTags.map(tag => `
+                            <span style="padding: 4px 10px; background: ${tag.type === 'topic' ? 'rgba(95, 252, 249, 0.15)' : 'var(--bg-chip)'}; border: 1px solid ${tag.type === 'topic' ? 'rgba(95, 252, 249, 0.3)' : 'var(--border-subtle)'}; border-radius: 999px; font-size: 12px; color: ${tag.type === 'topic' ? 'var(--accent-cyan)' : 'var(--text-secondary)'};">
+                                ${this.escapeHtml(tag.text)}
+                            </span>
+                        `).join('');
+                    } else {
+                        topicsKeywords.innerHTML = '<span style="padding: 4px 10px; background: var(--bg-chip); border-radius: 999px; font-size: 12px; color: var(--text-tertiary);">No topics or keywords</span>';
+                    }
+                }
+            },
+
+            // Escape HTML to prevent XSS
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            },
+
+            // Fill in missing analysis using LLM
+            async fillMissingAnalysis() {
+                if (!this.state.currentNote) {
+                    this.showToast('No note loaded', 'error');
+                    return;
+                }
+
+                try {
+                    console.log('🔍 Filling in missing analysis...');
+                    this.showToast('Analyzing note content...', 'info');
+
+                    const noteData = this.state.currentNote.data?.notes || {};
+                    
+                    // Check if transcript DID exists
+                    const transcriptDid = noteData.transcript_full_text;
+                    if (!transcriptDid) {
+                        this.showToast('No transcript available for this note', 'error');
+                        return;
+                    }
+
+                    // Fetch the transcript
+                    console.log('📄 Fetching transcript:', transcriptDid);
+                    const transcriptResponse = await fetch(`${this.config.backendUrl}/api/records?recordType=text&source=gun&did=${transcriptDid}`, {
+                        headers: {
+                            'Authorization': `Bearer ${this.config.token}`
+                        }
+                    });
+
+                    const transcriptData = await transcriptResponse.json();
+                    const transcriptText = transcriptData.records?.[0]?.data?.text?.value;
+                    
+                    if (!transcriptText) {
+                        this.showToast('Could not retrieve transcript text', 'error');
+                        return;
+                    }
+
+                    console.log('✅ Transcript retrieved, length:', transcriptText.length);
+
+                    // Format participants
+                    const participantNames = noteData.participant_display_names || [];
+                    const participantRoles = noteData.participant_roles || [];
+                    
+                    let participantsFormatted = '';
+                    if (participantNames.length > 0) {
+                        participantsFormatted = participantNames.map((name, idx) => {
+                            const role = participantRoles[idx] || '';
+                            return role ? `${name} (${role})` : name;
+                        }).join(', ');
+                    } else if (participantRoles.length > 0) {
+                        participantsFormatted = participantRoles.join(', ');
+                    }
+
+                    // Identify empty fields
+                    const fieldsToFill = [];
+                    const fieldChecks = {
+                        'summary_key_points': noteData.summary_key_points,
+                        'summary_decisions': noteData.summary_decisions,
+                        'summary_action_item_texts': noteData.summary_action_item_texts,
+                        'summary_action_item_assignees': noteData.summary_action_item_assignees,
+                        'summary_open_questions': noteData.summary_open_questions,
+                        'topics_auto': noteData.topics_auto,
+                        'keywords_auto': noteData.keywords_auto
+                    };
+
+                    for (const [field, value] of Object.entries(fieldChecks)) {
+                        if (!value || (Array.isArray(value) && value.length === 0)) {
+                            fieldsToFill.push(field);
+                        }
+                    }
+
+                    if (fieldsToFill.length === 0) {
+                        this.showToast('All analysis fields are already filled', 'info');
+                        return;
+                    }
+
+                    console.log('📋 Fields to fill:', fieldsToFill);
+
+                    // Build the prompt for the LLM
+                    const prompt = `Analyze this transcript and provide the following missing fields as a JSON object.
+
+TRANSCRIPT:
+${transcriptText}
+
+${participantsFormatted ? `PARTICIPANTS: ${participantsFormatted}\n` : ''}
+
+MISSING FIELDS TO FILL: ${fieldsToFill.join(', ')}
+
+Provide a JSON object with ONLY these fields:
+- summary_key_points: array of key discussion points (3-7 items)
+- summary_decisions: array of decisions made (if any)
+- summary_action_item_texts: array of action items identified
+- summary_action_item_assignees: array of assignees (parallel to action_item_texts, use "unassigned" if unclear)
+- summary_open_questions: array of unresolved questions
+- topics_auto: array of topics discussed (3-5 items)
+- keywords_auto: array of keywords (5-10 items)
+
+Return ONLY the JSON object, nothing else:`;
+
+                    // Determine which LLM to use based on user preference
+                    const selectedModel = document.getElementById('aiModel')?.value || 'grok-2-mini';
+                    let processingMode = 'llm'; // Default: race all models
+                    
+                    // Map model selection to processing_mode
+                    if (selectedModel === 'gpt-4o-mini') {
+                        processingMode = 'llm-gpt-4o-mini';
+                    } else if (selectedModel === 'grok-beta' || selectedModel === 'grok-2' || selectedModel === 'grok-2-mini') {
+                        processingMode = `llm-${selectedModel}`;
+                    } else if (selectedModel.startsWith('llama') || selectedModel.includes(':')) {
+                        processingMode = `llm-${selectedModel}`;
+                    }
+                    // 'parallel' stays as 'llm' to race all models
+
+                    // Call LLM via voice/chat endpoint with direct LLM mode (bypasses RAG)
+                    console.log(`🤖 Calling LLM for analysis (mode: ${processingMode})...`);
+                    const llmResponse = await fetch(`${this.config.backendUrl}/api/voice/chat`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.config.token}`
+                        },
+                        body: JSON.stringify({
+                            text: prompt,
+                            processing_mode: processingMode,
+                            return_audio: false  // Text only, no TTS
+                        })
+                    });
+
+                    if (!llmResponse.ok) {
+                        const errorText = await llmResponse.text();
+                        console.error('LLM response error:', errorText);
+                        throw new Error(`LLM request failed: ${llmResponse.status} ${llmResponse.statusText}`);
+                    }
+
+                    const llmData = await llmResponse.json();
+                    
+                    if (!llmData.success) {
+                        throw new Error(llmData.error || 'LLM request failed');
+                    }
+                    
+                    let analysis;
+
+                    try {
+                        // Try to parse JSON from response (check multiple possible response fields)
+                        const responseText = llmData.response_text || llmData.response || llmData.answer || '';
+                        console.log('📝 LLM response received, length:', responseText.length);
+                        
+                        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+                        if (jsonMatch) {
+                            analysis = JSON.parse(jsonMatch[0]);
+                        } else {
+                            throw new Error('No JSON found in response');
+                        }
+                    } catch (parseError) {
+                        console.error('❌ Failed to parse LLM response:', parseError);
+                        console.log('Raw response:', llmData.response_text || llmData.response || llmData.answer);
+                        this.showToast('Failed to parse analysis results', 'error');
+                        return;
+                    }
+
+                    console.log('✅ Analysis received:', Object.keys(analysis));
+
+                    // Update the current note with new analysis
+                    for (const [field, value] of Object.entries(analysis)) {
+                        if (fieldsToFill.includes(field) && value) {
+                            this.state.currentNote.data.notes[field] = value;
+                        }
+                    }
+
+                    // Re-render the note detail view
+                    this.renderNoteDetail();
+                    
+                    this.showToast(`Filled in ${Object.keys(analysis).length} missing field(s)`, 'success');
+                    console.log('✅ Missing analysis fields filled successfully');
+
+                } catch (error) {
+                    console.error('❌ Error filling missing analysis:', error);
+                    this.showToast(`Failed to fill analysis: ${error.message}`, 'error');
+                }
+            },
+
+            // Chat about the current note
+            chatAboutNote() {
+                if (!this.state.currentNote) return;
+                
+                const noteDid = this.state.currentNote.oip?.did || this.state.currentNote.did;
+                const noteTitle = this.state.currentNote.data?.basic?.name || 'Untitled Note';
+                
+                // Set the note context for chat
                 this.setNoteContext(noteDid, noteTitle);
+            },
+
+            // Open note (legacy - redirects to viewNote)
+            openNote(noteDid, noteTitle) {
+                this.viewNote(noteDid);
             },
 
             // Duration management
@@ -2961,6 +4268,282 @@
                 this.state.selectedDuration = duration;
                 document.querySelectorAll('.duration-btn').forEach(btn => {
                     btn.classList.toggle('active', btn.dataset.duration === duration);
+                });
+            },
+
+            // ========================================
+            // AUDIO FILE UPLOAD
+            // ========================================
+
+            // Switch between record and upload modes
+            switchCaptureMode(mode) {
+                this.state.captureMode = mode;
+                
+                // Update toggle buttons
+                document.querySelectorAll('.capture-mode-toggle .mode-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.mode === mode);
+                });
+                
+                // Show/hide appropriate content
+                const recordMode = document.getElementById('recordMode');
+                const uploadMode = document.getElementById('uploadMode');
+                
+                if (mode === 'record') {
+                    recordMode.style.display = 'block';
+                    uploadMode.classList.remove('active');
+                } else {
+                    recordMode.style.display = 'none';
+                    uploadMode.classList.add('active');
+                }
+                
+                console.log('🔄 Switched to', mode, 'mode');
+            },
+
+            // Handle audio file selection
+            handleAudioFileSelect(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                // Validate file type
+                const validTypes = ['audio/mp3', 'audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/wav', 'audio/webm', 'audio/flac', 'audio/ogg'];
+                const isValid = validTypes.some(type => file.type.includes(type.split('/')[1])) || file.name.match(/\.(mp3|m4a|wav|webm|flac|ogg)$/i);
+                
+                if (!isValid) {
+                    this.showToast('Invalid file type. Please select an audio file.', 'error');
+                    return;
+                }
+                
+                this.state.selectedAudioFile = file;
+                
+                // Update UI to show file selected
+                const uploadArea = document.getElementById('uploadArea');
+                uploadArea.classList.add('has-file');
+                uploadArea.innerHTML = `
+                    <img src="/icons/noun-microphone-7208171.svg" alt="Audio" class="upload-icon" style="opacity: 0.7;">
+                    <div class="upload-text" style="color: var(--accent-cyan);">✓ ${file.name}</div>
+                    <div class="upload-formats">${(file.size / (1024 * 1024)).toFixed(2)} MB</div>
+                    <div id="audioDurationInfo" class="upload-file-info">Detecting duration...</div>
+                    <div class="upload-clear" onclick="event.stopPropagation(); alfredNotesApp.clearAudioFile()">Click to select a different file</div>
+                    <input type="file" id="audioFileInput" accept="audio/*" style="display: none;" onchange="alfredNotesApp.handleAudioFileSelect(event)">
+                `;
+                
+                // Show form fields
+                document.getElementById('uploadForm').classList.add('active');
+                
+                // Set default times
+                const now = new Date();
+                const startEl = document.getElementById('uploadStartTime');
+                const endEl = document.getElementById('uploadEndTime');
+                
+                startEl.value = this.formatDateTimeLocal(now);
+                endEl.value = this.formatDateTimeLocal(new Date(now.getTime() + 5 * 60000));
+                
+                // Detect audio duration
+                this.detectAudioDuration(file);
+                
+                console.log('📁 File selected:', file.name, file.type, file.size);
+            },
+
+            // Format date for datetime-local input
+            formatDateTimeLocal(date) {
+                return date.toISOString().slice(0, 16);
+            },
+
+            // Detect audio duration from file
+            detectAudioDuration(file) {
+                const audio = new Audio();
+                const objectUrl = URL.createObjectURL(file);
+                
+                audio.addEventListener('loadedmetadata', () => {
+                    const durationSeconds = audio.duration;
+                    const durationMinutes = Math.round(durationSeconds / 60);
+                    
+                    console.log(`🕐 Audio duration detected: ${durationMinutes} minutes`);
+                    
+                    // Update duration info display
+                    const durationInfo = document.getElementById('audioDurationInfo');
+                    if (durationInfo) {
+                        const hours = Math.floor(durationMinutes / 60);
+                        const mins = durationMinutes % 60;
+                        const durationText = hours > 0 ? `${hours}h ${mins}m` : `${mins} minutes`;
+                        durationInfo.textContent = `Duration: ${durationText}`;
+                    }
+                    
+                    // Auto-select long duration mode if > 45 minutes
+                    if (durationMinutes >= 45) {
+                        this.setDuration('long');
+                        this.showToast(`Long meeting detected (${durationMinutes} min). Switched to async mode.`, 'success');
+                    }
+                    
+                    // Update end time based on actual duration
+                    const startEl = document.getElementById('uploadStartTime');
+                    const endEl = document.getElementById('uploadEndTime');
+                    if (startEl && endEl && startEl.value) {
+                        const startDate = new Date(startEl.value);
+                        const endDate = new Date(startDate.getTime() + (durationSeconds * 1000));
+                        endEl.value = this.formatDateTimeLocal(endDate);
+                    }
+                    
+                    URL.revokeObjectURL(objectUrl);
+                });
+                
+                audio.addEventListener('error', () => {
+                    console.warn('⚠️ Could not detect audio duration');
+                    const durationInfo = document.getElementById('audioDurationInfo');
+                    if (durationInfo) {
+                        durationInfo.textContent = 'Duration: Unable to detect';
+                    }
+                    URL.revokeObjectURL(objectUrl);
+                });
+                
+                audio.src = objectUrl;
+            },
+
+            // Clear selected audio file
+            clearAudioFile() {
+                this.state.selectedAudioFile = null;
+                const fileInput = document.getElementById('audioFileInput');
+                if (fileInput) fileInput.value = '';
+                
+                // Reset upload area
+                const uploadArea = document.getElementById('uploadArea');
+                uploadArea.classList.remove('has-file');
+                uploadArea.innerHTML = `
+                    <img src="/icons/noun-microphone-7208171.svg" alt="Upload" class="upload-icon">
+                    <div class="upload-text">Click to select or drag & drop audio file</div>
+                    <div class="upload-formats">Supports: MP3, M4A, WAV, WebM, FLAC, OGG</div>
+                    <input type="file" id="audioFileInput" accept="audio/*" style="display: none;" onchange="alfredNotesApp.handleAudioFileSelect(event)">
+                `;
+                
+                // Hide form
+                document.getElementById('uploadForm').classList.remove('active');
+            },
+
+            // Upload audio file to backend
+            async uploadAudioFile() {
+                if (!this.state.selectedAudioFile) {
+                    this.showToast('Please select an audio file first', 'error');
+                    return;
+                }
+                
+                if (!this.config.token) {
+                    this.showToast('Please login first', 'error');
+                    return;
+                }
+                
+                const uploadBtn = document.getElementById('uploadBtn');
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = 'Uploading...';
+                
+                try {
+                    // Get form values
+                    const startTime = document.getElementById('uploadStartTime').value;
+                    const endTime = document.getElementById('uploadEndTime').value;
+                    const deviceType = document.getElementById('uploadDeviceType').value;
+                    const participantNames = document.getElementById('uploadParticipantNames').value;
+                    const participantRoles = document.getElementById('uploadParticipantRoles').value;
+                    const addToWebServer = document.getElementById('uploadAddToWebServer').checked;
+                    const queueEnhanced = document.getElementById('uploadQueueEnhanced').checked;
+                    
+                    if (!startTime || !endTime) {
+                        this.showToast('Please fill in start and end times', 'error');
+                        uploadBtn.disabled = false;
+                        uploadBtn.textContent = '📤 Upload & Process';
+                        return;
+                    }
+                    
+                    // Build form data
+                    const formData = new FormData();
+                    formData.append('audio', this.state.selectedAudioFile);
+                    formData.append('start_time', new Date(startTime).toISOString());
+                    formData.append('end_time', new Date(endTime).toISOString());
+                    formData.append('note_type', this.state.selectedNoteType);
+                    formData.append('device_type', deviceType);
+                    formData.append('model', document.getElementById('aiModel').value);
+                    formData.append('addToWebServer', addToWebServer ? 'true' : 'false');
+                    formData.append('queue_enhanced_transcript', queueEnhanced ? 'true' : 'false');
+                    
+                    // Add participants if provided
+                    if (participantNames.trim()) {
+                        formData.append('participant_display_names', JSON.stringify(
+                            participantNames.split(',').map(n => n.trim()).filter(n => n)
+                        ));
+                    }
+                    if (participantRoles.trim()) {
+                        formData.append('participant_roles', JSON.stringify(
+                            participantRoles.split(',').map(r => r.trim()).filter(r => r)
+                        ));
+                    }
+                    
+                    // Determine endpoint based on duration mode
+                    const isLongMeeting = this.state.selectedDuration === 'long';
+                    const endpoint = isLongMeeting 
+                        ? `${this.config.backendUrl}/api/notes/from-audio-async`
+                        : `${this.config.backendUrl}/api/notes/from-audio`;
+                    
+                    console.log(`📤 Uploading to ${isLongMeeting ? 'async' : 'sync'} endpoint...`);
+                    
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.config.token}`
+                        },
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        if (isLongMeeting && data.jobId) {
+                            this.showToast(`Job started! ID: ${data.jobId.substring(0, 8)}...`, 'success');
+                            this.pollEnhancementJob(data.jobId);
+                        } else {
+                            this.showToast('Note created successfully!', 'success');
+                        }
+                        
+                        // Clear form and switch back to record mode
+                        this.clearAudioFile();
+                        this.switchCaptureMode('record');
+                        this.loadNotes();
+                        
+                    } else {
+                        this.showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                    
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    this.showToast('Failed to upload: ' + error.message, 'error');
+                } finally {
+                    uploadBtn.disabled = false;
+                    uploadBtn.textContent = '📤 Upload & Process';
+                }
+            },
+
+            // Setup drag and drop for upload area
+            setupUploadAreaEvents() {
+                const uploadArea = document.getElementById('uploadArea');
+                if (!uploadArea) return;
+                
+                uploadArea.addEventListener('click', () => {
+                    document.getElementById('audioFileInput').click();
+                });
+                
+                uploadArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.add('drag-over');
+                });
+                
+                uploadArea.addEventListener('dragleave', () => {
+                    uploadArea.classList.remove('drag-over');
+                });
+                
+                uploadArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.remove('drag-over');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        this.handleAudioFileSelect({ target: { files } });
+                    }
                 });
             },
 
@@ -3119,6 +4702,8 @@
                 this.state.notes = [];
                 localStorage.removeItem('alfred_jwt_token');
                 localStorage.removeItem('alfred_user_email');
+                localStorage.removeItem('alfred_notes_cache');
+                localStorage.removeItem('alfred_notes_cache_time');
                 this.showAuthModal();
                 this.showToast('Logged out successfully', 'success');
             },
@@ -3172,6 +4757,13 @@
         // Initialize app on load
         document.addEventListener('DOMContentLoaded', () => {
             alfredNotesApp.init();
+        });
+
+        // Clean up voice stream when leaving page
+        window.addEventListener('beforeunload', () => {
+            if (alfredNotesApp.destroyVoiceStream) {
+                alfredNotesApp.destroyVoiceStream();
+            }
         });
     </script>
 </body>

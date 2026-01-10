@@ -27,6 +27,11 @@ function calculateTimeout(textLength) {
 class SummarizationService {
     constructor() {
         this.alfred = null;
+        
+        // Log configured API keys at startup
+        const hasOpenAI = !!process.env.OPENAI_API_KEY;
+        const hasXAI = !!process.env.XAI_API_KEY;
+        console.log(`📝 [SummarizationService] API keys configured: OpenAI=${hasOpenAI}, xAI=${hasXAI}`);
     }
 
     /**
@@ -215,7 +220,7 @@ JSON RESPONSE:`;
         
         // Determine API based on model
         const openaiModels = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'];
-        const xaiModels = ['grok-4', 'grok-4-fast', 'grok-beta'];
+        const xaiModels = ['grok-2', 'grok-2-mini', 'grok-4', 'grok-4-fast', 'grok-beta'];
         
         let apiUrl, apiKey;
         
@@ -232,7 +237,9 @@ JSON RESPONSE:`;
         }
 
         if (!apiKey && (openaiModels.includes(model) || xaiModels.includes(model))) {
-            throw new Error(`API key not configured for ${model}`);
+            const keyName = xaiModels.includes(model) ? 'XAI_API_KEY' : 'OPENAI_API_KEY';
+            console.error(`❌ [Summarization] ${keyName} not set in environment for model: ${model}`);
+            throw new Error(`API key not configured for ${model}. Please set ${keyName} in your .env file.`);
         }
 
         try {
@@ -412,7 +419,7 @@ JSON RESPONSE:`;
         
         // Grok request  
         if (process.env.XAI_API_KEY) {
-            requests.push(this._callGrok(prompt, 'grok-beta', effectiveTimeout));
+            requests.push(this._callGrok(prompt, 'grok-2', effectiveTimeout));
         }
         
         // Ollama requests
