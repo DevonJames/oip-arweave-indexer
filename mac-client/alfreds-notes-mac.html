@@ -1986,7 +1986,7 @@
                         <path d="M3 22v-6h6"/>
                         <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
                     </svg>
-                    Refresh from Backend
+                    Refresh Notes
                 </button>
             </div>
             <div id="notesList" class="notes-list">
@@ -3797,6 +3797,12 @@
                         this.state.lastPartialText = '';
                         document.getElementById('liveTranscript').textContent = '';
                         
+                        // Clear participants after successful submission
+                        this.clearParticipants();
+                        
+                        // Refresh notes list to show the new note
+                        this.loadNotes();
+                        
                         // If enhancement job was queued, show status
                         if (result.enhancementJob) {
                             this.pollEnhancementJob(result.enhancementJob.jobId);
@@ -5371,6 +5377,11 @@ Instructions:
                 const names = this.state.participants.filter(p => p.name).map(p => p.name);
                 const roles = this.state.participants.filter(p => p.role).map(p => p.role);
                 return { names, roles };
+            },
+
+            clearParticipants() {
+                this.state.participants = [];
+                this.renderParticipants();
             },
 
             // ========================================

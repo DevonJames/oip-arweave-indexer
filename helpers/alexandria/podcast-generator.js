@@ -229,9 +229,35 @@ async function generateHostComment(args) {
   
   // const systemPrompt = (ifOutro) ? generateSystemPrompt(host, dialogue, articles, ifIntro, ifOutro, closingInstruction) : generateSystemPrompt(host, dialogue, articles, ifIntro, ifOutro);
   const systemPrompt = generateSystemPrompt(host, dialogue, articles, ifIntro, ifOutro, closingLines, generateTitle, hostNames, generateTags);
+  
+  // Make the API call to generate the comment
+  const response = await axios.post(
+    "https://api.x.ai/v1/chat/completions",
+    {
+      model: "grok-4",
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt
+        },
+        {
+          role: "user",
+          content: userPrompt
+        }
+      ],
+      temperature: 0.8,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.XAI_BEARER_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+  
   // console.log('generating intro, main, reply or outro?', {ifIntro, ifFollowUp, ifReply, ifOutro}, 'generating comments with this system prompt:', {systemPrompt}, 'and this user prompt:', {userPrompt}, 'result:', response.data.choices[0].message.content.trim());
   // console.log('response.data.choices[0].message.content:', response.data.choices[0].message.content);
-      const generatedComment = response.data.choices[0]?.message?.content?.trim() || "";
+  const generatedComment = response.data.choices[0]?.message?.content?.trim() || "";
       const cleanedText = generatedComment
         .replace(/^.*?(said|responded|replied|added|concluded):/i, '') // Remove speaker indicators
         .replace(/^[RS]:\s*/, '') // Remove placeholders like "R:" or "S:"

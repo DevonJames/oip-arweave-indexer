@@ -541,6 +541,208 @@ const youtubeResult = await mediaManager.processMedia({
 
 ## Client Integration Examples
 
+### Client Deployment Options
+
+OIP supports two primary client deployment patterns, each with different advantages:
+
+| Deployment | Description | Best For |
+|------------|-------------|----------|
+| **Public Folder Applications** | Frontend served directly by OIP server | Same-origin benefits, simpler setup |
+| **External Applications** | Standalone frontend connecting to OIP API | Independent deployments, multiple backends |
+
+### Public Folder Applications
+
+Applications placed in the OIP server's `public/` directory are served directly by the Express server, providing significant advantages for media-intensive applications.
+
+#### How It Works
+
+The OIP server serves static files from a configurable public directory:
+
+```javascript
+// In index.js - Static file serving configuration
+if (process.env.CUSTOM_PUBLIC_PATH === 'true' && !isDocker) {
+  // Non-Docker: Use parent directory's public folder
+  publicPath = path.join(__dirname, '..', 'public');
+} else {
+  // Docker or default: Use local public folder
+  publicPath = path.join(__dirname, 'public');
+}
+app.use(express.static(publicPath));
+```
+
+#### Benefits of Public Folder Deployment
+
+| Benefit | Description |
+|---------|-------------|
+| **Same-Origin Requests** | No CORS configuration needed - all API calls are same-origin |
+| **Relative Paths** | Use simple paths like `/api/media/upload` instead of full URLs |
+| **Simplified Authentication** | Cookies and tokens work seamlessly without cross-origin complexity |
+| **Single Deployment** | One `make standard` starts both backend and frontend |
+| **Automatic Protocol Detection** | Media URLs automatically use the correct protocol (http/https) |
+| **Shared Session** | JWT tokens stored in localStorage are automatically available |
+
+#### Configuration
+
+**Environment Variable** (`.env`):
+```bash
+# Use custom public path (for development outside Docker)
+CUSTOM_PUBLIC_PATH=true
+
+# Project name used for media web URLs
+COMPOSE_PROJECT_NAME=fitnessally
+```
+
+**Directory Structure**:
+```
+project-root/
+├── oip-arweave-indexer/           # OIP backend
+│   ├── public/                    # Default public folder (Docker)
+│   │   └── reference-client.html
+│   └── data/media/web/
+│       └── fitnessally/           # Media files for this project
+│           ├── workout-video.mp4
+│           └── recipe-image.jpg
+└── public/                        # Custom public folder (CUSTOM_PUBLIC_PATH=true)
+    └── my-app.html                # Your application
+```
+
+#### Public Folder Client Implementation
+
+Applications in the public folder can use simplified relative paths:
+
+```javascript
+class OIPPublicFolderClient {
+  constructor(token) {
+    // No baseUrl needed - all requests are same-origin
+    this.token = token;
+  }
+
+  async uploadMedia(file, metadata = {}) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('name', metadata.name || file.name);
+    formData.append('access_level', metadata.access_level || 'private');
+
+    // Step 1: Upload file using relative path
+    const uploadResponse = await fetch('/api/media/upload', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.token}` },
+      body: formData
+    });
+
+    const uploadResult = await uploadResponse.json();
+    if (!uploadResult.success) throw new Error(uploadResult.error);
+
+    return uploadResult;
+  }
+
+  async setupWebAccess(mediaId, filename) {
+    // Step 2: Setup web server access using relative path
+    const webResponse = await fetch('/api/media/web-setup', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`
+      },
+      body: JSON.stringify({ mediaId, filename })
+    });
+
+    const webResult = await webResponse.json();
+    if (!webResult.success) throw new Error(webResult.error);
+
+    // Returns URL like: /media/fitnessally/filename.jpg
+    // Automatically uses correct protocol based on request
+    return webResult;
+  }
+
+  async uploadWithWebAccess(file, metadata = {}) {
+    // Complete workflow with web server distribution
+    const uploadResult = await this.uploadMedia(file, metadata);
+    
+    // Setup web access for direct HTTP serving
+    const webResult = await this.setupWebAccess(
+      uploadResult.mediaId, 
+      uploadResult.originalName
+    );
+
+    return {
+      ...uploadResult,
+      webUrl: webResult.webUrl  // e.g., https://oip.fitnessally.io/media/fitnessally/photo.jpg
+    };
+  }
+
+  // Display media using web URL (faster than API endpoint)
+  displayMedia(webUrl) {
+    // Web URLs serve directly from static middleware - no auth needed for public files
+    // Pattern: /media/{COMPOSE_PROJECT_NAME}/{filename}
+    const img = document.createElement('img');
+    img.src = webUrl;
+    return img;
+  }
+}
+
+// Usage in public folder application
+const token = localStorage.getItem('jwt_token');
+const client = new OIPPublicFolderClient(token);
+
+// Upload and get web-accessible URL
+const result = await client.uploadWithWebAccess(fileInput.files[0], {
+  name: 'Workout Photo',
+  access_level: 'public'
+});
+
+console.log('Web URL:', result.webUrl);
+// Output: https://oip.fitnessally.io/media/fitnessally/workout-photo.jpg
+```
+
+#### Real-World Example: reference-client.html
+
+The `reference-client.html` in the public folder demonstrates this pattern:
+
+```javascript
+// From reference-client.html - Media upload with web setup
+if (enableWeb) {
+    const webResponse = await fetch('/api/media/web-setup', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ 
+            mediaId: uploadResult.mediaId,
+            filename: uploadResult.originalName
+        })
+    });
+    
+    const webResult = await webResponse.json();
+    if (webResponse.ok) {
+        webUrl = webResult.webUrl;
+    }
+}
+```
+
+#### When to Use Public Folder Deployment
+
+**✅ Recommended For**:
+- Single-application deployments
+- Media-heavy applications (fitness apps, galleries, content management)
+- Development and prototyping
+- Applications that need tight integration with OIP features
+- Projects where simplicity is valued over architectural separation
+
+**❌ Consider External Deployment For**:
+- Multi-backend architectures (app connects to multiple OIP nodes)
+- Applications requiring independent scaling
+- Microservice architectures
+- When frontend and backend teams work independently
+- CDN-hosted frontends
+
+---
+
+### External Client Applications
+
+For applications hosted separately from the OIP server, use the full URL pattern with explicit CORS handling.
+
 ### JavaScript Client Implementation
 
 #### Simple Upload (BitTorrent Only)
@@ -876,6 +1078,11 @@ MEDIA_DIR=/usr/src/app/data/media
 COMPOSE_PROJECT_NAME=my-project        # Project-specific folder for web media
 NGROK_DOMAIN=abc123.ngrok.io          # Optional: Custom domain for web URLs
 
+# Public folder configuration (for custom frontend locations)
+CUSTOM_PUBLIC_PATH=true               # Enable custom public folder location
+# When true (non-Docker): serves from ../public (parent directory)
+# When false/unset: serves from ./public (local directory)
+
 # BitTorrent configuration
 WEBTORRENT_TRACKERS=wss://tracker.openwebtorrent.com,wss://tracker.btorrent.xyz
 
@@ -892,6 +1099,40 @@ TURBO_URL=https://turbo.ardrive.io
 COMPOSE_PROJECT_NAME=oip-arweave-indexer
 NGROK_DOMAIN=your-domain.ngrok.io
 ```
+
+### Public Folder Path Configuration
+
+The OIP server determines the public folder location based on `CUSTOM_PUBLIC_PATH`:
+
+| CUSTOM_PUBLIC_PATH | Environment | Public Path |
+|--------------------|-------------|-------------|
+| `false` or unset | Any | `./public` (inside oip-arweave-indexer) |
+| `true` | Docker | `./public` (Docker handles symlinks) |
+| `true` | Non-Docker | `../public` (sibling to oip-arweave-indexer) |
+
+**Example Project Structures**:
+
+```bash
+# Standard (CUSTOM_PUBLIC_PATH=false)
+oip-arweave-indexer/
+├── public/              # ← Static files served from here
+│   └── my-app.html
+└── data/media/web/
+    └── project-name/
+
+# Custom path (CUSTOM_PUBLIC_PATH=true, non-Docker)
+my-project/
+├── oip-arweave-indexer/
+│   └── data/media/web/
+│       └── fitnessally/
+└── public/              # ← Static files served from here
+    └── my-app.html
+```
+
+This flexibility allows you to:
+- Keep your frontend code separate from the OIP codebase
+- Share a public folder between multiple OIP instances
+- Organize project files according to your team's preferences
 
 ### Dependencies
 ```json
@@ -946,5 +1187,5 @@ The system's modular architecture allows for flexible deployment scenarios, from
 ---
 
 *Last updated: January 2025*  
-*Version: 1.0.0*  
-*Compatible with OIP v0.8.0*
+*Version: 1.1.0*  
+*Compatible with OIP v0.8.0 and v0.9.0*
