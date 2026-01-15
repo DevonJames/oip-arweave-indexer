@@ -220,6 +220,50 @@ function getRecordVersion(record) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
+ * Bootstrap v0.9 Creator Configuration
+ * 
+ * INSTRUCTIONS TO ACTIVATE:
+ * 1. Run: node scripts/bootstrap-v09-creator.js --generate
+ * 2. Copy the generated values below
+ * 3. Set BOOTSTRAP_V09_ENABLED = true
+ * 4. Publish the DID document using the debug interface
+ * 
+ * This creator is used to publish the first v0.9 records.
+ */
+const BOOTSTRAP_V09_ENABLED = false; // Set to true after generating bootstrap creator
+
+const BOOTSTRAP_V09_CREATOR = {
+    // TODO: Replace with actual values from bootstrap script
+    did: 'did:arweave:REPLACE_WITH_GENERATED_DID',
+    signingXpub: 'REPLACE_WITH_GENERATED_XPUB',
+    validFromBlock: 0,
+    isV09: true,
+    verificationMethods: [{
+        vmId: '#sign',
+        vmType: 'oip:XpubDerivation2025',
+        xpub: 'REPLACE_WITH_GENERATED_XPUB',
+        validFromBlock: 0,
+        revokedFromBlock: null
+    }]
+};
+
+/**
+ * Resolves a creator DID, checking bootstrap creator first.
+ * 
+ * @param {string} creatorDid - Creator's DID
+ * @returns {Promise<object|null>} Creator verification data
+ */
+async function resolveCreatorWithBootstrap(creatorDid) {
+    // Check if this is the bootstrap creator
+    if (BOOTSTRAP_V09_ENABLED && creatorDid === BOOTSTRAP_V09_CREATOR.did) {
+        console.log(`[SyncVerification] Using hardcoded bootstrap creator for ${creatorDid}`);
+        return BOOTSTRAP_V09_CREATOR;
+    }
+    // Otherwise use normal resolution
+    return await resolveCreator(creatorDid);
+}
+
+/**
  * Verifies a bootstrap creator registration.
  * Used for the first v0.9 creator that publishes templates.
  * 
@@ -248,17 +292,42 @@ async function verifyBootstrapCreator(record, bootstrapCreatorData) {
     };
 }
 
+/**
+ * Gets the bootstrap creator configuration.
+ * 
+ * @returns {object|null} Bootstrap creator data or null if not enabled
+ */
+function getBootstrapCreator() {
+    if (!BOOTSTRAP_V09_ENABLED) return null;
+    return BOOTSTRAP_V09_CREATOR;
+}
+
+/**
+ * Checks if a DID is the bootstrap creator.
+ * 
+ * @param {string} did - DID to check
+ * @returns {boolean}
+ */
+function isBootstrapCreator(did) {
+    return BOOTSTRAP_V09_ENABLED && did === BOOTSTRAP_V09_CREATOR.did;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // EXPORTS
 // ═══════════════════════════════════════════════════════════════════════════
 
 module.exports = {
     resolveCreator,
+    resolveCreatorWithBootstrap,
     resolveVerificationMethods,
     verifyBeforeIndex,
     handleLegacyRecord,
     isV09Record,
     getRecordVersion,
-    verifyBootstrapCreator
+    verifyBootstrapCreator,
+    getBootstrapCreator,
+    isBootstrapCreator,
+    BOOTSTRAP_V09_CREATOR,
+    BOOTSTRAP_V09_ENABLED
 };
 

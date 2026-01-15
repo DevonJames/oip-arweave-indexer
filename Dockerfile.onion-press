@@ -49,6 +49,7 @@ COPY config ./config
 
 # Copy helpers
 COPY helpers/onion-press ./helpers/onion-press
+COPY helpers/core ./helpers/core
 COPY helpers/utils.js ./helpers/utils.js
 
 # Copy routes

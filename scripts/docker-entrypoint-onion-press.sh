@@ -29,6 +29,11 @@ done
 # ─────────────────────────────────────────────────────────────────────────────
 echo "🔐 Starting TOR daemon..."
 
+# Update torrc with the actual port (default 3007, but can be overridden by PORT env)
+APP_PORT="${PORT:-3007}"
+sed -i "s/HiddenServicePort 80 127.0.0.1:[0-9]*/HiddenServicePort 80 127.0.0.1:${APP_PORT}/" /etc/tor/torrc
+echo "   TOR hidden service will forward to port ${APP_PORT}"
+
 # Clean up any stale lock files from previous runs
 rm -f /var/lib/tor/data/lock 2>/dev/null || true
 rm -f /var/lib/tor/lock 2>/dev/null || true

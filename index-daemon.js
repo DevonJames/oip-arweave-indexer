@@ -154,6 +154,7 @@ const mediaRoutes = require('./routes/daemon/media');
 const cleanupRoutes = require('./routes/daemon/cleanup');
 const adminRoutes = require('./routes/daemon/admin');
 const didRoutes = require('./routes/daemon/did');
+const debugV09Routes = require('./routes/daemon/debug');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Import Daemon Helpers
@@ -413,6 +414,7 @@ app.use('/api/media', mediaRoutes);
 app.use('/api/cleanup', cleanupRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/did', didRoutes);
+app.use('/api/debug/v09', debugV09Routes);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Backward Compatibility: Direct /api/* routes that redirect to /api/user/*
@@ -690,6 +692,11 @@ if (ONION_PRESS_ENABLED) {
     
     // Serve root public directory (alfreds-notes.html, reference-client.html, etc.)
     app.use(express.static(path.join(__dirname, 'public')));
+    
+    // Serve debug interfaces
+    app.get('/debug/v09', (req, res) => {
+        res.sendFile(path.join(__dirname, 'public', 'debug', 'v09.html'));
+    });
     
     // Serve onion-press subdirectory
     app.use('/onion-press', express.static(path.join(__dirname, 'public', 'onion-press'), {

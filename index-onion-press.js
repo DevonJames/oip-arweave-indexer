@@ -35,6 +35,7 @@ const publishRoutes = require('./routes/onion-press/publish');
 const adminRoutes = require('./routes/onion-press/admin');
 const browseRoutes = require('./routes/onion-press/browse');
 const torRoutes = require('./routes/onion-press/tor');
+const debugRoutes = require('./routes/onion-press/debug');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Import Helpers
@@ -116,6 +117,7 @@ app.use('/api/publish', publishRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/browse', browseRoutes);
 app.use('/api/tor', torRoutes);
+app.use('/api/debug', debugRoutes);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Static Files - Browsing Interface
@@ -125,6 +127,11 @@ app.use(express.static(path.join(__dirname, 'public', 'onion-press')));
 // Serve index.html for all non-API routes (SPA support)
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'onion-press', 'index.html'));
+});
+
+// Serve debug interface
+app.get('/debug', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'onion-press', 'debug.html'));
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

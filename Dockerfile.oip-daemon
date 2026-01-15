@@ -125,6 +125,9 @@ COPY middleware ./middleware
 COPY socket ./socket
 COPY socket.js ./socket.js
 
+# Copy public files (debug interfaces, etc.)
+COPY public ./public
+
 # Copy entry point and utilities
 COPY index-daemon.js ./index.js
 COPY gun-relay-server.js ./gun-relay-server.js
