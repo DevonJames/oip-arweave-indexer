@@ -230,19 +230,19 @@ function getRecordVersion(record) {
  * 
  * This creator is used to publish the first v0.9 records.
  */
-const BOOTSTRAP_V09_ENABLED = false; // Set to true after generating bootstrap creator
+const BOOTSTRAP_V09_ENABLED = true; // Set to true after generating bootstrap creator
 
 const BOOTSTRAP_V09_CREATOR = {
     // TODO: Replace with actual values from bootstrap script
-    did: 'did:arweave:REPLACE_WITH_GENERATED_DID',
-    signingXpub: 'REPLACE_WITH_GENERATED_XPUB',
-    validFromBlock: 0,
+    did: 'did:arweave:Lc1Ak-qzTdWSPGBoZYOBopBocRS5Mfy-vO6ChujzYbU',
+    signingXpub: 'xpub6DMaz5ZtqvapPzE8xtHiZyNqcJetimwiNnQ5XqqksqAuZXvqV88G8uepxyB6tJnkt2ngZehREvGsMZJQhNP55ZKsxDnAaLDvSFT9ixTVqzT',
+    validFromBlock: 1837357,
     isV09: true,
     verificationMethods: [{
         vmId: '#sign',
         vmType: 'oip:XpubDerivation2025',
-        xpub: 'REPLACE_WITH_GENERATED_XPUB',
-        validFromBlock: 0,
+        xpub: 'xpub6DMaz5ZtqvapPzE8xtHiZyNqcJetimwiNnQ5XqqksqAuZXvqV88G8uepxyB6tJnkt2ngZehREvGsMZJQhNP55ZKsxDnAaLDvSFT9ixTVqzT',
+        validFromBlock: 1837357,
         revokedFromBlock: null
     }]
 };
