@@ -7,7 +7,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { resolveCreator } = require('../../helpers/core/sync-verification');
+const { resolveCreatorWithBootstrap, getBootstrapCreator, isBootstrapCreator } = require('../../helpers/core/sync-verification');
 const { verifyRecord, VerificationMode } = require('../../helpers/core/oip-verification');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -26,7 +26,7 @@ router.get('/:did', async (req, res) => {
         const { did } = req.params;
         const decodedDid = decodeURIComponent(did);
         
-        const creatorData = await resolveCreator(decodedDid);
+        const creatorData = await resolveCreatorWithBootstrap(decodedDid);
         
         if (!creatorData) {
             return res.status(404).json({
@@ -35,14 +35,44 @@ router.get('/:did', async (req, res) => {
             });
         }
         
-        // Format as W3C DID Document
-        const didDocument = formatAsW3C(creatorData);
+        // Use pre-computed W3C format if available (indexed with the record)
+        // Otherwise fall back to on-the-fly formatting
+        let didDocument;
+        let source = 'computed';
+        
+        if (creatorData.didDocument?.oip?.w3c) {
+            // Pre-computed format available - add verification methods
+            didDocument = { ...creatorData.didDocument.oip.w3c };
+            
+            // Add resolved verification methods (these need current validity info)
+            if (creatorData.verificationMethods && creatorData.verificationMethods.length > 0) {
+                didDocument.verificationMethod = creatorData.verificationMethods.map(vm => ({
+                    id: `${didDocument.id}${vm.vmId}`,
+                    type: vm.vmType,
+                    controller: didDocument.id,
+                    'oip:xpub': vm.xpub,
+                    'oip:derivationPathPrefix': vm.derivationPathPrefix,
+                    'oip:leafIndexPolicy': vm.leafIndexPolicy,
+                    'oip:validFromBlock': vm.validFromBlock,
+                    'oip:revokedFromBlock': vm.revokedFromBlock,
+                    'oip:isActive': !vm.revokedFromBlock
+                }));
+            }
+            
+            // Remove the refs array (was for internal use)
+            delete didDocument.verificationMethodRefs;
+            source = 'indexed';
+        } else {
+            // Fall back to on-the-fly formatting
+            didDocument = formatAsW3C(creatorData);
+        }
         
         res.json({
             success: true,
             didDocument,
             metadata: {
                 isV09: creatorData.isV09,
+                source, // 'indexed' = fast pre-computed, 'computed' = on-the-fly
                 resolvedAt: new Date().toISOString()
             }
         });
@@ -81,7 +111,7 @@ router.post('/verify', async (req, res) => {
         
         const result = await verifyRecord(
             payload,
-            resolveCreator,
+            resolveCreatorWithBootstrap,
             blockHeight || 0
         );
         
@@ -122,7 +152,7 @@ router.get('/:did/verification-methods', async (req, res) => {
         const { did } = req.params;
         const decodedDid = decodeURIComponent(did);
         
-        const creatorData = await resolveCreator(decodedDid);
+        const creatorData = await resolveCreatorWithBootstrap(decodedDid);
         
         if (!creatorData) {
             return res.status(404).json({
@@ -167,6 +197,7 @@ router.get('/:did/verification-methods', async (req, res) => {
  * @returns {object} W3C DID Document
  */
 function formatAsW3C(creatorData) {
+    // v0.9 format with full DID document
     if (creatorData.isV09 && creatorData.didDocument) {
         const doc = creatorData.didDocument.oip?.data || {};
         return {
@@ -205,6 +236,27 @@ function formatAsW3C(creatorData) {
                 instagram: doc.oipSocialInstagram,
                 tiktok: doc.oipSocialTiktok
             }
+        };
+    }
+    
+    // v0.9 bootstrap creator (hardcoded, no indexed DID document yet)
+    if (creatorData.isV09 && creatorData.verificationMethods) {
+        return {
+            '@context': ['https://www.w3.org/ns/did/v1', 'https://oip.dev/ns/v1'],
+            id: creatorData.did,
+            controller: creatorData.did,
+            verificationMethod: creatorData.verificationMethods.map(vm => ({
+                id: `${creatorData.did}${vm.vmId}`,
+                type: vm.vmType,
+                controller: creatorData.did,
+                'oip:xpub': vm.xpub,
+                'oip:validFromBlock': vm.validFromBlock,
+                'oip:revokedFromBlock': vm.revokedFromBlock
+            })),
+            authentication: [`${creatorData.did}#sign`],
+            assertionMethod: [`${creatorData.did}#sign`],
+            'oip:isBootstrap': true,
+            'oip:note': 'This is a bootstrap creator. Full DID document will be available after publishing.'
         };
     }
     

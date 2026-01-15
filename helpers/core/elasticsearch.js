@@ -1074,6 +1074,75 @@ async function getTemplateFieldsForRecordType(recordType) {
     }
 }
 
+/**
+ * Pre-computes W3C DID Document format for didDocument records.
+ * This is done during indexing to avoid repeated computation on reads.
+ * 
+ * @param {object} record - The record being indexed
+ * @returns {object|null} W3C formatted document or null if not a DID document
+ */
+function preComputeW3CFormat(record) {
+    const recordType = record?.oip?.recordType;
+    
+    if (recordType !== 'didDocument') {
+        return null;
+    }
+    
+    const data = record?.oip?.data || record?.data || {};
+    const did = data.did || record?.oip?.did;
+    
+    if (!did) return null;
+    
+    // Build W3C DID Document format
+    const w3c = {
+        '@context': ['https://www.w3.org/ns/did/v1', 'https://oip.dev/ns/v1'],
+        id: did,
+        controller: data.controller || did,
+        // verificationMethod will be populated when verification methods are resolved
+        verificationMethodRefs: data.verificationMethod || [],
+        authentication: (data.authentication || ['#sign']).map(ref => 
+            ref.startsWith('#') ? `${did}${ref}` : ref
+        ),
+        assertionMethod: (data.assertionMethod || ['#sign']).map(ref => 
+            ref.startsWith('#') ? `${did}${ref}` : ref
+        ),
+        keyAgreement: data.keyAgreement?.map(ref => 
+            ref.startsWith('#') ? `${did}${ref}` : ref
+        ) || [],
+        service: data.service || [],
+        alsoKnownAs: data.alsoKnownAs || [],
+        'oip:profile': {
+            handle: data.oipHandle,
+            handleRaw: data.oipHandleRaw,
+            name: data.oipName,
+            surname: data.oipSurname,
+            language: data.oipLanguage
+        },
+        'oip:social': {
+            x: data.oipSocialX,
+            youtube: data.oipSocialYoutube,
+            instagram: data.oipSocialInstagram,
+            tiktok: data.oipSocialTiktok
+        },
+        'oip:keyBindingPolicy': data.keyBindingPolicy
+    };
+    
+    // Clean up undefined values
+    Object.keys(w3c['oip:profile']).forEach(key => {
+        if (w3c['oip:profile'][key] === undefined) delete w3c['oip:profile'][key];
+    });
+    Object.keys(w3c['oip:social']).forEach(key => {
+        if (w3c['oip:social'][key] === undefined) delete w3c['oip:social'][key];
+    });
+    if (Object.keys(w3c['oip:profile']).length === 0) delete w3c['oip:profile'];
+    if (Object.keys(w3c['oip:social']).length === 0) delete w3c['oip:social'];
+    if (w3c.keyAgreement.length === 0) delete w3c.keyAgreement;
+    if (w3c.service.length === 0) delete w3c.service;
+    if (w3c.alsoKnownAs.length === 0) delete w3c.alsoKnownAs;
+    
+    return w3c;
+}
+
 const indexRecord = async (record) => {
     const recordId = record?.oip?.did || record?.oip?.didTx;
     debugLog(`\n      💾 [indexRecord] Attempting to index/update record: ${recordId}`);
@@ -1097,6 +1166,14 @@ const indexRecord = async (record) => {
             if (templateFields) {
                 debugLog(`      📋 [indexRecord] Got template fields for '${typeForIndex}': ${Object.keys(templateFields).length} fields`);
             }
+        }
+        
+        // Pre-compute W3C format for DID documents (avoids repeated computation on reads)
+        const w3cFormat = preComputeW3CFormat(record);
+        if (w3cFormat) {
+            record.oip = record.oip || {};
+            record.oip.w3c = w3cFormat;
+            debugLog(`      📄 [indexRecord] Pre-computed W3C DID Document format`);
         }
         
         const existingRecord = await getElasticsearchClient().exists({
