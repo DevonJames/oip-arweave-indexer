@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const { resolveCreatorWithBootstrap, getBootstrapCreator, isBootstrapCreator } = require('../../helpers/core/sync-verification');
 const { verifyRecord, VerificationMode } = require('../../helpers/core/oip-verification');
+const { getDidContextArray } = require('../../helpers/core/urlHelper');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DID RESOLUTION
@@ -41,7 +42,7 @@ router.get('/:did', async (req, res) => {
         let source = 'computed';
         
         if (creatorData.didDocument?.oip?.w3c) {
-            // Pre-computed format available - add verification methods
+            // Pre-computed format available - return directly (zero processing)
             didDocument = { ...creatorData.didDocument.oip.w3c };
             
             // Add resolved verification methods (these need current validity info)
@@ -64,7 +65,7 @@ router.get('/:did', async (req, res) => {
             source = 'indexed';
         } else {
             // Fall back to on-the-fly formatting
-            didDocument = formatAsW3C(creatorData);
+            didDocument = formatAsW3C(creatorData, req);
         }
         
         res.json({
@@ -194,14 +195,17 @@ router.get('/:did/verification-methods', async (req, res) => {
  * Formats OIP creator data as W3C DID Document.
  * 
  * @param {object} creatorData - Creator data from resolver
+ * @param {object} req - Express request object (for dynamic context URL)
  * @returns {object} W3C DID Document
  */
-function formatAsW3C(creatorData) {
+function formatAsW3C(creatorData, req = null) {
+    const contextArray = getDidContextArray(req);
+    
     // v0.9 format with full DID document
     if (creatorData.isV09 && creatorData.didDocument) {
         const doc = creatorData.didDocument.oip?.data || {};
         return {
-            '@context': ['https://www.w3.org/ns/did/v1', 'https://oip.dev/ns/v1'],
+            '@context': contextArray,
             id: doc.did,
             controller: doc.controller,
             verificationMethod: creatorData.verificationMethods?.map(vm => ({
@@ -242,7 +246,7 @@ function formatAsW3C(creatorData) {
     // v0.9 bootstrap creator (hardcoded, no indexed DID document yet)
     if (creatorData.isV09 && creatorData.verificationMethods) {
         return {
-            '@context': ['https://www.w3.org/ns/did/v1', 'https://oip.dev/ns/v1'],
+            '@context': contextArray,
             id: creatorData.did,
             controller: creatorData.did,
             verificationMethod: creatorData.verificationMethods.map(vm => ({
@@ -260,7 +264,7 @@ function formatAsW3C(creatorData) {
         };
     }
     
-    // Legacy v0.8 format
+    // Legacy v0.8 format (no OIP extension context needed)
     const legacy = creatorData.legacyRecord?.oip?.data || {};
     return {
         '@context': ['https://www.w3.org/ns/did/v1'],

@@ -61,10 +61,35 @@ function getMediaFileUrl(filename, req = null) {
     return `${baseUrl}/api/media/${filename}`;
 }
 
+/**
+ * Get the OIP JSON-LD context URL for DID documents
+ * This is the @context URL that points to the OIP namespace schema
+ * @param {Object|null} req - Express request object (optional)
+ * @returns {string} OIP namespace URL (e.g., "https://oip.yourdomain.com/ns/v1")
+ */
+function getOipContextUrl(req = null) {
+    const baseUrl = getBaseUrl(req);
+    return `${baseUrl}/ns/v1`;
+}
+
+/**
+ * Get the standard W3C DID context array with OIP extension
+ * @param {Object|null} req - Express request object (optional)
+ * @returns {string[]} Array of JSON-LD context URLs
+ */
+function getDidContextArray(req = null) {
+    return [
+        'https://www.w3.org/ns/did/v1',
+        getOipContextUrl(req)
+    ];
+}
+
 module.exports = {
     getBaseUrl,
     getBaseUrlFromRequest,
     getBaseUrlFromEnv,
     getMediaUrl,
-    getMediaFileUrl
+    getMediaFileUrl,
+    getOipContextUrl,
+    getDidContextArray
 };

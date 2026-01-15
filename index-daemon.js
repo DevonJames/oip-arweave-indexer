@@ -809,6 +809,51 @@ app.get('/health', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// OIP JSON-LD Namespace Context
+// Provides the JSON-LD context schema for OIP DID documents
+// Referenced by @context in DID documents as: ["https://www.w3.org/ns/did/v1", "{baseUrl}/ns/v1"]
+// ═══════════════════════════════════════════════════════════════════════════════
+app.get('/ns/v1', (req, res) => {
+    const { getBaseUrlFromRequest } = require('./helpers/core/urlHelper');
+    const baseUrl = getBaseUrlFromRequest(req);
+    
+    res.setHeader('Content-Type', 'application/ld+json');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.json({
+        '@context': {
+            '@version': 1.1,
+            'oip': `${baseUrl}/ns/v1#`,
+            'xpub': { '@id': 'oip:xpub', '@type': '@id' },
+            'derivationPathPrefix': 'oip:derivationPathPrefix',
+            'leafIndexPolicy': 'oip:leafIndexPolicy',
+            'validFromBlock': { '@id': 'oip:validFromBlock', '@type': 'http://www.w3.org/2001/XMLSchema#unsignedLong' },
+            'revokedFromBlock': { '@id': 'oip:revokedFromBlock', '@type': 'http://www.w3.org/2001/XMLSchema#unsignedLong' },
+            'isActive': { '@id': 'oip:isActive', '@type': 'http://www.w3.org/2001/XMLSchema#boolean' },
+            'profile': 'oip:profile',
+            'handle': 'oip:handle',
+            'handleRaw': 'oip:handleRaw',
+            'name': 'oip:name',
+            'surname': 'oip:surname',
+            'language': 'oip:language',
+            'social': 'oip:social',
+            'x': 'oip:socialX',
+            'youtube': 'oip:socialYoutube',
+            'instagram': 'oip:socialInstagram',
+            'tiktok': 'oip:socialTiktok',
+            'keyBindingPolicy': 'oip:keyBindingPolicy',
+            'isBootstrap': { '@id': 'oip:isBootstrap', '@type': 'http://www.w3.org/2001/XMLSchema#boolean' },
+            'isLegacy': { '@id': 'oip:isLegacy', '@type': 'http://www.w3.org/2001/XMLSchema#boolean' },
+            'signingXpub': 'oip:signingXpub',
+            'XpubDerivation2025': 'oip:XpubDerivation2025'
+        },
+        '@id': `${baseUrl}/ns/v1`,
+        'name': 'OIP DID Document Extension',
+        'version': '1.0.0',
+        'description': 'JSON-LD context for Open Index Protocol DID documents with xpub-based verification methods'
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Track memory growth between samples to identify leak sources
 let lastMemorySample = null;
 let memorySamples = [];

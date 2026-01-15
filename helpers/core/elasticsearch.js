@@ -1094,8 +1094,12 @@ function preComputeW3CFormat(record) {
     if (!did) return null;
     
     // Build W3C DID Document format
+    // Get context URL from environment at index time
+    // If PUBLIC_API_BASE_URL changes, affected records can be re-indexed
+    const { getDidContextArray } = require('./urlHelper');
+    
     const w3c = {
-        '@context': ['https://www.w3.org/ns/did/v1', 'https://oip.dev/ns/v1'],
+        '@context': getDidContextArray(),
         id: did,
         controller: data.controller || did,
         // verificationMethod will be populated when verification methods are resolved
