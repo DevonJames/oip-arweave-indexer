@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧅 Onion Press - Anonymous Publisher</title>
+    <link rel="stylesheet" href="css/onion-press.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- OIP v0.9 Crypto Dependencies (from CDN for browser) -->
+    <script src="https://unpkg.com/@noble/hashes@1.3.3/sha256.js" type="module"></script>
+    <script src="https://unpkg.com/@noble/curves@1.3.0/secp256k1.js" type="module"></script>
+    <script src="https://unpkg.com/@scure/bip32@1.3.3/index.js" type="module"></script>
+    <script src="https://unpkg.com/@scure/bip39@1.2.2/index.js" type="module"></script>
+    
+    <style>
+        /* ═══════════════════════════════════════════════════════════════════════════════
+           Publisher Page - Additional Styles
+           ═══════════════════════════════════════════════════════════════════════════════ */
+        
+        :root {
+            --accent-purple: #7c3aed;
+            --accent-green: #10b981;
+            --accent-orange: #f59e0b;
+            --accent-red: #ef4444;
+            --font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+        }
+
+        .publisher-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .publisher-header {
+            text-align: center;
+            margin-bottom: var(--spacing-2xl);
+            padding-bottom: var(--spacing-lg);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .publisher-header h1 {
+            font-size: 2rem;
+            margin-bottom: var(--spacing-sm);
+            background: linear-gradient(135deg, var(--accent-purple), #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .publisher-header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        /* Identity Section */
+        .identity-section {
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .identity-section.active {
+            border-color: var(--accent-green);
+        }
+
+        .identity-section h2 {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-lg);
+            font-size: 1.3rem;
+        }
+
+        .identity-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent-purple);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .identity-section.active .identity-badge {
+            background: var(--accent-green);
+        }
+
+        .mnemonic-input {
+            width: 100%;
+            min-height: 100px;
+            padding: var(--spacing-md);
+            border: 2px dashed var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-tertiary);
+            font-family: var(--font-mono);
+            font-size: 1rem;
+            line-height: 1.6;
+            resize: vertical;
+            transition: var(--transition-normal);
+        }
+
+        .mnemonic-input:focus {
+            outline: none;
+            border-color: var(--accent-purple);
+            border-style: solid;
+        }
+
+        .mnemonic-actions {
+            display: flex;
+            gap: var(--spacing-sm);
+            margin-top: var(--spacing-md);
+        }
+
+        .identity-info {
+            margin-top: var(--spacing-lg);
+            padding: var(--spacing-md);
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--accent-green);
+            border-radius: var(--radius-md);
+        }
+
+        .identity-row {
+            display: flex;
+            align-items: baseline;
+            gap: var(--spacing-md);
+            padding: var(--spacing-xs) 0;
+        }
+
+        .identity-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            min-width: 100px;
+            font-size: 0.85rem;
+        }
+
+        .identity-value {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            word-break: break-all;
+            color: var(--accent-green);
+        }
+
+        /* Record Form Section */
+        .record-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .record-section h2 {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-lg);
+            font-size: 1.3rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-md);
+        }
+
+        .form-group {
+            margin-bottom: var(--spacing-md);
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: var(--spacing-xs);
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: var(--spacing-sm) var(--spacing-md);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-tertiary);
+            font-family: var(--font-sans);
+            font-size: 1rem;
+            transition: var(--transition-fast);
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--accent-purple);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        /* Destinations Section */
+        .destinations-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .destinations-section h2 {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .destination-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .destination-card {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+            padding: var(--spacing-md);
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+
+        .destination-card:hover {
+            border-color: var(--accent-purple);
+        }
+
+        .destination-card.selected {
+            border-color: var(--accent-green);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .destination-card input {
+            width: 20px;
+            height: 20px;
+        }
+
+        .destination-icon {
+            font-size: 1.5rem;
+        }
+
+        .destination-info h4 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .destination-info p {
+            margin: 0;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Publish Button */
+        .publish-actions {
+            display: flex;
+            justify-content: center;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-xl);
+        }
+
+        .publish-btn {
+            padding: var(--spacing-md) var(--spacing-2xl);
+            font-size: 1.2rem;
+            font-weight: 600;
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: var(--transition-normal);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .publish-btn.primary {
+            background: var(--accent-purple);
+            color: white;
+        }
+
+        .publish-btn.primary:hover:not(:disabled) {
+            background: #6d28d9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
+        }
+
+        .publish-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Status Messages */
+        .status-message {
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-md);
+            margin-top: var(--spacing-xl);
+            display: none;
+        }
+
+        .status-message.visible {
+            display: block;
+        }
+
+        .status-message.success {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .status-message.error {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .status-message.processing {
+            background: rgba(124, 58, 237, 0.15);
+            border: 1px solid var(--accent-purple);
+            color: var(--accent-purple);
+        }
+
+        .status-message h3 {
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .status-message .tx-link {
+            font-family: var(--font-mono);
+            word-break: break-all;
+        }
+
+        .status-message a {
+            color: inherit;
+            text-decoration: underline;
+        }
+
+        /* Warning Box */
+        .warning-box {
+            background: rgba(245, 158, 11, 0.15);
+            border: 1px solid var(--accent-orange);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+            font-size: 0.9rem;
+            color: var(--accent-orange);
+        }
+
+        .warning-box strong {
+            display: block;
+            margin-bottom: var(--spacing-xs);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .destination-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <span class="logo-icon">🧅</span>
+                <span class="logo-text">Onion Press</span>
+            </div>
+            <nav class="nav">
+                <a href="/" class="nav-btn">← Back to Browse</a>
+                <a href="/debug/v09" class="nav-btn">🔐 Debug Interface</a>
+            </nav>
+            <div class="header-actions">
+                <div class="tor-status" id="torStatus" title="TOR Status">
+                    <span class="tor-indicator"></span>
+                    <span class="tor-label">TOR</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="publisher-container">
+            <div class="publisher-header">
+                <h1>🔏 Anonymous Publisher</h1>
+                <p>Publish records to the blockchain without creating an account. Your identity is your mnemonic.</p>
+            </div>
+
+            <!-- Step 1: Identity -->
+            <section class="identity-section" id="identitySection">
+                <h2><span class="identity-badge">1</span> Your Identity</h2>
+                
+                <div class="warning-box">
+                    <strong>⚠️ Security Warning</strong>
+                    Your mnemonic is your identity and signing key. It is processed entirely in your browser and never sent to any server. 
+                    However, only use this for testing or content you're comfortable having publicly attributed to this identity.
+                </div>
+
+                <div class="form-group">
+                    <label for="mnemonic">BIP-39 Mnemonic (12 or 24 words)</label>
+                    <textarea id="mnemonic" class="mnemonic-input" 
+                        placeholder="Enter your mnemonic phrase here, or click 'Generate Test Mnemonic' below..."></textarea>
+                </div>
+
+                <div class="mnemonic-actions">
+                    <button id="generateMnemonicBtn" class="secondary-btn">🎲 Generate Test Mnemonic</button>
+                    <button id="loadIdentityBtn" class="primary-btn">🔑 Load Identity</button>
+                </div>
+
+                <div id="identityInfo" class="identity-info hidden">
+                    <div class="identity-row">
+                        <span class="identity-label">Your DID</span>
+                        <span class="identity-value" id="displayDid">-</span>
+                    </div>
+                    <div class="identity-row">
+                        <span class="identity-label">Signing xpub</span>
+                        <span class="identity-value" id="displayXpub">-</span>
+                    </div>
+                    <div class="identity-row">
+                        <span class="identity-label">Status</span>
+                        <span class="identity-value" style="color: var(--accent-green);">✓ Ready to sign records</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 2: Record -->
+            <section class="record-section">
+                <h2><span class="identity-badge" style="background: var(--accent-orange);">2</span> Create Record</h2>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="recordType">Record Type</label>
+                        <select id="recordType">
+                            <option value="post">📰 Post / Article</option>
+                            <option value="image">🖼️ Image</option>
+                            <option value="video">🎬 Video</option>
+                            <option value="audio">🎵 Audio</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="byline">Byline / Author Name</label>
+                        <input type="text" id="byline" placeholder="Anonymous">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="title">Title *</label>
+                    <input type="text" id="title" placeholder="Enter a title for your record..." required>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <textarea id="description" rows="2" placeholder="Brief description of your content..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="content">Content *</label>
+                    <textarea id="content" rows="8" placeholder="The main content of your record..." required></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="webUrl">Web URL (canonical link)</label>
+                        <input type="url" id="webUrl" placeholder="https://example.com/original-post">
+                    </div>
+                    <div class="form-group">
+                        <label for="tags">Tags (comma-separated)</label>
+                        <input type="text" id="tags" placeholder="news, politics, whistleblower">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 3: Destinations -->
+            <section class="destinations-section">
+                <h2><span class="identity-badge" style="background: #06b6d4;">3</span> Publishing Destinations</h2>
+
+                <div class="destination-grid">
+                    <label class="destination-card selected">
+                        <input type="checkbox" id="destArweave" checked>
+                        <span class="destination-icon">⛓️</span>
+                        <div class="destination-info">
+                            <h4>Arweave</h4>
+                            <p>Permanent blockchain storage</p>
+                        </div>
+                    </label>
+
+                    <label class="destination-card">
+                        <input type="checkbox" id="destGun">
+                        <span class="destination-icon">🔄</span>
+                        <div class="destination-info">
+                            <h4>GUN Network</h4>
+                            <p>Real-time peer sync</p>
+                        </div>
+                    </label>
+
+                    <label class="destination-card">
+                        <input type="checkbox" id="destIA">
+                        <span class="destination-icon">🧅</span>
+                        <div class="destination-info">
+                            <h4>Internet Archive</h4>
+                            <p>Via TOR (anonymous)</p>
+                        </div>
+                    </label>
+                </div>
+            </section>
+
+            <!-- Publish Button -->
+            <div class="publish-actions">
+                <button id="publishBtn" class="publish-btn primary" disabled>
+                    🚀 Sign & Publish Record
+                </button>
+            </div>
+
+            <!-- Status Messages -->
+            <div id="statusMessage" class="status-message"></div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <span>OIP v0.9 Anonymous Publisher</span>
+            <span class="separator">|</span>
+            <span>Powered by <a href="https://oip.io" target="_blank">Open Index Protocol</a></span>
+            <span class="separator">|</span>
+            <span>🔏 Client-side signing - your keys never leave your browser</span>
+        </div>
+    </footer>
+
+    <script type="module">
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // OIP v0.9 Anonymous Publisher - Client-Side Signing
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        // Import crypto libraries
+        import { HDKey } from 'https://esm.sh/@scure/bip32@1.3.3';
+        import { mnemonicToSeedSync, validateMnemonic, generateMnemonic } from 'https://esm.sh/@scure/bip39@1.2.2';
+        import { wordlist } from 'https://esm.sh/@scure/bip39@1.2.2/wordlists/english';
+        import { sha256 } from 'https://esm.sh/@noble/hashes@1.3.3/sha256';
+        import { secp256k1 } from 'https://esm.sh/@noble/curves@1.3.0/secp256k1';
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CONSTANTS
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        const OIP_PURPOSE = 176800;
+        const OIP_VERSION = '0.9.0';
+
+        // State
+        let identity = null;
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // UTILITY FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        function base64urlEncode(bytes) {
+            const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+            const base64 = btoa(String.fromCharCode(...arr));
+            return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        function canonicalJson(obj) {
+            return JSON.stringify(obj, (key, value) => {
+                if (value && typeof value === 'object' && !Array.isArray(value)) {
+                    return Object.keys(value).sort().reduce((sorted, k) => {
+                        sorted[k] = value[k];
+                        return sorted;
+                    }, {});
+                }
+                return value;
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // IDENTITY MANAGEMENT
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        function createIdentity(mnemonic, account = 0) {
+            // Validate mnemonic
+            if (!validateMnemonic(mnemonic, wordlist)) {
+                throw new Error('Invalid mnemonic phrase. Please enter a valid BIP-39 mnemonic.');
+            }
+
+            // Generate seed and master key
+            const seed = mnemonicToSeedSync(mnemonic);
+            const masterKey = HDKey.fromMasterSeed(seed);
+
+            // Derive signing key at m/176800'/0'/account'
+            const signingPath = `m/${OIP_PURPOSE}'/0'/${account}'`;
+            const signingKey = masterKey.derive(signingPath);
+
+            // Generate DID from master public key
+            const pubKeyHash = sha256(masterKey.publicKey);
+            const did = `did:arweave:${base64urlEncode(pubKeyHash)}`;
+
+            return {
+                did,
+                signingXpub: signingKey.publicExtendedKey,
+                signingKey: signingKey,
+                account
+            };
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // SIGNING
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        function signPayload(payload, identity) {
+            // 1. Compute payload digest (canonical JSON → SHA256 → base64url)
+            const payloadBytes = canonicalJson(payload);
+            const payloadHash = sha256(new TextEncoder().encode(payloadBytes));
+            const payloadDigest = base64urlEncode(payloadHash);
+
+            // 2. Derive key index from payload digest
+            const indexInput = `oip:${payloadDigest}`;
+            const indexHash = sha256(new TextEncoder().encode(indexInput));
+            const view = new DataView(indexHash.buffer);
+            const keyIndex = view.getUint32(0, false) & 0x7FFFFFFF;
+
+            // 3. Derive child signing key
+            const childKey = identity.signingKey.deriveChild(keyIndex);
+
+            // 4. Sign the payload hash
+            const signature = secp256k1.sign(payloadHash, childKey.privateKey);
+            const signatureBase64 = base64urlEncode(signature.toCompactRawBytes());
+
+            // 5. Add signature tags to payload
+            const signedPayload = JSON.parse(JSON.stringify(payload));
+            signedPayload.tags.push({ name: 'PayloadDigest', value: payloadDigest });
+            signedPayload.tags.push({ name: 'KeyIndex', value: keyIndex.toString() });
+            signedPayload.tags.push({ name: 'CreatorSig', value: signatureBase64 });
+
+            return {
+                signedPayload,
+                debug: {
+                    payloadDigest,
+                    keyIndex,
+                    signature: signatureBase64
+                }
+            };
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // RECORD BUILDING
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        function buildRecord(identity) {
+            const recordType = document.getElementById('recordType').value;
+            const title = document.getElementById('title').value.trim();
+            const description = document.getElementById('description').value.trim();
+            const content = document.getElementById('content').value.trim();
+            const byline = document.getElementById('byline').value.trim() || 'Anonymous';
+            const webUrl = document.getElementById('webUrl').value.trim();
+            const tags = document.getElementById('tags').value.trim();
+
+            if (!title) throw new Error('Title is required');
+            if (!content) throw new Error('Content is required');
+
+            // Build the record data
+            const recordData = {
+                basic: {
+                    name: title,
+                    description: description || undefined
+                }
+            };
+
+            // Add type-specific fields
+            if (recordType === 'post') {
+                recordData.post = {
+                    byline: byline,
+                    articleText: content,
+                    webUrl: webUrl || undefined
+                };
+            } else if (recordType === 'image') {
+                recordData.image = {
+                    description: content
+                };
+            } else if (recordType === 'video') {
+                recordData.video = {
+                    description: content
+                };
+            } else if (recordType === 'audio') {
+                recordData.audio = {
+                    description: content
+                };
+            }
+
+            // Build tags array for Arweave
+            const tagsList = tags ? tags.split(',').map(t => t.trim()).filter(t => t) : [];
+
+            // Build DataForSignature structure (without signature tags yet)
+            const payload = {
+                '@context': identity.did,
+                tags: [
+                    { name: 'Index-Method', value: 'OIP' },
+                    { name: 'Ver', value: OIP_VERSION },
+                    { name: 'Content-Type', value: 'application/json' },
+                    { name: 'Creator', value: identity.did },
+                    { name: 'Record-Type', value: recordType }
+                ],
+                fragments: [{
+                    id: crypto.randomUUID(),
+                    dataType: 'Record',
+                    recordType: recordType,
+                    records: [recordData]
+                }]
+            };
+
+            // Add content tags
+            if (tagsList.length > 0) {
+                payload.tags.push({ name: 'Tags', value: tagsList.join(',') });
+            }
+
+            return payload;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // PUBLISHING
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        async function publishRecord() {
+            const statusEl = document.getElementById('statusMessage');
+            const publishBtn = document.getElementById('publishBtn');
+
+            try {
+                publishBtn.disabled = true;
+                showStatus('processing', '⏳ Signing and publishing...', 'Please wait while your record is signed and submitted to the blockchain.');
+
+                // Build the record
+                const payload = buildRecord(identity);
+                console.log('Built payload:', payload);
+
+                // Sign it client-side
+                const { signedPayload, debug } = signPayload(payload, identity);
+                console.log('Signed payload:', signedPayload);
+                console.log('Debug info:', debug);
+
+                // Get selected destinations
+                const destinations = {
+                    arweave: document.getElementById('destArweave').checked,
+                    gun: document.getElementById('destGun').checked,
+                    internetArchive: document.getElementById('destIA').checked
+                };
+
+                // Send to server (server pays Arweave fee)
+                const response = await fetch('/api/records/publishSigned', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        payload: signedPayload,
+                        verifySignature: false, // Skip verification for new creators
+                        destinations
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.message || result.error || 'Publishing failed');
+                }
+
+                showStatus('success', '✅ Published Successfully!', `
+                    <p>Your record has been submitted to Arweave.</p>
+                    <p><strong>Transaction ID:</strong> <span class="tx-link">${result.transactionId}</span></p>
+                    <p><strong>DID:</strong> <span class="tx-link">${result.did}</span></p>
+                    <p><a href="${result.explorerUrl}" target="_blank">View on Arweave Explorer →</a></p>
+                `);
+
+                // Clear form
+                document.getElementById('title').value = '';
+                document.getElementById('description').value = '';
+                document.getElementById('content').value = '';
+                document.getElementById('webUrl').value = '';
+                document.getElementById('tags').value = '';
+
+            } catch (error) {
+                console.error('Publish error:', error);
+                showStatus('error', '❌ Publishing Failed', error.message);
+            } finally {
+                publishBtn.disabled = false;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // UI HELPERS
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        function showStatus(type, title, message) {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.className = `status-message visible ${type}`;
+            statusEl.innerHTML = `<h3>${title}</h3><div>${message}</div>`;
+        }
+
+        function updatePublishButton() {
+            const publishBtn = document.getElementById('publishBtn');
+            const title = document.getElementById('title').value.trim();
+            const content = document.getElementById('content').value.trim();
+
+            publishBtn.disabled = !identity || !title || !content;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // EVENT HANDLERS
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const mnemonicEl = document.getElementById('mnemonic');
+            const generateBtn = document.getElementById('generateMnemonicBtn');
+            const loadBtn = document.getElementById('loadIdentityBtn');
+            const publishBtn = document.getElementById('publishBtn');
+            const identitySection = document.getElementById('identitySection');
+            const identityInfo = document.getElementById('identityInfo');
+            const displayDid = document.getElementById('displayDid');
+            const displayXpub = document.getElementById('displayXpub');
+
+            // Generate test mnemonic
+            generateBtn.addEventListener('click', () => {
+                const mnemonic = generateMnemonic(wordlist, 256); // 24 words
+                mnemonicEl.value = mnemonic;
+            });
+
+            // Load identity from mnemonic
+            loadBtn.addEventListener('click', () => {
+                try {
+                    const mnemonic = mnemonicEl.value.trim().toLowerCase();
+                    if (!mnemonic) {
+                        alert('Please enter a mnemonic phrase');
+                        return;
+                    }
+
+                    identity = createIdentity(mnemonic);
+                    
+                    // Update UI
+                    identitySection.classList.add('active');
+                    identityInfo.classList.remove('hidden');
+                    displayDid.textContent = identity.did;
+                    displayXpub.textContent = identity.signingXpub;
+                    
+                    updatePublishButton();
+                    
+                    console.log('Identity loaded:', identity.did);
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                }
+            });
+
+            // Publish record
+            publishBtn.addEventListener('click', publishRecord);
+
+            // Update publish button state on form changes
+            document.getElementById('title').addEventListener('input', updatePublishButton);
+            document.getElementById('content').addEventListener('input', updatePublishButton);
+
+            // Destination card selection styling
+            document.querySelectorAll('.destination-card').forEach(card => {
+                const checkbox = card.querySelector('input[type="checkbox"]');
+                checkbox.addEventListener('change', () => {
+                    card.classList.toggle('selected', checkbox.checked);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

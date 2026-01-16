@@ -134,6 +134,11 @@ app.get('/debug', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'onion-press', 'debug.html'));
 });
 
+// Serve v0.9 anonymous publisher interface
+app.get('/publish', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'onion-press', 'publish.html'));
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Basic Health Check
 // ═══════════════════════════════════════════════════════════════════════════════

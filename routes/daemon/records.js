@@ -302,6 +302,137 @@ router.post('/newRecord', authenticateToken, async (req, res) => {
     }
 });
 
+/**
+ * POST /api/records/publishSigned
+ * 
+ * Login-less publishing endpoint for v0.9 pre-signed records.
+ * Accepts a payload that has already been signed client-side (with CreatorSig, KeyIndex, PayloadDigest tags).
+ * Server verifies the signature, wraps in Arweave transaction, and pays the fee.
+ * 
+ * This enables anonymous publishing without user accounts - users sign with their mnemonic client-side.
+ */
+router.post('/publishSigned', async (req, res) => {
+    try {
+        const { payload, verifySignature = true, destinations } = req.body;
+        
+        if (!payload) {
+            return res.status(400).json({
+                error: 'Missing payload',
+                message: 'Request body must include a signed "payload" object with CreatorSig tag'
+            });
+        }
+        
+        // Extract signature data from payload tags
+        const tags = payload.tags || [];
+        const getTag = (name) => tags.find(t => t.name === name)?.value;
+        
+        const creatorSig = getTag('CreatorSig');
+        const payloadDigest = getTag('PayloadDigest');
+        const keyIndex = getTag('KeyIndex');
+        const creator = getTag('Creator');
+        const version = getTag('Ver') || '0.9.0';
+        
+        // Validate required v0.9 signature tags
+        if (!creatorSig || !payloadDigest || !keyIndex) {
+            return res.status(400).json({
+                error: 'Invalid v0.9 payload',
+                message: 'Payload must include CreatorSig, PayloadDigest, and KeyIndex tags. Use the OIP SDK to sign your payload client-side.',
+                receivedTags: tags.map(t => t.name)
+            });
+        }
+        
+        if (!creator) {
+            return res.status(400).json({
+                error: 'Missing Creator',
+                message: 'Payload must include a Creator tag with the signer\'s DID'
+            });
+        }
+        
+        console.log(`📝 [PublishSigned] Received v${version} payload from ${creator}`);
+        console.log(`   PayloadDigest: ${payloadDigest.substring(0, 20)}...`);
+        console.log(`   KeyIndex: ${keyIndex}`);
+        
+        // Optionally verify signature before accepting
+        if (verifySignature) {
+            try {
+                const { verifyBeforeIndex } = require('../../helpers/core/sync-verification');
+                const { shouldIndex, verificationResult } = await verifyBeforeIndex(payload, 0);
+                
+                if (!shouldIndex) {
+                    console.log(`❌ [PublishSigned] Signature verification failed: ${verificationResult.error}`);
+                    return res.status(400).json({
+                        error: 'Signature verification failed',
+                        message: verificationResult.error || 'The signature could not be verified against the creator\'s published xpub',
+                        creator,
+                        keyIndex
+                    });
+                }
+                
+                console.log(`✅ [PublishSigned] Signature verified (mode: ${verificationResult.mode})`);
+            } catch (verifyError) {
+                console.warn(`⚠️ [PublishSigned] Verification error (proceeding anyway): ${verifyError.message}`);
+                // If verification fails due to missing creator DID doc, still allow publishing
+                // The signature will be verified again during indexing
+            }
+        }
+        
+        // Prepare the data for Arweave
+        // For v0.9, the payload structure is the Arweave transaction data
+        const dataToPublish = payload.fragments ? payload : { fragments: [payload] };
+        
+        // Build tags for Arweave transaction
+        const arweaveTags = [
+            { name: 'Index-Method', value: 'OIP' },
+            { name: 'Ver', value: version },
+            { name: 'Content-Type', value: 'application/json' },
+            { name: 'Creator', value: creator },
+            { name: 'CreatorSig', value: creatorSig },
+            { name: 'PayloadDigest', value: payloadDigest },
+            { name: 'KeyIndex', value: keyIndex },
+            { name: 'App-Name', value: 'OIP-OnionPress' }
+        ];
+        
+        // Add any additional tags from payload (except signature tags which we already added)
+        const sigTags = ['Index-Method', 'Ver', 'Content-Type', 'Creator', 'CreatorSig', 'PayloadDigest', 'KeyIndex'];
+        for (const tag of tags) {
+            if (!sigTags.includes(tag.name)) {
+                arweaveTags.push(tag);
+            }
+        }
+        
+        // Submit to Arweave using server wallet
+        console.log(`🚀 [PublishSigned] Submitting to Arweave...`);
+        const result = await arweaveWallet.uploadFile(
+            JSON.stringify(dataToPublish),
+            'application/json',
+            arweaveTags
+        );
+        
+        const transactionId = result.id;
+        const did = `did:arweave:${transactionId}`;
+        
+        console.log(`✅ [PublishSigned] Published! TxID: ${transactionId}`);
+        
+        res.status(200).json({
+            success: true,
+            transactionId,
+            did,
+            creator,
+            version,
+            blockchain: 'arweave',
+            message: 'Record published successfully. It will be indexed after Arweave confirmation.',
+            explorerUrl: `https://viewblock.io/arweave/tx/${transactionId}`
+        });
+        
+    } catch (error) {
+        console.error('❌ [PublishSigned] Error:', error);
+        res.status(500).json({
+            error: 'Publishing failed',
+            message: error.message
+        });
+    }
+});
+
 // Moved decrypt route from access.js
 router.post('/decrypt', async (req, res) => {
     try {
