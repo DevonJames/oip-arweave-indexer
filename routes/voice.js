@@ -3153,8 +3153,22 @@ router.post('/converse-custom', upload.single('audio'), async (req, res) => {
                 
                 console.log(`[Converse Custom] Using TTS engine: ${voiceConfig.engine} with voice: ${elevenlabsVoiceId} (ElevenLabs available: ${hasElevenLabsKey})`);
 
+                // Flag to track if the parallel race is complete (prevents duplicate TTS from losing requests)
+                let raceComplete = false;
+                
                 const handleTextChunk = async (textChunk) => {
+                    // Skip processing if race is already complete (this chunk is from a losing/cancelled request)
+                    if (raceComplete) {
+                        return;
+                    }
+                    
                     responseText += textChunk;
+                    
+                    // Check if stream still exists (client may have disconnected)
+                    if (!ongoingDialogues.has(dialogueId)) {
+                        console.log(`[Converse Custom] Stream ${dialogueId} no longer exists, skipping chunk`);
+                        return;
+                    }
                     
                     // Send text chunk to client
                     socketManager.sendToClients(dialogueId, {
@@ -3163,13 +3177,16 @@ router.post('/converse-custom', upload.single('audio'), async (req, res) => {
                         text: textChunk
                     });
                     
-                    ongoingStream.data.push({
-                        event: 'textChunk',
-                        data: {
-                            role: 'assistant',
-                            text: textChunk
-                        }
-                    });
+                    // Safely push to data array (check for null due to cleanup race condition)
+                    if (ongoingStream && ongoingStream.data && Array.isArray(ongoingStream.data)) {
+                        ongoingStream.data.push({
+                            event: 'textChunk',
+                            data: {
+                                role: 'assistant',
+                                text: textChunk
+                            }
+                        });
+                    }
                     
                     // Generate audio if voice mode enabled
                     if (outputMode === 'voice') {
@@ -3179,6 +3196,9 @@ router.post('/converse-custom', upload.single('audio'), async (req, res) => {
                                 String(dialogueId),
                                 voiceConfig,
                                 (audioChunk, chunkIndex, chunkText, isFinal = false) => {
+                                    // Double-check race isn't complete before sending audio
+                                    if (raceComplete) return;
+                                    
                                     console.log(`🎵 Custom adaptive audio chunk ${chunkIndex} (${audioChunk.length} bytes)`);
                                     
                                     socketManager.sendToClients(dialogueId, {
@@ -3261,39 +3281,67 @@ router.post('/converse-custom', upload.single('audio'), async (req, res) => {
                 const llmStartTime = Date.now();
                 
                 if (model === 'parallel') {
-                    // Parallel mode - race multiple models
+                    // Parallel mode - race multiple models with cancellation support
                     console.log(`[Converse Custom] 🏁 Racing parallel requests with max_tokens=${maxTokens}`);
                     
+                    // Create AbortControllers for each request so we can cancel losers
+                    const abortControllers = [];
                     const requests = [];
                     
                     // OpenAI request
                     if (process.env.OPENAI_API_KEY) {
-                        requests.push(callOpenAIStreaming(conversationWithSystem, 'gpt-4o-mini', maxTokens, handleTextChunk));
+                        const controller = new AbortController();
+                        abortControllers.push({ controller, name: 'openai-gpt-4o-mini' });
+                        requests.push(callOpenAIStreaming(conversationWithSystem, 'gpt-4o-mini', maxTokens, handleTextChunk, controller.signal));
                     }
                     
                     // Grok request
                     if (process.env.XAI_API_KEY) {
-                        requests.push(callGrokStreaming(conversationWithSystem, 'grok-beta', maxTokens, handleTextChunk));
+                        const controller = new AbortController();
+                        abortControllers.push({ controller, name: 'xai-grok-beta' });
+                        requests.push(callGrokStreaming(conversationWithSystem, 'grok-beta', maxTokens, handleTextChunk, controller.signal));
                     }
                     
                     // Ollama requests
-                    requests.push(callOllamaStreaming(conversationWithSystem, 'mistral:latest', maxTokens, handleTextChunk));
-                    const defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
-                    requests.push(callOllamaStreaming(conversationWithSystem, defaultModel, maxTokens, handleTextChunk));
+                    const mistralController = new AbortController();
+                    abortControllers.push({ controller: mistralController, name: 'ollama-mistral:latest' });
+                    requests.push(callOllamaStreaming(conversationWithSystem, 'mistral:latest', maxTokens, handleTextChunk, mistralController.signal));
                     
-                    // Race: first to finish wins
+                    const defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
+                    const defaultController = new AbortController();
+                    abortControllers.push({ controller: defaultController, name: `ollama-${defaultModel}` });
+                    requests.push(callOllamaStreaming(conversationWithSystem, defaultModel, maxTokens, handleTextChunk, defaultController.signal));
+                    
+                    // Race: first to finish wins, then cancel all others
                     let winnerFound = false;
                     await new Promise((resolve) => {
-                        requests.forEach((req) => {
+                        requests.forEach((req, index) => {
                             req.then(result => {
                                 if (!winnerFound && result && result.success) {
                                     winnerFound = true;
+                                    raceComplete = true; // Mark race complete to prevent duplicate TTS
                                     const raceTime = Date.now() - llmStartTime;
                                     console.log(`[Converse Custom] 🏆 FIRST TO FINISH: ${result.source} in ${raceTime}ms`);
+                                    
+                                    // Cancel all other requests to prevent duplicate TTS generation
+                                    console.log(`[Converse Custom] 🛑 Cancelling ${abortControllers.length - 1} losing parallel requests`);
+                                    abortControllers.forEach((ac, i) => {
+                                        if (i !== index) {
+                                            try {
+                                                ac.controller.abort();
+                                                console.log(`[Converse Custom] ❌ Cancelled: ${ac.name}`);
+                                            } catch (e) {
+                                                // Ignore abort errors
+                                            }
+                                        }
+                                    });
+                                    
                                     resolve(result);
                                 }
                             }).catch((error) => {
-                                console.warn(`[Converse Custom] Model failed: ${error.message}`);
+                                if (error.name !== 'CanceledError' && error.name !== 'AbortError') {
+                                    console.warn(`[Converse Custom] Model failed: ${error.message}`);
+                                }
                             });
                         });
                         
@@ -3301,6 +3349,15 @@ router.post('/converse-custom', upload.single('audio'), async (req, res) => {
                         setTimeout(() => {
                             if (!winnerFound) {
                                 console.error('[Converse Custom] All parallel requests timed out');
+                                raceComplete = true; // Mark race complete on timeout too
+                                // Cancel all requests on timeout
+                                abortControllers.forEach(ac => {
+                                    try {
+                                        ac.controller.abort();
+                                    } catch (e) {
+                                        // Ignore
+                                    }
+                                });
                                 resolve(null);
                             }
                         }, 30000);
@@ -3420,7 +3477,8 @@ router.post('/converse-custom', upload.single('audio'), async (req, res) => {
 });
 
 // Helper functions for streaming LLM calls
-async function callOpenAIStreaming(conversation, modelName, maxTokens, onChunk) {
+// Each function now accepts an optional AbortController signal for cancellation
+async function callOpenAIStreaming(conversation, modelName, maxTokens, onChunk, abortSignal = null) {
     try {
         const response = await axiosInstance.post('https://api.openai.com/v1/chat/completions', {
             model: modelName,
@@ -3433,8 +3491,15 @@ async function callOpenAIStreaming(conversation, modelName, maxTokens, onChunk) 
                 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 45000
+            timeout: 45000,
+            signal: abortSignal
         });
+        
+        // Check if cancelled before processing
+        if (abortSignal?.aborted) {
+            console.log(`[Streaming] OpenAI ${modelName} cancelled before processing`);
+            return { success: false, cancelled: true, source: `openai-${modelName}` };
+        }
         
         const fullText = response.data.choices[0].message.content.trim();
         
@@ -3442,6 +3507,12 @@ async function callOpenAIStreaming(conversation, modelName, maxTokens, onChunk) 
         const words = fullText.split(' ');
         const chunkSize = 3;
         for (let i = 0; i < words.length; i += chunkSize) {
+            // Check if cancelled during chunking
+            if (abortSignal?.aborted) {
+                console.log(`[Streaming] OpenAI ${modelName} cancelled during chunking`);
+                return { success: false, cancelled: true, source: `openai-${modelName}` };
+            }
+            
             const chunk = words.slice(i, i + chunkSize).join(' ');
             if (i + chunkSize < words.length) {
                 await onChunk(chunk + ' ');
@@ -3456,12 +3527,16 @@ async function callOpenAIStreaming(conversation, modelName, maxTokens, onChunk) 
             source: `openai-${modelName}`
         };
     } catch (error) {
+        if (error.name === 'CanceledError' || error.name === 'AbortError' || abortSignal?.aborted) {
+            console.log(`[Streaming] OpenAI ${modelName} request cancelled`);
+            return { success: false, cancelled: true, source: `openai-${modelName}` };
+        }
         console.warn(`[Streaming] OpenAI ${modelName} failed:`, error.message);
         return null;
     }
 }
 
-async function callGrokStreaming(conversation, modelName, maxTokens, onChunk) {
+async function callGrokStreaming(conversation, modelName, maxTokens, onChunk, abortSignal = null) {
     try {
         const response = await axiosInstance.post('https://api.x.ai/v1/chat/completions', {
             model: modelName,
@@ -3474,8 +3549,15 @@ async function callGrokStreaming(conversation, modelName, maxTokens, onChunk) {
                 'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 45000
+            timeout: 45000,
+            signal: abortSignal
         });
+        
+        // Check if cancelled before processing
+        if (abortSignal?.aborted) {
+            console.log(`[Streaming] XAI ${modelName} cancelled before processing`);
+            return { success: false, cancelled: true, source: `xai-${modelName}` };
+        }
         
         const fullText = response.data.choices[0].message.content.trim();
         
@@ -3483,6 +3565,12 @@ async function callGrokStreaming(conversation, modelName, maxTokens, onChunk) {
         const words = fullText.split(' ');
         const chunkSize = 3;
         for (let i = 0; i < words.length; i += chunkSize) {
+            // Check if cancelled during chunking
+            if (abortSignal?.aborted) {
+                console.log(`[Streaming] XAI ${modelName} cancelled during chunking`);
+                return { success: false, cancelled: true, source: `xai-${modelName}` };
+            }
+            
             const chunk = words.slice(i, i + chunkSize).join(' ');
             if (i + chunkSize < words.length) {
                 await onChunk(chunk + ' ');
@@ -3497,12 +3585,16 @@ async function callGrokStreaming(conversation, modelName, maxTokens, onChunk) {
             source: `xai-${modelName}`
         };
     } catch (error) {
+        if (error.name === 'CanceledError' || error.name === 'AbortError' || abortSignal?.aborted) {
+            console.log(`[Streaming] XAI ${modelName} request cancelled`);
+            return { success: false, cancelled: true, source: `xai-${modelName}` };
+        }
         console.warn(`[Streaming] XAI ${modelName} failed:`, error.message);
         return null;
     }
 }
 
-async function callOllamaStreaming(conversation, modelName, maxTokens, onChunk) {
+async function callOllamaStreaming(conversation, modelName, maxTokens, onChunk, abortSignal = null) {
     try {
         const prompt = conversation.map(msg => `${msg.role}: ${msg.content}`).join('\n') + '\nassistant:';
         
@@ -3519,8 +3611,15 @@ async function callOllamaStreaming(conversation, modelName, maxTokens, onChunk) 
                 num_predict: maxTokens
             }
         }, {
-            timeout: 30000
+            timeout: 30000,
+            signal: abortSignal
         });
+        
+        // Check if cancelled before processing
+        if (abortSignal?.aborted) {
+            console.log(`[Streaming] Ollama ${modelName} cancelled before processing`);
+            return { success: false, cancelled: true, source: `ollama-${modelName}` };
+        }
         
         const fullText = response.data.response?.trim() || '';
         
@@ -3528,6 +3627,12 @@ async function callOllamaStreaming(conversation, modelName, maxTokens, onChunk) 
         const words = fullText.split(' ');
         const chunkSize = 3;
         for (let i = 0; i < words.length; i += chunkSize) {
+            // Check if cancelled during chunking
+            if (abortSignal?.aborted) {
+                console.log(`[Streaming] Ollama ${modelName} cancelled during chunking`);
+                return { success: false, cancelled: true, source: `ollama-${modelName}` };
+            }
+            
             const chunk = words.slice(i, i + chunkSize).join(' ');
             if (i + chunkSize < words.length) {
                 await onChunk(chunk + ' ');
@@ -3542,6 +3647,10 @@ async function callOllamaStreaming(conversation, modelName, maxTokens, onChunk) 
             source: `ollama-${modelName}`
         };
     } catch (error) {
+        if (error.name === 'CanceledError' || error.name === 'AbortError' || abortSignal?.aborted) {
+            console.log(`[Streaming] Ollama ${modelName} request cancelled`);
+            return { success: false, cancelled: true, source: `ollama-${modelName}` };
+        }
         console.warn(`[Streaming] Ollama ${modelName} failed:`, error.message);
         return null;
     }
