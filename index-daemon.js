@@ -721,6 +721,38 @@ if (ONION_PRESS_ENABLED) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// WordPress Proxy (for remote server access)
+// ═══════════════════════════════════════════════════════════════════════════════
+const WORDPRESS_URL = process.env.WORDPRESS_URL || `http://wordpress:${process.env.WORDPRESS_PORT || 80}`;
+const WORDPRESS_PROXY_ENABLED = process.env.WORDPRESS_PROXY_ENABLED === 'true';
+
+if (WORDPRESS_PROXY_ENABLED) {
+    const { createProxyMiddleware } = require('http-proxy-middleware');
+    
+    const wordpressProxy = createProxyMiddleware({
+        target: WORDPRESS_URL,
+        changeOrigin: true,
+        pathRewrite: { '^/wordpress': '' },
+        onProxyReq: (proxyReq, req, res) => {
+            // Ensure proper host header for WordPress
+            proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+            proxyReq.setHeader('X-Forwarded-Proto', req.protocol);
+        },
+        onError: (err, req, res) => {
+            console.error('[WordPress Proxy] Error:', err.message);
+            res.status(503).json({
+                error: 'WordPress service not available',
+                message: 'WordPress requires the onion-press-server profile',
+                hint: 'Deploy with: make -f Makefile.split onion-press-server'
+            });
+        }
+    });
+    
+    app.use('/wordpress', wordpressProxy);
+    console.log(`📝 WordPress proxy enabled at /wordpress → ${WORDPRESS_URL}`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Static File Serving with Memory-Safe Patterns
 // ═══════════════════════════════════════════════════════════════════════════════
 const mediaStaticOptions = {

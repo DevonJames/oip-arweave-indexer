@@ -1,0 +1,35 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# WordPress with WP-CLI for Onion Press Auto-Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This image extends the official WordPress image with:
+# - WP-CLI for command-line management
+# - Auto-installation support (skip the wizard)
+# - OP Publisher plugin pre-activated
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+FROM wordpress:latest
+
+# Install WP-CLI and MySQL client (for health checks)
+RUN apt-get update && apt-get install -y \
+    less \
+    default-mysql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install WP-CLI
+RUN curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
+    && chmod +x wp-cli.phar \
+    && mv wp-cli.phar /usr/local/bin/wp
+
+# Create wp-cli config for root user
+RUN mkdir -p /root/.wp-cli && \
+    echo "path: /var/www/html" > /root/.wp-cli/config.yml
+
+# Copy custom entrypoint
+COPY scripts/wordpress-entrypoint.sh /usr/local/bin/wordpress-entrypoint.sh
+RUN chmod +x /usr/local/bin/wordpress-entrypoint.sh
+
+# Override entrypoint
+ENTRYPOINT ["wordpress-entrypoint.sh"]
+CMD ["apache2-foreground"]

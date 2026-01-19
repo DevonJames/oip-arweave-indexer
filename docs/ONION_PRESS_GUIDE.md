@@ -84,13 +84,25 @@
 
 ### Services
 
-| Service | Port | Description |
-|---------|------|-------------|
-| `onion-press-service` | 3007 | Browsing UI, admin settings, TOR integration |
-| `oip-daemon-service` | 3005 | Core OIP functionality, blockchain interaction |
-| `wordpress` | 8080 | WordPress CMS with OP Publisher plugin |
-| `wordpress-db` | 3306 | MariaDB database for WordPress |
-| `elasticsearch` | 9200 | Search and indexing |
+| Service | Port | Access via Proxy | Description |
+|---------|------|------------------|-------------|
+| `onion-press-service` | 3007 | `/onion-press/` | Browsing UI, admin settings, TOR integration |
+| `oip-daemon-service` | 3005 | Direct (main entry) | Core OIP functionality, blockchain interaction |
+| `wordpress` | 8080 | `/wordpress/` | WordPress CMS with OP Publisher plugin |
+| `wordpress-db` | 3306 | Internal only | MariaDB database for WordPress |
+| `elasticsearch` | 9200 | Internal only | Search and indexing |
+
+### Remote Access URLs
+
+When running on a remote server (e.g., `https://your-domain.com`):
+
+| Interface | URL |
+|-----------|-----|
+| OIP Daemon API | `https://your-domain.com/api/...` |
+| Onion Press UI | `https://your-domain.com/onion-press/` |
+| Anonymous Publisher | `https://your-domain.com/onion-press/publish` |
+| WordPress Admin | `https://your-domain.com/wordpress/wp-admin/` |
+| TOR Hidden Service | `http://your-onion-address.onion/` |
 
 ---
 
@@ -118,6 +130,32 @@ nano .env
 # Start Onion Press Server profile
 make -f Makefile.split onion-press-server
 ```
+
+### Anonymous Deployment (No Email Required)
+
+For a fully anonymous Onion Press server, you can skip WordPress's installation wizard entirely by enabling auto-install:
+
+```bash
+# In your .env file:
+WP_AUTO_INSTALL=true
+WP_SITE_TITLE=My Anonymous Press
+WP_ADMIN_USER=admin
+WP_ADMIN_PASSWORD=          # Leave empty - a secure password will be generated
+WP_ADMIN_EMAIL=noreply@localhost.invalid   # Fake email - never verified!
+```
+
+**Why this works:**
+- WordPress's email field is **not verified** - you can enter anything
+- With `WP_AUTO_INSTALL=true`, the installation wizard is completely skipped
+- The admin password is auto-generated and displayed in the container logs
+- Search engine indexing is disabled by default
+
+**To get your auto-generated password:**
+```bash
+docker logs alexandria-wordpress-1 | grep -A5 "WORDPRESS ADMIN CREDENTIALS"
+```
+
+**Note:** Even if you do use the manual wizard, you can enter any fake email like `noreply@localhost` or `anonymous@example.invalid` - WordPress does not verify it.
 
 ### Profiles
 
@@ -613,16 +651,32 @@ PUBLISH_TO_ARWEAVE=true
 PUBLISH_TO_GUN=true
 PUBLISH_TO_INTERNETARCHIVE=false
 
+# Public API URL (for DID document context)
+PUBLIC_API_BASE_URL=https://your-domain.com
+
+# ═══════════════════════════════════════════════════════════════════════════
+# WORDPRESS CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
+
 # WordPress Database
 WORDPRESS_DB_USER=wordpress
 WORDPRESS_DB_PASSWORD=your-secure-password
 WORDPRESS_DB_NAME=wordpress
 
+# WordPress Proxy (access via /wordpress on OIP daemon)
+WORDPRESS_PROXY_ENABLED=true
+WORDPRESS_URL=http://wordpress:80
+
+# WordPress Auto-Install (for anonymous deployment - no wizard!)
+WP_AUTO_INSTALL=true
+WP_SITE_URL=https://your-domain.com/wordpress
+WP_SITE_TITLE=Onion Press
+WP_ADMIN_USER=admin
+WP_ADMIN_PASSWORD=          # Leave empty to auto-generate (shown in logs)
+WP_ADMIN_EMAIL=noreply@localhost.invalid   # Fake email - not verified!
+
 # Internet Archive Organization (for TOR publishing)
 IA_ORGANIZATION_HANDLE=internetarchive
-
-# Public API URL (for DID document context)
-PUBLIC_API_BASE_URL=https://your-domain.com
 ```
 
 ### Service URLs
@@ -795,13 +849,24 @@ curl http://localhost:3007/api/tor/status | jq .onionAddress
 
 ### URLs
 
+**Local Development:**
+
 | URL | Description |
 |-----|-------------|
-| `http://localhost:3007/` | Onion Press browsing interface |
-| `http://localhost:3007/publish` | Anonymous publisher |
-| `http://localhost:3007/debug` | Cryptographic debugger |
-| `http://localhost:8080/` | WordPress admin |
-| `http://localhost:3005/` | OIP Daemon (API only) |
+| `http://localhost:3005/onion-press/` | Onion Press browsing interface |
+| `http://localhost:3005/onion-press/publish` | Anonymous publisher |
+| `http://localhost:3005/debug/v09` | Cryptographic debugger |
+| `http://localhost:3005/wordpress/` | WordPress (via proxy) |
+| `http://localhost:3005/` | OIP Daemon (main entry) |
+
+**Remote Server (via your domain):**
+
+| URL | Description |
+|-----|-------------|
+| `https://your-domain.com/onion-press/` | Onion Press browsing interface |
+| `https://your-domain.com/onion-press/publish` | Anonymous publisher |
+| `https://your-domain.com/wordpress/wp-admin/` | WordPress admin |
+| `http://your-onion.onion/` | TOR hidden service |
 
 ### API Quick Reference
 

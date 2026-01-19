@@ -40,9 +40,15 @@ class OP_Publisher {
     }
     
     private function __construct() {
+        // Detect if running in Docker (container-to-container) or external
+        $is_docker = !empty($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'wordpress') !== false;
+        
+        $default_onion_press = $is_docker ? 'http://onion-press-service:3007' : '';
+        $default_oip_daemon = $is_docker ? 'http://oip-daemon-service:3005' : '';
+        
         $this->settings = get_option('op_publisher_settings', array(
-            'onion_press_url' => 'http://onion-press-service:3007',
-            'oip_daemon_url' => 'http://oip-daemon-service:3005',
+            'onion_press_url' => $default_onion_press,
+            'oip_daemon_url' => $default_oip_daemon,
             'api_token' => '',
             'default_mode' => 'mnemonic', // 'mnemonic' or 'account'
             'default_arweave' => true,
@@ -272,22 +278,30 @@ class OP_Publisher {
     }
     
     public function render_onion_press_url_field() {
-        $value = $this->settings['onion_press_url'] ?? 'http://onion-press-service:3007';
+        $value = $this->settings['onion_press_url'] ?? '';
         ?>
         <input type="url" name="op_publisher_settings[onion_press_url]" 
                value="<?php echo esc_attr($value); ?>" 
-               class="regular-text">
-        <p class="description"><?php _e('URL of the Onion Press service (for browsing and account mode).', 'op-publisher'); ?></p>
+               class="regular-text"
+               placeholder="http://onion-press-service:3007">
+        <p class="description">
+            <?php _e('URL of the Onion Press service (for browsing and account mode).', 'op-publisher'); ?>
+            <br><code>Docker internal: http://onion-press-service:3007</code>
+        </p>
         <?php
     }
     
     public function render_oip_daemon_url_field() {
-        $value = $this->settings['oip_daemon_url'] ?? 'http://oip-daemon-service:3005';
+        $value = $this->settings['oip_daemon_url'] ?? '';
         ?>
         <input type="url" name="op_publisher_settings[oip_daemon_url]" 
                value="<?php echo esc_attr($value); ?>" 
-               class="regular-text">
-        <p class="description"><?php _e('URL of the OIP Daemon service (for mnemonic mode publishing).', 'op-publisher'); ?></p>
+               class="regular-text"
+               placeholder="http://oip-daemon-service:3005">
+        <p class="description">
+            <?php _e('URL of the OIP Daemon service (for mnemonic mode publishing).', 'op-publisher'); ?>
+            <br><code>Docker internal: http://oip-daemon-service:3005</code>
+        </p>
         <?php
     }
     
