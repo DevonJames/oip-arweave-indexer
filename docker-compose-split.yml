@@ -296,7 +296,7 @@ services:
       - wordpress-db
     volumes:
       - wordpress-data:/var/www/html
-      - ./wordpress-plugin/lo-publisher:/var/www/html/wp-content/plugins/lo-publisher:ro
+      - ./wordpress-plugin/op-publisher:/var/www/html/wp-content/plugins/op-publisher:ro
     networks:
       - oip-network
     restart: unless-stopped

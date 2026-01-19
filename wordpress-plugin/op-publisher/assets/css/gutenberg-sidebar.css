@@ -1,0 +1,246 @@
+/**
+ * OP Publisher - Gutenberg Sidebar Styles
+ */
+
+/* Mode Tab Panel */
+.op-mode-tab-panel .components-tab-panel__tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 8px;
+}
+
+.op-mode-tab-panel .components-tab-panel__tabs button {
+    padding: 8px 16px;
+    border-radius: 6px 6px 0 0;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.op-mode-tab-panel .components-tab-panel__tabs button.is-active {
+    background: #8b5cf6;
+    color: white;
+}
+
+.op-mode-tab-panel .components-tab-panel__tabs button:not(.is-active) {
+    background: #f3f4f6;
+}
+
+.op-mode-tab-panel .components-tab-panel__tabs button:not(.is-active):hover {
+    background: #e5e7eb;
+}
+
+/* Identity Card */
+.op-identity-loaded,
+.op-identity-prompt,
+.op-account-info {
+    padding: 4px 0;
+}
+
+/* Mnemonic Modal */
+.op-mnemonic-modal .components-modal__content {
+    min-width: 450px;
+}
+
+.op-mnemonic-modal textarea {
+    font-family: 'SF Mono', Monaco, 'Andale Mono', monospace !important;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* Panel Body Styling */
+.edit-post-sidebar .components-panel__body-title button {
+    font-weight: 600;
+}
+
+/* Checkbox Controls */
+.edit-post-sidebar .components-checkbox-control__label {
+    font-size: 13px;
+}
+
+.edit-post-sidebar .components-base-control__help {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+/* Publish Button */
+.op-publish-button {
+    margin-top: 12px;
+}
+
+/* Result Panel */
+.op-result-panel {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.op-result-panel.success {
+    background: #f0fdf4;
+    border: 1px solid #22c55e;
+}
+
+.op-result-panel.error {
+    background: #fef2f2;
+    border: 1px solid #ef4444;
+}
+
+/* Status Badge */
+.op-status-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    color: white;
+}
+
+.op-status-badge.mnemonic {
+    background: #8b5cf6;
+}
+
+.op-status-badge.account {
+    background: #3b82f6;
+}
+
+/* Notice customization */
+.edit-post-sidebar .components-notice {
+    margin: 8px 0;
+    padding: 8px 12px;
+}
+
+.edit-post-sidebar .components-notice__content {
+    font-size: 12px;
+}
+
+/* External links */
+.edit-post-sidebar .components-external-link {
+    font-size: inherit;
+}
+
+/* Spinner inline */
+.components-button .components-spinner {
+    margin-right: 8px;
+}
+
+/* Tab content */
+.op-tab-content {
+    min-height: 80px;
+}
+
+/* Identity info box */
+.op-identity-box {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    color: white;
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+.op-identity-box .did {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 10px;
+    word-break: break-all;
+    opacity: 0.9;
+}
+
+/* Warning box */
+.op-warning-box {
+    background: #fffbeb;
+    border: 1px solid #f59e0b;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.op-warning-box p {
+    margin: 0;
+    font-size: 12px;
+    color: #92400e;
+}
+
+/* Success indicator */
+.op-success-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: #f0fdf4;
+    border: 1px solid #22c55e;
+    border-radius: 8px;
+}
+
+.op-success-indicator .icon {
+    font-size: 24px;
+}
+
+.op-success-indicator .text {
+    font-weight: 600;
+    color: #166534;
+}
+
+/* Error indicator */
+.op-error-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: #fef2f2;
+    border: 1px solid #ef4444;
+    border-radius: 8px;
+}
+
+.op-error-indicator .icon {
+    font-size: 24px;
+}
+
+.op-error-indicator .text {
+    font-weight: 600;
+    color: #991b1b;
+}
+
+/* Transaction ID display */
+.op-tx-id {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 10px;
+    word-break: break-all;
+    color: #6b7280;
+    background: #f9fafb;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-top: 4px;
+}
+
+/* Destination status list */
+.op-destination-status {
+    list-style: none;
+    margin: 8px 0 0 0;
+    padding: 0;
+}
+
+.op-destination-status li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 12px;
+}
+
+.op-destination-status .status-icon {
+    width: 16px;
+    text-align: center;
+}
+
+.op-destination-status .status-icon.success {
+    color: #22c55e;
+}
+
+.op-destination-status .status-icon.error {
+    color: #ef4444;
+}
+
+.op-destination-status .status-icon.pending {
+    color: #9ca3af;
+}

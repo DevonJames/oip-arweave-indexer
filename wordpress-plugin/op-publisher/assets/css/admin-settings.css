@@ -1,0 +1,195 @@
+/**
+ * OP Publisher - Admin Settings Page Styles
+ */
+
+.op-publisher-settings {
+    max-width: 800px;
+}
+
+.op-publisher-settings h1 {
+    font-size: 24px;
+    margin-bottom: 20px;
+}
+
+.op-publisher-intro {
+    background: #f8f9fa;
+    border-left: 4px solid #8b5cf6;
+    padding: 16px 20px;
+    margin: 20px 0;
+    border-radius: 0 8px 8px 0;
+}
+
+.op-publisher-intro ul {
+    margin: 12px 0 0 20px;
+}
+
+.op-publisher-intro li {
+    margin-bottom: 8px;
+}
+
+.op-test-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#op-test-result {
+    margin-left: 10px;
+    font-weight: 500;
+}
+
+/* Mode Selection Cards */
+.mode-option {
+    padding: 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #fff;
+}
+
+.mode-option:hover {
+    border-color: #c4b5fd;
+    background: #faf5ff;
+}
+
+.mode-option.selected {
+    border-color: #8b5cf6;
+    background: #f5f3ff;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.mode-option input[type="radio"] {
+    margin-right: 10px;
+    transform: scale(1.2);
+}
+
+.mode-option label {
+    cursor: pointer;
+    display: block;
+}
+
+.mode-option .description {
+    margin-left: 26px;
+    margin-top: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.mode-option em {
+    color: #6b7280;
+    font-size: 12px;
+}
+
+/* Form Fields */
+.form-table th {
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.form-table td .description {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
+}
+
+/* Section Headers */
+.op-publisher-settings h2 {
+    font-size: 18px;
+    margin-top: 30px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+/* Checkbox Labels */
+.op-publisher-settings label {
+    font-size: 14px;
+}
+
+/* Submit Button */
+.op-publisher-settings .submit input[type="submit"] {
+    background: #8b5cf6;
+    border-color: #7c3aed;
+    font-size: 14px;
+    padding: 8px 20px;
+    height: auto;
+}
+
+.op-publisher-settings .submit input[type="submit"]:hover {
+    background: #7c3aed;
+    border-color: #6d28d9;
+}
+
+/* Settings Sections */
+.settings-section {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.settings-section h3 {
+    margin-top: 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+/* Connection Status */
+.connection-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.connection-status.connected {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.connection-status.disconnected {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.connection-status.unknown {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+/* Documentation Link */
+.op-publisher-settings a[href*="docs"] {
+    color: #8b5cf6;
+    text-decoration: none;
+}
+
+.op-publisher-settings a[href*="docs"]:hover {
+    text-decoration: underline;
+}
+
+/* Responsive */
+@media (max-width: 782px) {
+    .op-publisher-settings {
+        padding: 10px;
+    }
+    
+    .mode-option {
+        padding: 12px;
+    }
+    
+    .op-test-buttons {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    #op-test-result {
+        margin-left: 0;
+        margin-top: 10px;
+    }
+}
