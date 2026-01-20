@@ -53,6 +53,7 @@
     "gpt-tokenizer": "^2.1.2",
     "graphql-request": "^6.1.0",
     "gun": "^0.2020.1240",
+    "http-proxy-middleware": "^3.0.5",
     "ipfs-http-client": "^49.0.4",
     "jsonwebtoken": "^9.0.2",
     "mime-types": "^2.1.35",

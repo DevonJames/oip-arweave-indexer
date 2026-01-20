@@ -226,6 +226,19 @@ GUN_REGISTRY_TIMEOUT_MS=30000
 # Useful for multi-deployment scenarios like RockHoppersGame/public/
 CUSTOM_PUBLIC_PATH=false
 
+# Custom Proxy Server Configuration
+# Proxy requests from OIP to another server (e.g., a game server, custom API)
+# This allows running a custom application alongside OIP with its own endpoints
+# Example: Your game server runs on port 3001 with /game-api/* endpoints
+#   CUSTOM_PROXY_TARGET=http://localhost:3001
+#   CUSTOM_PROXY_ROUTE=/game-api
+#   Then: http://localhost:3005/game-api/foo → http://localhost:3001/game-api/foo
+# Set CUSTOM_PROXY_STRIP_PREFIX=true to strip the route prefix when forwarding
+#   With strip: http://localhost:3005/game-api/foo → http://localhost:3001/foo
+CUSTOM_PROXY_TARGET=
+CUSTOM_PROXY_ROUTE=
+CUSTOM_PROXY_STRIP_PREFIX=false
+
 # Local Media Configuration (for custom apps with local media files)
 # Enable serving local media files (audio/video) from a directory
 ENABLE_LOCAL_MEDIA=false

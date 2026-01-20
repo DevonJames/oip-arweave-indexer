@@ -333,6 +333,60 @@ app.use((req, res, next) => {
     next();
 });
 
+// Custom Proxy Server Support
+// Allows OIP to proxy requests to another server (e.g., a game server, custom API)
+// This enables running a custom application alongside OIP with its own endpoints
+// Configure via environment variables:
+//   CUSTOM_PROXY_TARGET - The URL of the custom server (e.g., http://localhost:3001)
+//   CUSTOM_PROXY_ROUTE - The route prefix to proxy (e.g., /game-api)
+if (process.env.CUSTOM_PROXY_TARGET && process.env.CUSTOM_PROXY_ROUTE) {
+    const { createProxyMiddleware } = require('http-proxy-middleware');
+    
+    const proxyTarget = process.env.CUSTOM_PROXY_TARGET;
+    const proxyRoute = process.env.CUSTOM_PROXY_ROUTE;
+    
+    // Ensure route starts with /
+    const normalizedRoute = proxyRoute.startsWith('/') ? proxyRoute : `/${proxyRoute}`;
+    
+    console.log(`🔀 Custom proxy enabled: ${normalizedRoute}/* → ${proxyTarget}`);
+    
+    // Create proxy middleware with comprehensive options
+    const proxyMiddleware = createProxyMiddleware({
+        target: proxyTarget,
+        changeOrigin: true,
+        ws: true, // Support WebSocket proxying
+        pathRewrite: process.env.CUSTOM_PROXY_STRIP_PREFIX === 'true' 
+            ? { [`^${normalizedRoute}`]: '' }  // Strip the prefix when forwarding
+            : undefined,  // Keep the prefix
+        // Log proxy activity
+        on: {
+            proxyReq: (proxyReq, req, res) => {
+                console.log(`🔀 [Proxy] ${req.method} ${req.url} → ${proxyTarget}${req.url}`);
+            },
+            proxyRes: (proxyRes, req, res) => {
+                // Add CORS headers to proxied responses
+                proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+            },
+            error: (err, req, res) => {
+                console.error(`🔀 [Proxy Error] ${req.url}:`, err.message);
+                if (!res.headersSent) {
+                    res.status(502).json({ 
+                        error: 'Proxy error', 
+                        message: err.message,
+                        target: proxyTarget 
+                    });
+                }
+            }
+        }
+    });
+    
+    // Apply proxy middleware to the specified route
+    app.use(normalizedRoute, proxyMiddleware);
+    
+    console.log(`🔀 Proxy configured: ${normalizedRoute}/* → ${proxyTarget}`);
+    console.log(`🔀 Strip prefix: ${process.env.CUSTOM_PROXY_STRIP_PREFIX === 'true'}`);
+}
+
 // Public runtime config for static clients (e.g., reference-client.html)
 // Exposes window.API_BASE_URL derived from env var PUBLIC_API_BASE_URL and PORT
 app.get('/config.js', (req, res) => {
