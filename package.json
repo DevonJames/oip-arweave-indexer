@@ -67,6 +67,7 @@
     "play-dl": "^1.9.7",
     "progress": "^2.0.3",
     "progress-stream": "^2.0.0",
+    "http-proxy-middleware": "^3.0.0",
     "punycode2": "^1.0.1",
     "puppeteer": "^23.3.0",
     "puppeteer-extra": "^3.3.6",

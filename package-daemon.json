@@ -54,7 +54,8 @@
     "bitcoinjs-lib": "^6.1.7",
     "base64url": "^3.0.1",
     "progress": "^2.0.3",
-    "progress-stream": "^2.0.0"
+    "progress-stream": "^2.0.0",
+    "http-proxy-middleware": "^3.0.0"
   },
   "optionalDependencies": {},
   "devDependencies": {
