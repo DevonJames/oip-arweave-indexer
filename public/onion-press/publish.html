@@ -514,11 +514,11 @@
                     </label>
 
                     <label class="destination-card">
-                        <input type="checkbox" id="destIA">
-                        <span class="destination-icon">🧅</span>
+                        <input type="checkbox" id="destThisHost">
+                        <span class="destination-icon">🏠</span>
                         <div class="destination-info">
-                            <h4>Internet Archive</h4>
-                            <p>Via TOR (anonymous)</p>
+                            <h4 id="thisHostName">This Host</h4>
+                            <p id="thisHostUrl">Loading...</p>
                         </div>
                     </label>
                 </div>
@@ -759,11 +759,11 @@
                 const destinations = {
                     arweave: document.getElementById('destArweave').checked,
                     gun: document.getElementById('destGun').checked,
-                    internetArchive: document.getElementById('destIA').checked
+                    thisHost: document.getElementById('destThisHost').checked
                 };
 
                 // Send to server (server pays Arweave fee)
-                const response = await fetch('/api/records/publishSigned', {
+                const response = await fetch('/onion-press/api/records/publishSigned', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -781,12 +781,31 @@
                     throw new Error(result.message || result.error || 'Publishing failed');
                 }
 
-                showStatus('success', '✅ Published Successfully!', `
-                    <p>Your record has been submitted to Arweave.</p>
-                    <p><strong>Transaction ID:</strong> <span class="tx-link">${result.transactionId}</span></p>
-                    <p><strong>DID:</strong> <span class="tx-link">${result.did}</span></p>
-                    <p><a href="${result.explorerUrl}" target="_blank">View on Arweave Explorer →</a></p>
-                `);
+                // Build success message based on destinations
+                let successMessage = '<p>Your record has been published!</p>';
+                
+                if (result.destinations?.arweave?.success) {
+                    successMessage += `
+                        <p><strong>✅ Arweave:</strong> Published</p>
+                        <p><strong>Transaction ID:</strong> <span class="tx-link">${result.transactionId}</span></p>
+                        <p><strong>DID:</strong> <span class="tx-link">${result.did}</span></p>
+                        <p><a href="${result.explorerUrl}" target="_blank">View on Arweave Explorer →</a></p>
+                    `;
+                } else if (result.destinations?.arweave) {
+                    successMessage += `<p><strong>❌ Arweave:</strong> ${result.destinations.arweave.error || 'Failed'}</p>`;
+                }
+                
+                if (result.destinations?.thisHost?.success) {
+                    successMessage += `
+                        <p><strong>✅ WordPress:</strong> Published</p>
+                        <p><strong>Post ID:</strong> ${result.destinations.thisHost.postId}</p>
+                        <p><a href="${result.destinations.thisHost.permalink}" target="_blank">View WordPress Post →</a></p>
+                    `;
+                } else if (result.destinations?.thisHost) {
+                    successMessage += `<p><strong>❌ WordPress:</strong> ${result.destinations.thisHost.error || 'Failed'}</p>`;
+                }
+                
+                showStatus('success', '✅ Published Successfully!', successMessage);
 
                 // Clear form
                 document.getElementById('title').value = '';
@@ -825,7 +844,7 @@
         // EVENT HANDLERS
         // ═══════════════════════════════════════════════════════════════════════════════
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const mnemonicEl = document.getElementById('mnemonic');
             const generateBtn = document.getElementById('generateMnemonicBtn');
             const loadBtn = document.getElementById('loadIdentityBtn');
@@ -834,6 +853,18 @@
             const identityInfo = document.getElementById('identityInfo');
             const displayDid = document.getElementById('displayDid');
             const displayXpub = document.getElementById('displayXpub');
+            
+            // Load host info
+            try {
+                const response = await fetch('/onion-press/api/host-info');
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('thisHostName').textContent = data.name;
+                    document.getElementById('thisHostUrl').textContent = data.url;
+                }
+            } catch (error) {
+                console.warn('Failed to load host info:', error);
+            }
 
             // Generate test mnemonic
             generateBtn.addEventListener('click', () => {

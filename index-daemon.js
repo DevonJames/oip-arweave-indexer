@@ -589,6 +589,87 @@ if (ONION_PRESS_ENABLED) {
         }
     });
     
+    // GET /onion-press/api/host-info - Get host information
+    app.get('/onion-press/api/host-info', (req, res) => {
+        const hostName = process.env.COMPOSE_PROJECT_NAME || 'Onion Press';
+        const hostUrl = process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get('host')}`;
+        
+        res.json({
+            name: hostName,
+            url: hostUrl
+        });
+    });
+    
+    // GET /onion-press/api/wordpress/posts - Get WordPress posts
+    app.get('/onion-press/api/wordpress/posts', async (req, res) => {
+        try {
+            const WORDPRESS_PROXY_ENABLED = process.env.WORDPRESS_PROXY_ENABLED === 'true';
+            
+            if (!WORDPRESS_PROXY_ENABLED) {
+                return res.status(503).json({
+                    error: 'WordPress not available',
+                    message: 'WordPress proxy is not enabled'
+                });
+            }
+            
+            const { limit = 20, offset = 0, search, type } = req.query;
+            
+            // Query WordPress REST API
+            const wordpressUrl = process.env.WORDPRESS_URL || 'http://wordpress:80';
+            const wpApiUrl = `${wordpressUrl}/wp-json/wp/v2/posts`;
+            
+            const params = new URLSearchParams({
+                per_page: Math.min(parseInt(limit) || 20, 100),
+                offset: parseInt(offset) || 0,
+                _embed: 'true'
+            });
+            
+            if (search) {
+                params.append('search', search);
+            }
+            
+            if (type && type !== 'post') {
+                // WordPress only has 'post' type by default
+                return res.json({ records: [] });
+            }
+            
+            const response = await axios.get(`${wpApiUrl}?${params.toString()}`, {
+                httpAgent,
+                httpsAgent,
+                timeout: 10000
+            });
+            
+            const wpPosts = response.data || [];
+            
+            // Transform WordPress posts to OIP-like format
+            const records = wpPosts.map(post => ({
+                wordpress: {
+                    postId: post.id,
+                    title: post.title?.rendered || '',
+                    excerpt: post.excerpt?.rendered || '',
+                    content: post.content?.rendered || '',
+                    postDate: post.date,
+                    permalink: post.link,
+                    tags: post._embedded?.['wp:term']?.[0]?.map(t => t.name) || [],
+                    author: post._embedded?.author?.[0]?.name || ''
+                },
+                id: `wp-${post.id}`,
+                oip: {
+                    indexedAt: post.date
+                }
+            }));
+            
+            res.json({ records });
+            
+        } catch (error) {
+            console.error('WordPress posts API error:', error.message);
+            res.status(500).json({
+                error: 'Failed to fetch WordPress posts',
+                message: error.message
+            });
+        }
+    });
+    
     // GET /onion-press/api/browse/types - Get record types
     app.get('/onion-press/api/browse/types', async (req, res) => {
         try {
@@ -617,6 +698,108 @@ if (ONION_PRESS_ENABLED) {
             res.status(200).json(response.data);
         } catch (error) {
             res.status(500).json({ error: 'Failed to get templates', message: error.message });
+        }
+    });
+    
+    // POST /onion-press/api/records/publishSigned - Proxy to daemon's publishSigned endpoint
+    app.post('/onion-press/api/records/publishSigned', async (req, res) => {
+        try {
+            const response = await axios.post(`http://localhost:${port}/api/records/publishSigned`, req.body, {
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                timeout: 120000,
+                httpAgent,
+                httpsAgent
+            });
+            res.status(response.status).json(response.data);
+        } catch (error) {
+            console.error('PublishSigned proxy error:', error.message);
+            res.status(error.response?.status || 500).json({
+                error: 'Publishing failed',
+                message: error.response?.data?.message || error.message
+            });
+        }
+    });
+    
+    // GET /onion-press/api/host-info - Get host information
+    app.get('/onion-press/api/host-info', (req, res) => {
+        const hostName = process.env.COMPOSE_PROJECT_NAME || 'Onion Press';
+        const hostUrl = process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get('host')}`;
+        
+        res.json({
+            name: hostName,
+            url: hostUrl
+        });
+    });
+    
+    // GET /onion-press/api/wordpress/posts - Get WordPress posts
+    app.get('/onion-press/api/wordpress/posts', async (req, res) => {
+        try {
+            const WORDPRESS_PROXY_ENABLED = process.env.WORDPRESS_PROXY_ENABLED === 'true';
+            
+            if (!WORDPRESS_PROXY_ENABLED) {
+                return res.status(503).json({
+                    error: 'WordPress not available',
+                    message: 'WordPress proxy is not enabled'
+                });
+            }
+            
+            const { limit = 20, offset = 0, search, type } = req.query;
+            
+            // Query WordPress REST API
+            const wordpressUrl = process.env.WORDPRESS_URL || 'http://wordpress:80';
+            const wpApiUrl = `${wordpressUrl}/wp-json/wp/v2/posts`;
+            
+            const params = new URLSearchParams({
+                per_page: Math.min(parseInt(limit) || 20, 100),
+                offset: parseInt(offset) || 0,
+                _embed: 'true'
+            });
+            
+            if (search) {
+                params.append('search', search);
+            }
+            
+            if (type && type !== 'post') {
+                // WordPress only has 'post' type by default
+                return res.json({ records: [] });
+            }
+            
+            const response = await axios.get(`${wpApiUrl}?${params.toString()}`, {
+                httpAgent,
+                httpsAgent,
+                timeout: 10000
+            });
+            
+            const wpPosts = response.data || [];
+            
+            // Transform WordPress posts to OIP-like format
+            const records = wpPosts.map(post => ({
+                wordpress: {
+                    postId: post.id,
+                    title: post.title?.rendered || '',
+                    excerpt: post.excerpt?.rendered || '',
+                    content: post.content?.rendered || '',
+                    postDate: post.date,
+                    permalink: post.link,
+                    tags: post._embedded?.['wp:term']?.[0]?.map(t => t.name) || [],
+                    author: post._embedded?.author?.[0]?.name || ''
+                },
+                id: `wp-${post.id}`,
+                oip: {
+                    indexedAt: post.date
+                }
+            }));
+            
+            res.json({ records });
+            
+        } catch (error) {
+            console.error('WordPress posts API error:', error.message);
+            res.status(500).json({
+                error: 'Failed to fetch WordPress posts',
+                message: error.message
+            });
         }
     });
     

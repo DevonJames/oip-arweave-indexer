@@ -256,29 +256,115 @@ async function loadRecords() {
     recordsContainer.innerHTML = '<div class="loading">Loading records...</div>';
     
     try {
-        const params = {
-            limit: pageSize,
-            offset: currentPage * pageSize,
-            sortBy: sortFilter.value
+        // Get destination settings
+        const destinations = window.onionPressSettings?.getDestinations() || {
+            arweave: true,
+            gun: true,
+            thisHost: false
         };
         
-        if (searchInput.value) {
-            params.search = searchInput.value;
+        const allRecords = [];
+        
+        // Load from Arweave/GUN if enabled
+        if (destinations.arweave || destinations.gun) {
+            const params = {
+                limit: pageSize,
+                offset: currentPage * pageSize,
+                sortBy: sortFilter.value
+            };
+            
+            if (searchInput.value) {
+                params.search = searchInput.value;
+            }
+            
+            if (typeFilter.value) {
+                params.recordType = typeFilter.value;
+            }
+            
+            const data = await getRecords(params);
+            allRecords.push(...(data.records || []));
+            totalRecords = data.total || data.records?.length || 0;
         }
         
-        if (typeFilter.value) {
-            params.recordType = typeFilter.value;
+        // Load from WordPress if "thisHost" is enabled
+        if (destinations.thisHost) {
+            try {
+                const wpRecords = await getWordPressPosts({
+                    limit: pageSize,
+                    offset: currentPage * pageSize,
+                    search: searchInput.value,
+                    type: typeFilter.value
+                });
+                allRecords.push(...wpRecords);
+                // Update total if we got WordPress posts
+                if (wpRecords.length > 0) {
+                    totalRecords = Math.max(totalRecords, allRecords.length);
+                }
+            } catch (error) {
+                console.warn('Failed to load WordPress posts:', error);
+            }
         }
         
-        const data = await getRecords(params);
-        totalRecords = data.total || data.records?.length || 0;
+        // Remove duplicates by DID or post ID
+        const uniqueRecords = deduplicateRecords(allRecords);
         
-        renderRecords(data.records || []);
+        // Sort records
+        sortRecords(uniqueRecords, sortFilter.value);
+        
+        // Limit to page size
+        const paginatedRecords = uniqueRecords.slice(
+            currentPage * pageSize,
+            (currentPage + 1) * pageSize
+        );
+        
+        totalRecords = uniqueRecords.length;
+        renderRecords(paginatedRecords);
         updatePagination();
         
     } catch (error) {
         recordsContainer.innerHTML = `<div class="loading">Error loading records: ${error.message}</div>`;
     }
+}
+
+/**
+ * Deduplicate records by DID or post ID
+ */
+function deduplicateRecords(records) {
+    const seen = new Set();
+    return records.filter(record => {
+        const id = record.oip?.did || record.oip?.didTx || record.wordpress?.postId || record.id;
+        if (seen.has(id)) {
+            return false;
+        }
+        seen.add(id);
+        return true;
+    });
+}
+
+/**
+ * Sort records
+ */
+function sortRecords(records, sortBy) {
+    const [field, direction] = sortBy.split(':');
+    const asc = direction === 'asc';
+    
+    records.sort((a, b) => {
+        let aVal, bVal;
+        
+        if (field === 'date') {
+            aVal = a.oip?.indexedAt || a.wordpress?.postDate || 0;
+            bVal = b.oip?.indexedAt || b.wordpress?.postDate || 0;
+        } else if (field === 'name') {
+            aVal = (a.data?.basic?.name || a.wordpress?.title || '').toLowerCase();
+            bVal = (b.data?.basic?.name || b.wordpress?.title || '').toLowerCase();
+        } else {
+            return 0;
+        }
+        
+        if (aVal < bVal) return asc ? -1 : 1;
+        if (aVal > bVal) return asc ? 1 : -1;
+        return 0;
+    });
 }
 
 /**
@@ -328,6 +414,11 @@ function detectSources(record) {
  * Render a single record card
  */
 function renderRecordCard(record) {
+    // Handle WordPress posts differently
+    if (record.wordpress) {
+        return renderWordPressCard(record);
+    }
+    
     const data = record.data || {};
     const oip = record.oip || {};
     const sources = record._publishingSources || detectSources(record);
@@ -380,6 +471,45 @@ function renderRecordCard(record) {
             ${sources.length > 0 ? `
                 <div class="record-sources">
                     ${sources.map(s => `<span class="source-badge ${s}">${s}</span>`).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+/**
+ * Render WordPress post card
+ */
+function renderWordPressCard(record) {
+    const wp = record.wordpress || {};
+    const title = wp.title || 'Untitled';
+    const excerpt = wp.excerpt || wp.content?.substring(0, 200) || '';
+    const date = wp.postDate ? new Date(wp.postDate).toLocaleDateString() : '';
+    const permalink = wp.permalink || '';
+    const tags = wp.tags || [];
+    
+    return `
+        <div class="record-card" data-wp-id="${wp.postId || ''}">
+            <div class="record-header">
+                <span class="record-type-icon">📝</span>
+                <h3 class="record-title">${escapeHtml(title)}</h3>
+            </div>
+            <p class="record-description">${escapeHtml(excerpt)}</p>
+            <div class="record-meta">
+                <span>📅 ${date}</span>
+                <span>📝 WordPress</span>
+            </div>
+            ${tags.length > 0 ? `
+                <div class="record-tags">
+                    ${tags.slice(0, 5).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+                </div>
+            ` : ''}
+            <div class="record-sources">
+                <span class="source-badge wordpress">WordPress</span>
+            </div>
+            ${permalink ? `
+                <div class="record-actions">
+                    <a href="${escapeHtml(permalink)}" target="_blank" class="record-link">View Post →</a>
                 </div>
             ` : ''}
         </div>

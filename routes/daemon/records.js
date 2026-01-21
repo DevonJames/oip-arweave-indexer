@@ -17,6 +17,7 @@ try {
 }
 const arweaveWallet = require('../../helpers/core/arweave-wallet');
 const { GunHelper } = require('../../helpers/core/gun');
+const axios = require('axios');
 
 // TODO: Implement these payment verification functions
 async function verifyBitcoinPayment(txid, expectedAmount, address) {
@@ -400,28 +401,78 @@ router.post('/publishSigned', async (req, res) => {
             }
         }
         
-        // Submit to Arweave using server wallet
-        console.log(`🚀 [PublishSigned] Submitting to Arweave...`);
-        const result = await arweaveWallet.uploadFile(
-            JSON.stringify(dataToPublish),
-            'application/json',
-            arweaveTags
-        );
+        // Handle destinations
+        const publishResults = {
+            arweave: null,
+            gun: null,
+            thisHost: null
+        };
         
-        const transactionId = result.id;
-        const did = `did:arweave:${transactionId}`;
+        // Publish to Arweave if requested
+        if (destinations?.arweave !== false) {
+            try {
+                console.log(`🚀 [PublishSigned] Submitting to Arweave...`);
+                const result = await arweaveWallet.uploadFile(
+                    JSON.stringify(dataToPublish),
+                    'application/json',
+                    arweaveTags
+                );
+                
+                publishResults.arweave = {
+                    success: true,
+                    transactionId: result.id,
+                    did: `did:arweave:${result.id}`,
+                    explorerUrl: `https://viewblock.io/arweave/tx/${result.id}`
+                };
+                console.log(`✅ [PublishSigned] Published to Arweave! TxID: ${result.id}`);
+            } catch (error) {
+                console.error(`❌ [PublishSigned] Arweave publish failed:`, error.message);
+                publishResults.arweave = {
+                    success: false,
+                    error: error.message
+                };
+            }
+        }
         
-        console.log(`✅ [PublishSigned] Published! TxID: ${transactionId}`);
+        // Publish to WordPress (This Host) if requested
+        if (destinations?.thisHost === true) {
+            try {
+                const WORDPRESS_PROXY_ENABLED = process.env.WORDPRESS_PROXY_ENABLED === 'true';
+                if (WORDPRESS_PROXY_ENABLED) {
+                    console.log(`📝 [PublishSigned] Publishing to WordPress...`);
+                    const wpResult = await publishToWordPress(payload, publishResults.arweave);
+                    publishResults.thisHost = wpResult;
+                    console.log(`✅ [PublishSigned] Published to WordPress! Post ID: ${wpResult.postId}`);
+                } else {
+                    publishResults.thisHost = {
+                        success: false,
+                        error: 'WordPress proxy is not enabled'
+                    };
+                }
+            } catch (error) {
+                console.error(`❌ [PublishSigned] WordPress publish failed:`, error.message);
+                publishResults.thisHost = {
+                    success: false,
+                    error: error.message
+                };
+            }
+        }
         
-        res.status(200).json({
-            success: true,
-            transactionId,
-            did,
+        // Determine overall success
+        const hasSuccess = Object.values(publishResults).some(r => r?.success === true);
+        
+        res.status(hasSuccess ? 200 : 500).json({
+            success: hasSuccess,
+            transactionId: publishResults.arweave?.transactionId || null,
+            did: publishResults.arweave?.did || null,
             creator,
             version,
             blockchain: 'arweave',
-            message: 'Record published successfully. It will be indexed after Arweave confirmation.',
-            explorerUrl: `https://viewblock.io/arweave/tx/${transactionId}`
+            destinations: publishResults,
+            message: hasSuccess 
+                ? 'Record published successfully. It will be indexed after Arweave confirmation.'
+                : 'Publishing failed for all destinations.',
+            explorerUrl: publishResults.arweave?.explorerUrl || null
         });
         
     } catch (error) {
@@ -432,6 +483,88 @@ router.post('/publishSigned', async (req, res) => {
         });
     }
 });
+
+/**
+ * Publish OIP record to WordPress
+ * @param {object} payload - Signed OIP payload
+ * @param {object} arweaveResult - Arweave publishing result (if available)
+ * @returns {Promise<object>} WordPress post creation result
+ */
+async function publishToWordPress(payload, arweaveResult = null) {
+    const WORDPRESS_URL = process.env.WORDPRESS_URL || 'http://wordpress:80';
+    const WORDPRESS_ADMIN_USER = process.env.WP_ADMIN_USER || 'admin';
+    const WORDPRESS_ADMIN_PASSWORD = process.env.WP_ADMIN_PASSWORD || '';
+    
+    if (!WORDPRESS_ADMIN_PASSWORD) {
+        throw new Error('WordPress admin password not configured (WP_ADMIN_PASSWORD)');
+    }
+    
+    // Extract record data from payload
+    const fragments = payload.fragments || [payload];
+    const firstFragment = fragments[0];
+    const records = firstFragment.records || [];
+    
+    if (records.length === 0) {
+        throw new Error('No records found in payload');
+    }
+    
+    const record = records[0];
+    const basic = record.basic || {};
+    const postData = record.post || {};
+    
+    // Build WordPress post data
+    const wpPostData = {
+        title: basic.name || 'Untitled',
+        content: postData.articleText || basic.description || '',
+        excerpt: basic.description || '',
+        status: 'publish',
+        meta: {
+            op_publisher_did: arweaveResult?.did || null,
+            op_publisher_tx_id: arweaveResult?.transactionId || null,
+            op_publisher_status: 'published',
+            op_publisher_mode: 'oip-signed',
+            op_publisher_published_at: new Date().toISOString()
+        }
+    };
+    
+    // Add tags if available
+    if (basic.tagItems && Array.isArray(basic.tagItems) && basic.tagItems.length > 0) {
+        wpPostData.tags = basic.tagItems;
+    }
+    
+    // Add author byline if available
+    if (postData.bylineWriter) {
+        wpPostData.meta.op_publisher_byline = postData.bylineWriter;
+    }
+    
+    // Create post via WordPress REST API
+    const wpApiUrl = `${WORDPRESS_URL}/wp-json/wp/v2/posts`;
+    const auth = Buffer.from(`${WORDPRESS_ADMIN_USER}:${WORDPRESS_ADMIN_PASSWORD}`).toString('base64');
+    
+    try {
+        const response = await axios.post(wpApiUrl, wpPostData, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Basic ${auth}`
+            },
+            timeout: 30000
+        });
+        
+        const wpPost = response.data;
+        
+        return {
+            success: true,
+            postId: wpPost.id,
+            postUrl: wpPost.link,
+            permalink: wpPost.link
+        };
+    } catch (error) {
+        if (error.response) {
+            throw new Error(`WordPress API error: ${error.response.status} - ${error.response.data?.message || JSON.stringify(error.response.data)}`);
+        }
+        throw new Error(`WordPress connection error: ${error.message}`);
+    }
+}
 
 // Moved decrypt route from access.js
 router.post('/decrypt', async (req, res) => {

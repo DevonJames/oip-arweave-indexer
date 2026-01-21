@@ -42,7 +42,7 @@
         const [destinations, setDestinations] = useState({
             arweave: settings.settings?.default_arweave ?? true,
             gun: settings.settings?.default_gun ?? true,
-            internetArchive: settings.settings?.default_ia ?? false
+            thisHost: settings.settings?.default_this_host ?? false
         });
         
         // WordPress data
@@ -359,10 +359,10 @@
                             onChange={(value) => setDestinations({...destinations, gun: value})}
                         />
                         <CheckboxControl
-                            label="🧅 Internet Archive"
-                            help="Anonymous via TOR"
-                            checked={destinations.internetArchive}
-                            onChange={(value) => setDestinations({...destinations, internetArchive: value})}
+                            label="🏠 This Host"
+                            help="Publish to this WordPress instance"
+                            checked={destinations.thisHost}
+                            onChange={(value) => setDestinations({...destinations, thisHost: value})}
                         />
                     </PanelBody>
                     

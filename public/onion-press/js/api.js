@@ -111,6 +111,15 @@ async function testTorConnection() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// WordPress API
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function getWordPressPosts(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    return apiRequest('GET', `${OIP_API}/wordpress/posts?${queryString}`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Auth
 // ═══════════════════════════════════════════════════════════════════════════════
 

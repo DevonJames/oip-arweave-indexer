@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS = {
     // Publishing destinations
     publishToArweave: process.env.PUBLISH_TO_ARWEAVE !== 'false',
     publishToGun: process.env.PUBLISH_TO_GUN !== 'false',
-    publishToInternetArchive: process.env.PUBLISH_TO_INTERNETARCHIVE === 'true',
+    publishToThisHost: process.env.PUBLISH_TO_THIS_HOST === 'true',
     
     // GUN sync configuration
     gunExternalPeers: process.env.GUN_EXTERNAL_PEERS || '',
@@ -120,7 +120,7 @@ function updateSettings(updates) {
     const allowedKeys = [
         'publishToArweave',
         'publishToGun',
-        'publishToInternetArchive',
+        'publishToThisHost',
         'gunExternalPeers',
         'gunSyncInterval',
         'gunSyncTrustedNodes',
@@ -132,7 +132,7 @@ function updateSettings(updates) {
             // Type coercion for specific fields
             if (key === 'gunSyncInterval') {
                 currentSettings[key] = parseInt(updates[key]) || 30000;
-            } else if (['publishToArweave', 'publishToGun', 'publishToInternetArchive'].includes(key)) {
+            } else if (['publishToArweave', 'publishToGun', 'publishToThisHost'].includes(key)) {
                 currentSettings[key] = Boolean(updates[key]);
             } else {
                 currentSettings[key] = updates[key];
@@ -158,7 +158,7 @@ function resetSettings() {
 
 /**
  * Check if a publishing destination is enabled
- * @param {string} destination - 'arweave', 'gun', or 'internetArchive'
+ * @param {string} destination - 'arweave', 'gun', or 'thisHost'
  * @returns {boolean} Whether destination is enabled
  */
 function isDestinationEnabled(destination) {
@@ -167,9 +167,10 @@ function isDestinationEnabled(destination) {
             return currentSettings.publishToArweave;
         case 'gun':
             return currentSettings.publishToGun;
-        case 'internetarchive':
-        case 'ia':
-            return currentSettings.publishToInternetArchive;
+        case 'thishost':
+        case 'this-host':
+        case 'wordpress':
+            return currentSettings.publishToThisHost;
         default:
             return false;
     }
@@ -183,7 +184,7 @@ function getEnabledDestinations() {
     const destinations = [];
     if (currentSettings.publishToArweave) destinations.push('arweave');
     if (currentSettings.publishToGun) destinations.push('gun');
-    if (currentSettings.publishToInternetArchive) destinations.push('internetArchive');
+    if (currentSettings.publishToThisHost) destinations.push('thisHost');
     return destinations;
 }
 

@@ -8,7 +8,7 @@ Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Publish WordPress content to the Open Index Protocol (OIP) - permanent, decentralized storage on Arweave, GUN, and Internet Archive via TOR.
+Publish WordPress content to the Open Index Protocol (OIP) - permanent, decentralized storage on Arweave, GUN, and local WordPress instance.
 
 == Description ==
 
@@ -17,7 +17,7 @@ Publish WordPress content to the Open Index Protocol (OIP) - permanent, decentra
 = Key Features =
 
 * **Dual Publishing Modes**: Choose between mnemonic-based (login-less) or account-based (server) publishing
-* **Multi-Destination Publishing**: Publish to Arweave, GUN, and Internet Archive simultaneously
+* **Multi-Destination Publishing**: Publish to Arweave, GUN, and This Host (WordPress) simultaneously
 * **Client-Side Signing**: In mnemonic mode, your identity never leaves your browser
 * **Gutenberg Integration**: Seamless sidebar panel in the WordPress block editor
 * **Status Tracking**: Monitor publishing status and view transaction details
@@ -40,7 +40,7 @@ Publish WordPress content to the Open Index Protocol (OIP) - permanent, decentra
 
 * **Arweave**: Permanent, immutable blockchain storage
 * **GUN**: Real-time peer-to-peer synchronization
-* **Internet Archive**: Anonymous submission via TOR
+* **This Host**: Publish to local WordPress instance
 
 = Requirements =
 
@@ -74,7 +74,7 @@ Yes! Each post can be published in either mode. The mode used is recorded in the
 
 = What happens if the server goes down? =
 
-Records published to Arweave are permanent and can be read from any Arweave gateway. Records on GUN sync across peers. Only Internet Archive submissions require the TOR connection to be active.
+Records published to Arweave are permanent and can be read from any Arweave gateway. Records on GUN sync across peers. Records published to This Host are stored locally in WordPress and can be browsed via the Onion Press interface.
 
 == Screenshots ==
 

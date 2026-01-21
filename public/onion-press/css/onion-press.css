@@ -193,6 +193,28 @@ body {
     background: var(--accent-success);
 }
 
+.settings-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-md);
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+}
+
+.settings-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+    background: rgba(124, 58, 237, 0.1);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════════
    Main Content
    ═══════════════════════════════════════════════════════════════════════════════ */
@@ -825,6 +847,95 @@ body {
     padding: var(--spacing-sm);
     background: rgba(239, 68, 68, 0.1);
     border-radius: var(--radius-sm);
+}
+
+.settings-description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: var(--spacing-lg);
+}
+
+.destinations-settings {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-xl);
+}
+
+.destination-setting {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.destination-setting:hover {
+    border-color: var(--accent-primary);
+    background: rgba(124, 58, 237, 0.05);
+}
+
+.destination-setting input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--accent-primary);
+}
+
+.destination-setting:has(input:checked) {
+    border-color: var(--accent-success);
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.dest-details {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.dest-details .dest-name {
+    font-weight: 600;
+    margin-bottom: var(--spacing-xs);
+}
+
+.dest-details .dest-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.settings-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-md);
+}
+
+.wordpress-info {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    margin-top: var(--spacing-xl);
+}
+
+.wordpress-info p {
+    margin-bottom: var(--spacing-md);
+    line-height: 1.6;
+}
+
+.wordpress-info p:last-child {
+    margin-bottom: 0;
+}
+
+.wordpress-link {
+    color: var(--accent-primary);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.wordpress-link:hover {
+    text-decoration: underline;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════

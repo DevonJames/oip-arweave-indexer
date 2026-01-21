@@ -197,7 +197,7 @@ class OP_Publisher {
                 <p>
                     <strong>OP Publisher</strong> connects WordPress to the <strong>Open Index Protocol (OIP)</strong>, 
                     enabling permanent, decentralized publishing to Arweave, GUN, and anonymous submission to the 
-                    Internet Archive via TOR.
+                    This Host (WordPress) for local publishing.
                 </p>
                 <p>
                     Choose between two publishing modes:
@@ -383,9 +383,9 @@ class OP_Publisher {
             🔄 <?php _e('GUN (real-time peer sync)', 'op-publisher'); ?>
         </label>
         <label style="display: block; margin-bottom: 8px;">
-            <input type="checkbox" name="op_publisher_settings[default_ia]" value="1"
-                   <?php checked($this->settings['default_ia'] ?? false); ?>>
-            🧅 <?php _e('Internet Archive (via TOR)', 'op-publisher'); ?>
+            <input type="checkbox" name="op_publisher_settings[default_this_host]" value="1"
+                   <?php checked($this->settings['default_this_host'] ?? false); ?>>
+            🏠 <?php _e('This Host (WordPress)', 'op-publisher'); ?>
         </label>
         <?php
     }
@@ -703,7 +703,7 @@ class OP_Publisher {
             'defaults' => array(
                 'arweave' => $this->settings['default_arweave'] ?? true,
                 'gun' => $this->settings['default_gun'] ?? true,
-                'internetArchive' => $this->settings['default_ia'] ?? false
+                'thisHost' => $this->settings['default_this_host'] ?? false
             ),
             'version' => OP_PUBLISHER_VERSION
         ));
