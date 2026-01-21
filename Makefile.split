@@ -66,6 +66,7 @@ onion-press-server: ## Deploy: OIP + WordPress + TOR anonymous publishing
 	@echo "  • WordPress (port 8080)"
 	@echo "  • TOR Daemon (SOCKS5 proxy)"
 	@echo "  • Elasticsearch + Kibana"
+	@echo "  • Ngrok (public access)"
 	@echo ""
 	docker-compose -f $(COMPOSE_FILE) --profile onion-press-server up -d
 	@echo ""
@@ -73,6 +74,7 @@ onion-press-server: ## Deploy: OIP + WordPress + TOR anonymous publishing
 	@echo "  • OIP Daemon: http://localhost:3005"
 	@echo "  • Onion Press: http://localhost:3007"
 	@echo "  • WordPress: http://localhost:8080"
+	@echo "  • Ngrok Dashboard: http://localhost:4040"
 	@echo ""
 	@echo "$(YELLOW)📋 To get your .onion address:$(NC)"
 	@echo "  make -f Makefile.split tor-status"

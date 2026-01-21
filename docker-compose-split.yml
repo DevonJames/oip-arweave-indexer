@@ -586,6 +586,7 @@ services:
     restart: unless-stopped
     profiles:
       - oip-only
+      - onion-press-server
       - alexandria
       - alexandria-gpu
       - alexandria-macMseries
