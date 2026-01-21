@@ -44,6 +44,7 @@ echo "   NODE_ENV: ${NODE_ENV:-development}"
 echo "   ELASTICSEARCH: ${ELASTICSEARCH_HOST:-localhost}:${ELASTICSEARCH_PORT:-9200}"
 echo "   GUN_PEERS: ${GUN_PEERS:-not set}"
 echo "   GUN_SYNC: ${GUN_SYNC_ENABLED:-true}"
+echo "   ARWEAVE_SYNC: ${ARWEAVE_SYNC_ENABLED:-true}"
 echo ""
 
 # Memory settings
@@ -53,5 +54,31 @@ echo ""
 
 # Start the daemon
 echo "🚀 Starting OIP Daemon Service..."
-exec "$@"
+
+# Check if Arweave syncing is disabled
+if [ "${ARWEAVE_SYNC_ENABLED:-true}" = "false" ]; then
+    echo "⚠️  Arweave syncing is DISABLED (ARWEAVE_SYNC_ENABLED=false)"
+    echo "   Running in web server + login service mode only"
+    echo "   No blockchain indexing will occur"
+    # Override CMD to remove --keepDBUpToDate flag
+    # Replace the command arguments, removing --keepDBUpToDate and its parameters
+    NEW_CMD=()
+    SKIP_NEXT=0
+    for arg in "$@"; do
+        if [ "$SKIP_NEXT" -eq 1 ]; then
+            SKIP_NEXT=0
+            continue
+        fi
+        if [ "$arg" = "--keepDBUpToDate" ]; then
+            # Skip this flag and the next two arguments (delay and interval)
+            SKIP_NEXT=2
+            continue
+        fi
+        NEW_CMD+=("$arg")
+    done
+    exec "${NEW_CMD[@]}"
+else
+    echo "✅ Arweave syncing is ENABLED (default)"
+    exec "$@"
+fi
 

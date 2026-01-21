@@ -155,6 +155,9 @@ services:
       # V8 memory flags (max-old-space-size should be higher than MEMORY_RESTART_THRESHOLD_GB)
       # Note: --expose-gc and --optimize-for-size must be passed via CMD, not NODE_OPTIONS
       - NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=49152}
+      # Arweave syncing control (set to false to disable automatic blockchain indexing)
+      # For onion-press-server profile: set ARWEAVE_SYNC_ENABLED=false in .env
+      - ARWEAVE_SYNC_ENABLED=${ARWEAVE_SYNC_ENABLED:-true}
     depends_on:
       - elasticsearch
       - gun-relay
