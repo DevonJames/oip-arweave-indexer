@@ -175,6 +175,12 @@ function initPublish() {
     const publishBtn = document.getElementById('publishBtn');
     const publishStatus = document.getElementById('publishStatus');
     
+    // Publish tab no longer has a publish button (removed in favor of WordPress)
+    // This function is kept for backwards compatibility but does nothing
+    if (!publishBtn) {
+        return;
+    }
+    
     publishBtn.addEventListener('click', async () => {
         const title = document.getElementById('recordTitle').value;
         const description = document.getElementById('recordDescription').value;

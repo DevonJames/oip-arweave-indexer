@@ -150,7 +150,7 @@ app.get('/health', (req, res) => {
         settings: {
             publishToArweave: settingsManager.getSetting('publishToArweave'),
             publishToGun: settingsManager.getSetting('publishToGun'),
-            publishToInternetArchive: settingsManager.getSetting('publishToInternetArchive')
+            publishToThisHost: settingsManager.getSetting('publishToThisHost')
         }
     });
 });
@@ -191,7 +191,7 @@ server.listen(port, async () => {
     console.log(`\n  Publishing Destinations:`);
     console.log(`    Arweave:          ${settingsManager.getSetting('publishToArweave') ? '✓' : '✗'}`);
     console.log(`    GUN:              ${settingsManager.getSetting('publishToGun') ? '✓' : '✗'}`);
-    console.log(`    Internet Archive: ${settingsManager.getSetting('publishToInternetArchive') ? '✓' : '✗'}`);
+    console.log(`    This Host:        ${settingsManager.getSetting('publishToThisHost') ? '✓' : '✗'}`);
     console.log(`\n  OIP Daemon: ${process.env.OIP_DAEMON_URL || 'http://oip-daemon-service:3005'}`);
     console.log(`  TOR Proxy:  127.0.0.1:9050 (integrated)`);
     if (process.env.ONION_ADDRESS) {

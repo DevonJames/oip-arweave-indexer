@@ -701,6 +701,42 @@ if (ONION_PRESS_ENABLED) {
         }
     });
     
+    // GET /onion-press/api/tor/status - Get TOR status (proxy to onion-press-service)
+    app.get('/onion-press/api/tor/status', async (req, res) => {
+        try {
+            const targetUrl = `${ONION_PRESS_URL}/api/tor/status`;
+            console.log(`[TOR Status] Proxying to: ${targetUrl}`);
+            
+            const response = await axios.get(targetUrl, {
+                timeout: 10000,
+                httpAgent,
+                httpsAgent,
+                validateStatus: () => true // Don't throw on non-2xx
+            });
+            
+            console.log(`[TOR Status] Response: ${response.status}`, response.data);
+            res.status(response.status).json(response.data);
+        } catch (error) {
+            console.error('[TOR Status] Proxy error:', error.message);
+            console.error('[TOR Status] Error code:', error.code);
+            console.error('[TOR Status] Error details:', {
+                message: error.message,
+                code: error.code,
+                response: error.response?.data,
+                status: error.response?.status
+            });
+            
+            // Return disconnected status if onion-press-service is unavailable
+            res.status(200).json({
+                connected: false,
+                error: 'Onion Press service unavailable',
+                message: error.message,
+                code: error.code,
+                timestamp: new Date().toISOString()
+            });
+        }
+    });
+    
     // POST /onion-press/api/records/publishSigned - Proxy to daemon's publishSigned endpoint
     app.post('/onion-press/api/records/publishSigned', async (req, res) => {
         try {
@@ -844,13 +880,13 @@ if (ONION_PRESS_ENABLED) {
                         destinations: {
                             arweave: { enabled: true, description: 'Permanent blockchain storage' },
                             gun: { enabled: true, description: 'Real-time peer sync' },
-                            internetArchive: { enabled: false, description: 'Requires onion-press-service' }
+                            thisHost: { enabled: false, description: 'Requires onion-press-service' }
                         },
                         enabledDestinations: ['arweave', 'gun'],
                         note: 'Full publishing requires onion-press-server profile'
                     });
                 }
-                // For TOR status, return disconnected
+                // For TOR status, return disconnected (but don't fail - let specific route handle it)
                 if (req.url.startsWith('/tor/')) {
                     return res.status(200).json({
                         connected: false,
@@ -887,6 +923,11 @@ if (ONION_PRESS_ENABLED) {
         etag: true,
         lastModified: true
     }));
+    
+    // Serve anonymous publisher page
+    app.get('/publish', (req, res) => {
+        res.sendFile(path.join(__dirname, 'public', 'onion-press', 'publish.html'));
+    });
     
     // Fallback for SPA routing
     app.get('/onion-press/*', (req, res) => {

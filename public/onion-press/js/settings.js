@@ -19,21 +19,31 @@ let hostInfo = {
     url: window.location.origin
 };
 
-// DOM Elements
-const settingsBtn = document.getElementById('settingsBtn');
-const settingsModal = document.getElementById('settingsModal');
-const closeSettingsModal = document.getElementById('closeSettingsModal');
-const saveSettingsBtn = document.getElementById('saveSettingsBtn');
-const settingArweave = document.getElementById('settingArweave');
-const settingGun = document.getElementById('settingGun');
-const settingThisHost = document.getElementById('settingThisHost');
-const thisHostName = document.getElementById('thisHostName');
-const thisHostUrl = document.getElementById('thisHostUrl');
+// DOM Elements (will be set during initialization)
+let settingsBtn, settingsModal, closeSettingsModal, saveDestinationsBtn;
+let settingArweave, settingGun, settingThisHost, thisHostName, thisHostUrl;
 
 /**
  * Initialize settings module
  */
 function initSettings() {
+    // Get DOM elements
+    settingsBtn = document.getElementById('settingsBtn');
+    settingsModal = document.getElementById('settingsModal');
+    closeSettingsModal = document.getElementById('closeSettingsModal');
+    saveDestinationsBtn = document.getElementById('saveDestinationsBtn');
+    settingArweave = document.getElementById('settingArweave');
+    settingGun = document.getElementById('settingGun');
+    settingThisHost = document.getElementById('settingThisHost');
+    thisHostName = document.getElementById('thisHostName');
+    thisHostUrl = document.getElementById('thisHostUrl');
+    
+    // Check if required elements exist
+    if (!settingsBtn || !settingsModal) {
+        console.warn('Settings elements not found, skipping initialization');
+        return;
+    }
+    
     // Load saved settings from localStorage
     loadSettings();
     
@@ -48,18 +58,22 @@ function initSettings() {
         settingsModal.classList.remove('hidden');
     });
     
-    closeSettingsModal.addEventListener('click', () => {
-        settingsModal.classList.add('hidden');
-    });
+    if (closeSettingsModal) {
+        closeSettingsModal.addEventListener('click', () => {
+            settingsModal.classList.add('hidden');
+        });
+    }
     
-    saveSettingsBtn.addEventListener('click', () => {
-        saveSettings();
-        settingsModal.classList.add('hidden');
-        // Trigger browse refresh if on browse tab
-        if (typeof loadRecords === 'function') {
-            loadRecords();
-        }
-    });
+    if (saveDestinationsBtn) {
+        saveDestinationsBtn.addEventListener('click', () => {
+            saveSettings();
+            settingsModal.classList.add('hidden');
+            // Trigger browse refresh if on browse tab
+            if (typeof loadRecords === 'function') {
+                loadRecords();
+            }
+        });
+    }
     
     // Close modal on background click
     settingsModal.addEventListener('click', (e) => {
@@ -88,9 +102,9 @@ function loadSettings() {
  */
 function saveSettings() {
     destinations = {
-        arweave: settingArweave.checked,
-        gun: settingGun.checked,
-        thisHost: settingThisHost.checked
+        arweave: settingArweave ? settingArweave.checked : true,
+        gun: settingGun ? settingGun.checked : true,
+        thisHost: settingThisHost ? settingThisHost.checked : false
     };
     
     localStorage.setItem('onionpress_destinations', JSON.stringify(destinations));
@@ -103,9 +117,9 @@ function saveSettings() {
  * Update UI with current settings
  */
 function updateSettingsUI() {
-    settingArweave.checked = destinations.arweave;
-    settingGun.checked = destinations.gun;
-    settingThisHost.checked = destinations.thisHost;
+    if (settingArweave) settingArweave.checked = destinations.arweave;
+    if (settingGun) settingGun.checked = destinations.gun;
+    if (settingThisHost) settingThisHost.checked = destinations.thisHost;
 }
 
 /**
@@ -117,14 +131,14 @@ async function loadHostInfo() {
         if (response.ok) {
             const data = await response.json();
             hostInfo = data;
-            thisHostName.textContent = hostInfo.name;
-            thisHostUrl.textContent = hostInfo.url;
+            if (thisHostName) thisHostName.textContent = hostInfo.name;
+            if (thisHostUrl) thisHostUrl.textContent = hostInfo.url;
         }
     } catch (error) {
         console.warn('Failed to load host info:', error);
         // Use defaults
-        thisHostName.textContent = hostInfo.name;
-        thisHostUrl.textContent = hostInfo.url;
+        if (thisHostName) thisHostName.textContent = hostInfo.name;
+        if (thisHostUrl) thisHostUrl.textContent = hostInfo.url;
     }
 }
 

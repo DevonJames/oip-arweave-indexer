@@ -42,7 +42,7 @@ router.post('/', async (req, res) => {
         const publishDestinations = destinations || {
             arweave: settingsManager.isDestinationEnabled('arweave'),
             gun: settingsManager.isDestinationEnabled('gun'),
-            internetArchive: settingsManager.isDestinationEnabled('internetArchive')
+            thisHost: settingsManager.isDestinationEnabled('thisHost')
         };
         
         console.log(`📤 Publishing record to:`, Object.entries(publishDestinations)
