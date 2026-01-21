@@ -6,11 +6,11 @@
  * Manages destination settings for browsing and publishing
  */
 
-// Default destinations state
+// Default destinations state (will be loaded from server)
 let destinations = {
-    arweave: true,
-    gun: true,
-    thisHost: false
+    arweave: false,
+    gun: false,
+    thisHost: true
 };
 
 // Host info
@@ -26,7 +26,7 @@ let settingArweave, settingGun, settingThisHost, thisHostName, thisHostUrl;
 /**
  * Initialize settings module
  */
-function initSettings() {
+async function initSettings() {
     // Get DOM elements
     settingsBtn = document.getElementById('settingsBtn');
     settingsModal = document.getElementById('settingsModal');
@@ -44,7 +44,8 @@ function initSettings() {
         return;
     }
     
-    // Load saved settings from localStorage
+    // Load default destinations from server first, then load saved settings
+    await loadDefaultDestinations();
     loadSettings();
     
     // Update UI with current settings
@@ -84,6 +85,28 @@ function initSettings() {
 }
 
 /**
+ * Load default destinations from server (based on .env variables)
+ */
+async function loadDefaultDestinations() {
+    try {
+        const response = await fetch('/onion-press/api/destinations/defaults');
+        if (response.ok) {
+            const data = await response.json();
+            if (data.destinations) {
+                // Set defaults from server (only if no saved settings exist)
+                const saved = localStorage.getItem('onionpress_destinations');
+                if (!saved) {
+                    destinations = { ...data.destinations };
+                }
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to load default destinations:', error);
+        // Keep current defaults
+    }
+}
+
+/**
  * Load settings from localStorage
  */
 function loadSettings() {
@@ -95,6 +118,7 @@ function loadSettings() {
             console.warn('Failed to parse saved destinations:', e);
         }
     }
+    // If no saved settings, defaults from loadDefaultDestinations() will be used
 }
 
 /**

@@ -343,11 +343,11 @@ async function loadRecords() {
     recordsContainer.innerHTML = '<div class="loading">Loading records...</div>';
     
     try {
-        // Get destination settings
+        // Get destination settings (will use defaults from .env if not set)
         const destinations = window.onionPressSettings?.getDestinations() || {
-            arweave: true,
-            gun: true,
-            thisHost: false
+            arweave: false,
+            gun: false,
+            thisHost: true
         };
         
         const allRecords = [];

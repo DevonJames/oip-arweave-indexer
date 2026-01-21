@@ -602,6 +602,20 @@ if (ONION_PRESS_ENABLED) {
         });
     });
     
+    // GET /onion-press/api/destinations/defaults - Get default destination settings from .env
+    app.get('/onion-press/api/destinations/defaults', (req, res) => {
+        // Read from environment variables (defaults match original behavior)
+        const defaults = {
+            arweave: process.env.PUBLISH_TO_ARWEAVE !== 'false',
+            gun: process.env.PUBLISH_TO_GUN !== 'false',
+            thisHost: process.env.PUBLISH_TO_THIS_HOST === 'true'
+        };
+        
+        res.json({
+            destinations: defaults
+        });
+    });
+    
     // GET /onion-press/api/wordpress/posts - Get WordPress posts
     app.get('/onion-press/api/wordpress/posts', async (req, res) => {
         try {
