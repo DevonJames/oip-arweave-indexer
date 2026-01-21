@@ -161,11 +161,11 @@ During operation:
 
 ## Docker Configuration
 
-When running in Docker, you'll need to ensure your custom server is accessible. Options include:
+When running OIP in Docker, `localhost` inside the container refers to the container itself, NOT your host machine. You need special hostnames to reach external services.
 
-### Option 1: Host Network (Development)
+### Option 1: Proxy to Host Machine Services (Recommended)
 
-If your game server runs on the host machine:
+If your game server runs on the host machine (not in Docker), use `host.docker.internal`:
 
 ```bash
 # .env
@@ -173,9 +173,26 @@ CUSTOM_PROXY_TARGET=http://host.docker.internal:3001
 CUSTOM_PROXY_ROUTE=/game-api
 ```
 
-### Option 2: Docker Network (Production)
+**Linux Requirement:** `host.docker.internal` works automatically on Docker Desktop (Mac/Windows), but on Linux it requires the `extra_hosts` directive. OIP's docker-compose.yml already includes this:
 
-Add your game server to the same Docker network:
+```yaml
+# Already configured in docker-compose.yml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
+
+**Common Mistake:**
+```bash
+# ❌ WRONG - localhost means the container itself!
+CUSTOM_PROXY_TARGET=http://localhost:3001
+
+# ✅ CORRECT - reaches host machine
+CUSTOM_PROXY_TARGET=http://host.docker.internal:3001
+```
+
+### Option 2: Docker Network (Both in Docker)
+
+If your game server also runs in Docker, use the service name:
 
 ```yaml
 # docker-compose.override.yml
@@ -193,11 +210,18 @@ networks:
     name: ${COMPOSE_PROJECT_NAME}_oip-network
 ```
 
-Then use the service name:
 ```bash
-# .env
+# .env - use Docker service name
 CUSTOM_PROXY_TARGET=http://game-server:3001
 CUSTOM_PROXY_ROUTE=/game-api
+```
+
+### Restarting After Changes
+
+Environment changes only need a restart, not rebuild:
+
+```bash
+make down && make up
 ```
 
 ## Troubleshooting
@@ -220,12 +244,44 @@ CUSTOM_PROXY_ROUTE=/game-api
    🔀 Custom proxy enabled: /game-api/* → http://localhost:3001
    ```
 
+### ECONNREFUSED Error
+
+```json
+{"error": "Proxy error", "message": "connect ECONNREFUSED ::1:3001", "target": "http://localhost:3001"}
+```
+
+**Cause:** You're using `localhost` in Docker, which refers to the container itself.
+
+**Solution:** Use `host.docker.internal` instead:
+```bash
+# Change this:
+CUSTOM_PROXY_TARGET=http://localhost:3001
+# To this:
+CUSTOM_PROXY_TARGET=http://host.docker.internal:3001
+```
+
+### ENOTFOUND host.docker.internal Error
+
+```json
+{"error": "Proxy error", "message": "getaddrinfo ENOTFOUND host.docker.internal", "target": "http://host.docker.internal:3001"}
+```
+
+**Cause:** You're on Linux and `host.docker.internal` isn't configured.
+
+**Solution:** Ensure your docker-compose.yml has `extra_hosts` configured for the OIP service:
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
+
+OIP's docker-compose.yml already includes this for the `oip` and `oip-gpu` services. If using a different service variant, add the line manually.
+
 ### 502 Bad Gateway Errors
 
 The target server is unreachable. Check:
 - Is your custom server running?
 - Is the port correct?
-- In Docker, can the container reach the target? (use `host.docker.internal` for host services)
+- In Docker, are you using `host.docker.internal` (not `localhost`)?
 
 ### CORS Issues
 
@@ -281,13 +337,16 @@ app.listen(3001, () => {
 
 ```bash
 # Proxy to game server with prefix stripping
-CUSTOM_PROXY_TARGET=http://localhost:3001
+# Use host.docker.internal when running OIP in Docker
+CUSTOM_PROXY_TARGET=http://host.docker.internal:3001
 CUSTOM_PROXY_ROUTE=/game-api
 CUSTOM_PROXY_STRIP_PREFIX=true
 
 # Also serve custom static files
 CUSTOM_PUBLIC_PATH=true
 ```
+
+**Note:** If running OIP outside Docker (directly with Node.js), use `http://localhost:3001` instead.
 
 ### Frontend Usage
 

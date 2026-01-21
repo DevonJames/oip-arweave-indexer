@@ -94,6 +94,8 @@ services:
       - ./routes:/usr/src/app/routes
       - ./voices:/usr/src/app/voices
       - ../public:/usr/src/parent-public:ro  # Mount parent directory's public folder
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Allows container to reach host machine services
     environment:
       - NODE_ENV=production
       - NODE_OPTIONS=${NODE_OPTIONS}
