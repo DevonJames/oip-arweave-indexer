@@ -124,7 +124,38 @@ async function getWordPressUserId(email) {
     }
 }
 
+/**
+ * Check if a WordPress user is an admin
+ * @param {number} wordpressUserId - WordPress user ID
+ * @returns {Promise<boolean>} True if user is WordPress admin
+ */
+async function isWordPressAdmin(wordpressUserId) {
+    if (!WORDPRESS_ADMIN_PASSWORD || !wordpressUserId) {
+        return false;
+    }
+
+    try {
+        const response = await axios.get(
+            `${WORDPRESS_URL}/wp-json/wp/v2/users/${wordpressUserId}`,
+            {
+                auth: {
+                    username: WORDPRESS_ADMIN_USER,
+                    password: WORDPRESS_ADMIN_PASSWORD
+                }
+            }
+        );
+
+        // WordPress admin role is 'administrator'
+        const roles = response.data.roles || [];
+        return roles.includes('administrator');
+    } catch (error) {
+        console.error('[WordPress Sync] Error checking WordPress admin status:', error.message);
+        return false;
+    }
+}
+
 module.exports = {
     syncWordPressUser,
-    getWordPressUserId
+    getWordPressUserId,
+    isWordPressAdmin
 };

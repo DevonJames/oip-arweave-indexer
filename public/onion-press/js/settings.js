@@ -132,13 +132,22 @@ async function loadHostInfo() {
             const data = await response.json();
             hostInfo = data;
             if (thisHostName) thisHostName.textContent = hostInfo.name;
-            if (thisHostUrl) thisHostUrl.textContent = hostInfo.url;
+            // Update the link in the description
+            const thisHostLink = document.getElementById('thisHostLink');
+            if (thisHostLink) {
+                thisHostLink.textContent = hostInfo.name;
+                thisHostLink.href = hostInfo.url;
+            }
         }
     } catch (error) {
         console.warn('Failed to load host info:', error);
         // Use defaults
         if (thisHostName) thisHostName.textContent = hostInfo.name;
-        if (thisHostUrl) thisHostUrl.textContent = hostInfo.url;
+        const thisHostLink = document.getElementById('thisHostLink');
+        if (thisHostLink) {
+            thisHostLink.textContent = hostInfo.name;
+            thisHostLink.href = hostInfo.url;
+        }
     }
 }
 

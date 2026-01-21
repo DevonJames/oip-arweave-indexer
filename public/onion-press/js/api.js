@@ -171,6 +171,7 @@ function logout() {
     localStorage.removeItem('onionpress_token');
     localStorage.removeItem('onionpress_user_publicKey');
     localStorage.removeItem('onionpress_user_wpId');
+    clearAdminStatus();
 }
 
 function isLoggedIn() {
@@ -188,7 +189,15 @@ function isAdmin() {
     if (!authToken) return false;
     
     try {
-        const payload = JSON.parse(atob(authToken));
+        // Handle JWT token format (Bearer token or base64 encoded)
+        let payload;
+        if (authToken.includes('.')) {
+            // JWT format
+            payload = JSON.parse(atob(authToken.split('.')[1]));
+        } else {
+            // Base64 encoded JSON
+            payload = JSON.parse(atob(authToken));
+        }
         return payload.isAdmin && payload.exp > Date.now();
     } catch {
         return false;

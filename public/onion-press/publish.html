@@ -730,8 +730,8 @@
                     </div>
                 </section>
 
-                <!-- Step 2: Destinations -->
-                <section class="destinations-section">
+                <!-- Step 2: Destinations (Admin Only) -->
+                <section class="destinations-section admin-only hidden" id="anonDestinationsSection">
                     <h2><span class="identity-badge" style="background: #06b6d4;">2</span> Publishing Destinations</h2>
 
                     <div class="destination-grid">
@@ -1334,12 +1334,25 @@
                 const { payload } = buildRecord('anonymous');
                 console.log('Built anonymous payload:', payload);
 
-                // Get selected destinations
-                const destinations = {
-                    arweave: document.getElementById('anonDestArweave').checked,
-                    gun: document.getElementById('anonDestGun').checked,
-                    thisHost: document.getElementById('anonDestThisHost').checked
-                };
+                // Get selected destinations (use defaults if admin section is hidden)
+                const destinationsSection = document.getElementById('anonDestinationsSection');
+                let destinations;
+                
+                if (destinationsSection && !destinationsSection.classList.contains('hidden')) {
+                    // Admin mode: use selected destinations
+                    destinations = {
+                        arweave: document.getElementById('anonDestArweave')?.checked || false,
+                        gun: document.getElementById('anonDestGun')?.checked || false,
+                        thisHost: document.getElementById('anonDestThisHost')?.checked || false
+                    };
+                } else {
+                    // Non-admin mode: default to thisHost only
+                    destinations = {
+                        arweave: false,
+                        gun: false,
+                        thisHost: true
+                    };
+                }
 
                 // Send to server (server pays Arweave fee, no signature)
                 const response = await fetch('/onion-press/api/records/publishAnonymous', {
@@ -1430,6 +1443,8 @@
         // ═══════════════════════════════════════════════════════════════════════════════
 
         document.addEventListener('DOMContentLoaded', async () => {
+            // Check admin status and update UI
+            await checkAdminStatus();
             // Load host info for both forms
             try {
                 const response = await fetch('/onion-press/api/host-info');
@@ -1526,6 +1541,50 @@
                 });
             });
         });
+
+        /**
+         * Check admin status and update UI
+         */
+        async function checkAdminStatus() {
+            try {
+                // Check if user is logged in
+                const token = localStorage.getItem('onionpress_token');
+                if (!token) {
+                    // Not logged in, hide admin-only sections
+                    document.querySelectorAll('.admin-only').forEach(el => {
+                        el.classList.add('hidden');
+                    });
+                    return;
+                }
+
+                // Check WordPress admin status
+                const response = await fetch('/onion-press/api/user/admin-status', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const isAdmin = data.isWordPressAdmin || false;
+
+                    // Show/hide admin-only sections
+                    document.querySelectorAll('.admin-only').forEach(el => {
+                        if (isAdmin) {
+                            el.classList.remove('hidden');
+                        } else {
+                            el.classList.add('hidden');
+                        }
+                    });
+                }
+            } catch (error) {
+                console.warn('Failed to check admin status:', error);
+                // Hide admin sections on error
+                document.querySelectorAll('.admin-only').forEach(el => {
+                    el.classList.add('hidden');
+                });
+            }
+        }
 
         // Make functions available globally
         window.selectMethod = selectMethod;

@@ -23,7 +23,7 @@
                 <button class="nav-btn admin-only hidden" data-tab="admin">⚙️ Admin</button>
             </nav>
             <div class="header-actions">
-                <button class="settings-btn" id="settingsBtn" title="Show Records From / Publish Records To">
+                <button class="settings-btn admin-only hidden" id="settingsBtn" title="Show Records From / Publish Records To">
                     ⚙️
                 </button>
                 <div class="tor-status" id="torStatus" title="TOR Status">
@@ -245,27 +245,27 @@
             <p class="settings-description">Select which sources to browse and where to publish records.</p>
             <div class="destinations-settings">
                 <label class="destination-setting">
-                    <input type="checkbox" id="settingArweave" checked>
-                    <span class="dest-icon">⛓️</span>
+                    <input type="checkbox" id="settingThisHost">
+                    <img src="/icons/network-topology-server.png" alt="Server" class="dest-icon-img">
                     <div class="dest-details">
-                        <span class="dest-name">Arweave</span>
-                        <span class="dest-desc">Permanent blockchain storage</span>
+                        <span class="dest-name">Server (<span id="thisHostName">This Host</span>)</span>
+                        <span class="dest-desc">Posts will be published directly to this Onion Press node only. (<a href="#" id="thisHostLink" target="_blank" class="dest-link">This Host</a> will be the name of the host and link to its URL)</span>
                     </div>
                 </label>
                 <label class="destination-setting">
                     <input type="checkbox" id="settingGun" checked>
-                    <span class="dest-icon">🔄</span>
+                    <img src="/icons/network-topology-gun.png" alt="GUN" class="dest-icon-img">
                     <div class="dest-details">
-                        <span class="dest-name">GUN Network</span>
-                        <span class="dest-desc">Real-time peer sync</span>
+                        <span class="dest-name">Syncing (GUN)</span>
+                        <span class="dest-desc">Posts will sync to other registered Onion Press nodes over the <a href="https://gun.eco/" target="_blank" class="dest-link">GUN network</a>.</span>
                     </div>
                 </label>
                 <label class="destination-setting">
-                    <input type="checkbox" id="settingThisHost">
-                    <span class="dest-icon">🏠</span>
+                    <input type="checkbox" id="settingArweave" checked>
+                    <img src="/icons/network-topology-arweave.png" alt="Arweave" class="dest-icon-img">
                     <div class="dest-details">
-                        <span class="dest-name" id="thisHostName">This Host</span>
-                        <span class="dest-desc" id="thisHostUrl">Loading...</span>
+                        <span class="dest-name">Archived (Arweave)</span>
+                        <span class="dest-desc">Posts will be permanently stored in the <a href="https://arweave.org/" target="_blank" class="dest-link">Arweave blockchain</a> so they can be found by any Onion Press node that indexes from it.</span>
                     </div>
                 </label>
             </div>

@@ -514,6 +514,23 @@ body {
     font-size: 1.25rem;
 }
 
+.dest-icon-img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+}
+
+.dest-link {
+    color: var(--accent-primary);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: var(--transition-fast);
+}
+
+.dest-link:hover {
+    border-bottom-color: var(--accent-primary);
+}
+
 .dest-name {
     font-weight: 500;
     min-width: 120px;

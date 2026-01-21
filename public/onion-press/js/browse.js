@@ -36,7 +36,7 @@ const loginForm = document.getElementById('loginForm');
 const loginError = document.getElementById('loginError');
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     initNavigation();
     initSearch();
     initPagination();
@@ -45,9 +45,30 @@ document.addEventListener('DOMContentLoaded', () => {
     checkTorStatus();
     loadRecords();
     
+    // Check admin status and update UI
+    await updateAdminUI();
+    
     // Check TOR status periodically
     setInterval(checkTorStatus, 30000);
 });
+
+/**
+ * Update UI based on admin status
+ */
+async function updateAdminUI() {
+    const { isWordPressAdmin } = await import('./api.js');
+    const wpAdmin = await isWordPressAdmin();
+    
+    // Show/hide settings gear icon
+    const settingsBtn = document.getElementById('settingsBtn');
+    if (settingsBtn) {
+        if (wpAdmin) {
+            settingsBtn.classList.remove('hidden');
+        } else {
+            settingsBtn.classList.add('hidden');
+        }
+    }
+}
 
 /**
  * Initialize tab navigation
@@ -173,6 +194,9 @@ function initLogin() {
             if (accountWordPressBtnText) {
                 accountWordPressBtnText.textContent = 'Open WordPress →';
             }
+            
+            // Update admin UI
+            await updateAdminUI();
             
             // Check if user was trying to access WordPress
             const wasOpeningWordPress = sessionStorage.getItem('openingWordPress') === 'true';
