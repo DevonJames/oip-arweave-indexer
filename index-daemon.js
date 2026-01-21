@@ -731,12 +731,31 @@ if (WORDPRESS_PROXY_ENABLED) {
     
     const wordpressProxy = createProxyMiddleware({
         target: WORDPRESS_URL,
-        changeOrigin: true,
+        changeOrigin: false,  // Keep original Host header to prevent WordPress redirects
         pathRewrite: { '^/wordpress': '' },
         onProxyReq: (proxyReq, req, res) => {
-            // Ensure proper host header for WordPress
-            proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
-            proxyReq.setHeader('X-Forwarded-Proto', req.protocol);
+            // Preserve the original host header so WordPress knows the real domain
+            const originalHost = req.headers.host;
+            proxyReq.setHeader('Host', originalHost);
+            proxyReq.setHeader('X-Forwarded-Host', originalHost);
+            proxyReq.setHeader('X-Forwarded-Proto', req.protocol || 'https');
+            proxyReq.setHeader('X-Forwarded-For', req.ip || req.connection.remoteAddress);
+            proxyReq.setHeader('X-Real-IP', req.ip || req.connection.remoteAddress);
+        },
+        onProxyRes: (proxyRes, req, res) => {
+            // Fix any Location headers in redirects
+            if (proxyRes.headers.location) {
+                const location = proxyRes.headers.location;
+                // If WordPress is redirecting to internal hostname, fix it
+                if (location.includes('wordpress:') || location.includes('wordpress/')) {
+                    const originalHost = req.headers.host;
+                    proxyRes.headers.location = location
+                        .replace(/https?:\/\/wordpress[:\/]/g, `https://${originalHost}/wordpress`)
+                        .replace(/^\/wordpress/, `https://${originalHost}/wordpress`)
+                        .replace(/^\/wp-admin/, `https://${originalHost}/wordpress/wp-admin`)
+                        .replace(/^\/wp-login/, `https://${originalHost}/wordpress/wp-login`);
+                }
+            }
         },
         onError: (err, req, res) => {
             console.error('[WordPress Proxy] Error:', err.message);
