@@ -247,6 +247,8 @@ const corsOptions = {
             'https://mobile.fitnessally.io',
             'https://rockhoppersgame.com',
             'https://lyra.ninja',
+            'https://onionpress.net',
+            'http://onionpress.net',
             // Add additional production domains to ALLOWED_ORIGINS env var
             ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) : []),
         ];
@@ -957,15 +959,28 @@ if (ONION_PRESS_ENABLED) {
     // Static files and SPA routing
     // ─────────────────────────────────────────────────────────────────────────
     
-    // Serve root public directory (alfreds-notes.html, reference-client.html, etc.)
-    app.use(express.static(path.join(__dirname, 'public')));
+    // Check if Onion Press should be the default interface
+    const ONION_PRESS_DEFAULT = process.env.ONION_PRESS_DEFAULT === 'true';
+    
+    if (ONION_PRESS_DEFAULT) {
+        // Serve Onion Press as the default interface at root
+        app.get('/', (req, res) => {
+            res.sendFile(path.join(__dirname, 'public', 'onion-press', 'index.html'));
+        });
+        
+        // Serve other public files (alfreds-notes.html, reference-client.html, etc.) at /public
+        app.use('/public', express.static(path.join(__dirname, 'public')));
+    } else {
+        // Serve root public directory (alfreds-notes.html, reference-client.html, etc.)
+        app.use(express.static(path.join(__dirname, 'public')));
+    }
     
     // Serve debug interfaces
     app.get('/debug/v09', (req, res) => {
         res.sendFile(path.join(__dirname, 'public', 'debug', 'v09.html'));
     });
     
-    // Serve onion-press subdirectory
+    // Serve onion-press subdirectory (always available at /onion-press)
     app.use('/onion-press', express.static(path.join(__dirname, 'public', 'onion-press'), {
         index: 'index.html',
         etag: true,

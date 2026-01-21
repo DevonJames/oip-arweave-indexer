@@ -144,6 +144,7 @@ services:
       - ONION_PRESS_URL=http://onion-press-service:${ONION_PRESS_PORT:-3007}
       - ONION_PRESS_PORT=${ONION_PRESS_PORT:-3007}
       - ONION_PRESS_ENABLED=${ONION_PRESS_ENABLED:-true}
+      - ONION_PRESS_DEFAULT=${ONION_PRESS_DEFAULT:-false}
       # Alexandria proxy configuration (for profiles that include alexandria-service)
       - ALEXANDRIA_ENABLED=${ALEXANDRIA_ENABLED:-false}
       - ALEXANDRIA_URL=http://alexandria-service:${ALEXANDRIA_PORT:-3006}
