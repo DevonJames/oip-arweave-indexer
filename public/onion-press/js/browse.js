@@ -129,7 +129,19 @@ function initLogin() {
             loginBtn.textContent = 'Login';
             loginBtn.classList.remove('logged-in');
             updateAdminVisibility();
+            
+            // Update Account/WordPress button
+            const accountWordPressBtnText = document.getElementById('accountWordPressBtnText');
+            if (accountWordPressBtnText) {
+                accountWordPressBtnText.textContent = 'Login to Access WordPress →';
+            }
         } else {
+            // Check if user wants to open WordPress
+            const currentTab = document.querySelector('.nav-btn.active')?.dataset.tab;
+            if (currentTab === 'publish') {
+                // User is on publish tab, they probably want WordPress
+                sessionStorage.setItem('openingWordPress', 'true');
+            }
             loginModal.classList.remove('hidden');
         }
     });
@@ -150,11 +162,25 @@ function initLogin() {
         const password = document.getElementById('loginPassword').value;
         
         try {
-            await login(email, password);
+            const result = await login(email, password);
             loginModal.classList.add('hidden');
             loginBtn.textContent = 'Logout';
             loginBtn.classList.add('logged-in');
             updateAdminVisibility();
+            
+            // Update Account/WordPress button
+            const accountWordPressBtnText = document.getElementById('accountWordPressBtnText');
+            if (accountWordPressBtnText) {
+                accountWordPressBtnText.textContent = 'Open WordPress →';
+            }
+            
+            // Check if user was trying to access WordPress
+            const wasOpeningWordPress = sessionStorage.getItem('openingWordPress') === 'true';
+            if (wasOpeningWordPress) {
+                sessionStorage.removeItem('openingWordPress');
+                // Open WordPress in new tab
+                window.open('/wordpress/wp-admin/', '_blank');
+            }
         } catch (error) {
             loginError.textContent = error.message;
             loginError.classList.remove('hidden');
@@ -165,6 +191,26 @@ function initLogin() {
     if (isLoggedIn()) {
         loginBtn.textContent = 'Logout';
         loginBtn.classList.add('logged-in');
+        
+        // Update Account/WordPress button
+        const accountWordPressBtnText = document.getElementById('accountWordPressBtnText');
+        if (accountWordPressBtnText) {
+            accountWordPressBtnText.textContent = 'Open WordPress →';
+        }
+    }
+}
+
+/**
+ * Handle Account/WordPress button click
+ */
+function handleAccountWordPressClick() {
+    if (isLoggedIn()) {
+        // User is logged in, open WordPress
+        window.open('/wordpress/wp-admin/', '_blank');
+    } else {
+        // User not logged in, show login modal
+        sessionStorage.setItem('openingWordPress', 'true');
+        loginModal.classList.remove('hidden');
     }
 }
 
@@ -174,6 +220,17 @@ function initLogin() {
 function initPublish() {
     const publishBtn = document.getElementById('publishBtn');
     const publishStatus = document.getElementById('publishStatus');
+    
+    // Update Account/WordPress button text based on login status
+    const accountWordPressBtn = document.getElementById('accountWordPressBtn');
+    const accountWordPressBtnText = document.getElementById('accountWordPressBtnText');
+    if (accountWordPressBtnText) {
+        if (isLoggedIn()) {
+            accountWordPressBtnText.textContent = 'Open WordPress →';
+        } else {
+            accountWordPressBtnText.textContent = 'Login to Access WordPress →';
+        }
+    }
     
     // Publish tab no longer has a publish button (removed in favor of WordPress)
     // This function is kept for backwards compatibility but does nothing

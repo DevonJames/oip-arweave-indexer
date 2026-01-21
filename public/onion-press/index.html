@@ -86,18 +86,18 @@
                 </p>
                 
                 <div class="publishing-methods">
-                    <!-- WordPress Login -->
-                    <div class="publishing-method-card">
+                    <!-- Account/WordPress Publishing (Unified) -->
+                    <div class="publishing-method-card" id="accountPublishingCard">
                         <div class="method-header">
                             <span class="method-icon">👤</span>
-                            <h3>WordPress Login</h3>
+                            <h3>Account / WordPress</h3>
                         </div>
                         <p class="method-description">
-                            Though we use a WordPress interface, your account will be kept entirely locally to this node.
+                            Use your server account to publish. Though we use a WordPress interface, your account will be kept entirely locally to this node. Posts will be identified by your account name. When Arweave is enabled, records are signed with both your account wallet and the server's creator key.
                         </p>
-                        <a href="/wordpress/wp-admin/" target="_blank" class="method-action-btn">
-                            Open WordPress →
-                        </a>
+                        <button class="method-action-btn" id="accountWordPressBtn" onclick="handleAccountWordPressClick()">
+                            <span id="accountWordPressBtnText">Open WordPress →</span>
+                        </button>
                     </div>
                     
                     <!-- DID Publishing -->
@@ -111,20 +111,6 @@
                         </p>
                         <a href="/publish?method=did" class="method-action-btn">
                             Publish with DID →
-                        </a>
-                    </div>
-                    
-                    <!-- Account Publishing -->
-                    <div class="publishing-method-card" id="accountPublishingCard">
-                        <div class="method-header">
-                            <span class="method-icon">🔐</span>
-                            <h3>Account</h3>
-                        </div>
-                        <p class="method-description">
-                            Use your server account to publish. Posts will be identified by your account name. When Arweave is enabled, records are signed with both your account wallet and the server's creator key.
-                        </p>
-                        <a href="/publish?method=account" class="method-action-btn" id="accountPublishBtn">
-                            Publish with Account →
                         </a>
                     </div>
                     

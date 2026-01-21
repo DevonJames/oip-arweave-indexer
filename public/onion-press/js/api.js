@@ -124,34 +124,53 @@ async function getWordPressPosts(params = {}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function login(email, password) {
-    // Login via OIP daemon through onion-press proxy or directly
+    // Login via OIP daemon
     try {
-        const response = await fetch(`${API_BASE}/api/browse/records?limit=0`, {
+        const response = await fetch(`${API_BASE}/api/user/login`, {
+            method: 'POST',
             headers: {
-                'Authorization': `Basic ${btoa(email + ':' + password)}`
-            }
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, password })
         });
         
-        // For now, create a simple JWT-like token locally
-        // In production, this would call the OIP daemon's login endpoint
-        const fakeToken = btoa(JSON.stringify({
-            email,
-            isAdmin: email.includes('admin'),
-            exp: Date.now() + 24 * 60 * 60 * 1000
-        }));
+        const data = await response.json();
         
-        authToken = fakeToken;
-        localStorage.setItem('onionpress_token', fakeToken);
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || data.message || 'Login failed');
+        }
         
-        return { success: true, token: fakeToken };
+        if (data.token) {
+            authToken = data.token;
+            localStorage.setItem('onionpress_token', data.token);
+            
+            // Store user info
+            if (data.publicKey) {
+                localStorage.setItem('onionpress_user_publicKey', data.publicKey);
+            }
+            if (data.wordpressUserId) {
+                localStorage.setItem('onionpress_user_wpId', data.wordpressUserId.toString());
+            }
+            
+            return { 
+                success: true, 
+                token: data.token,
+                publicKey: data.publicKey,
+                wordpressUserId: data.wordpressUserId
+            };
+        } else {
+            throw new Error('No token received from server');
+        }
     } catch (error) {
-        throw new Error('Login failed');
+        throw new Error(error.message || 'Login failed');
     }
 }
 
 function logout() {
     authToken = null;
     localStorage.removeItem('onionpress_token');
+    localStorage.removeItem('onionpress_user_publicKey');
+    localStorage.removeItem('onionpress_user_wpId');
 }
 
 function isLoggedIn() {
