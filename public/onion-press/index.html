@@ -20,7 +20,6 @@
             <nav class="nav">
                 <button class="nav-btn active" data-tab="browse">Browse</button>
                 <button class="nav-btn" data-tab="publish">Publish</button>
-                <a href="/publish" class="nav-btn" style="text-decoration: none;">🔏 Anonymous</a>
                 <button class="nav-btn admin-only hidden" data-tab="admin">⚙️ Admin</button>
             </nav>
             <div class="header-actions">
@@ -81,15 +80,67 @@
         <!-- Publish Tab -->
         <section id="publishTab" class="tab-content hidden">
             <div class="publish-container">
-                <h2>Publish to OIP</h2>
+                <h2>Publish to The Onion Press</h2>
                 <p class="publish-description">
                     Choose your publishing method:
                 </p>
-                <div class="wordpress-info">
-                    <p>📝 <strong>WordPress Publishing:</strong> Use WordPress with the OP Publisher plugin for full authoring capabilities. 
-                    <a href="/wordpress/wp-admin/" target="_blank" class="wordpress-link">Open WordPress →</a>
-                    <br>Install and activate the "OP Publisher" plugin. When you publish a post, it will automatically be published to OIP based on your destination settings (configured via the ⚙️ icon in the header).</p>
-                    <p>🔏 <strong>Anonymous Publishing:</strong> Use the <a href="/publish">Anonymous Publisher</a> page for completely login-less publishing with client-side mnemonic signing. No WordPress account needed - just your mnemonic phrase.</p>
+                
+                <div class="publishing-methods">
+                    <!-- WordPress Login -->
+                    <div class="publishing-method-card">
+                        <div class="method-header">
+                            <span class="method-icon">👤</span>
+                            <h3>WordPress Login</h3>
+                        </div>
+                        <p class="method-description">
+                            Though we use a WordPress interface, your account will be kept entirely locally to this node.
+                        </p>
+                        <a href="/wordpress/wp-admin/" target="_blank" class="method-action-btn">
+                            Open WordPress →
+                        </a>
+                    </div>
+                    
+                    <!-- DID Publishing -->
+                    <div class="publishing-method-card">
+                        <div class="method-header">
+                            <span class="method-icon">🔑</span>
+                            <h3>Decentralized ID</h3>
+                        </div>
+                        <p class="method-description">
+                            Uses the <a href="https://www.w3.org/TR/did/" target="_blank" class="method-link">DID spec</a> for completely login-less publishing with client-side mnemonic signing. If you wish to create a provable relationship between all of your posts, this is the method you'll want to use. Just save the mnemonic that is generated the first time you post and use it again in future posts to create a cryptographic connection between your posts.
+                        </p>
+                        <a href="/publish?method=did" class="method-action-btn">
+                            Publish with DID →
+                        </a>
+                    </div>
+                    
+                    <!-- Account Publishing -->
+                    <div class="publishing-method-card" id="accountPublishingCard">
+                        <div class="method-header">
+                            <span class="method-icon">🔐</span>
+                            <h3>Account</h3>
+                        </div>
+                        <p class="method-description">
+                            Use your server account to publish. Posts will be identified by your account name. When Arweave is enabled, records are signed with both your account wallet and the server's creator key.
+                        </p>
+                        <a href="/publish?method=account" class="method-action-btn" id="accountPublishBtn">
+                            Publish with Account →
+                        </a>
+                    </div>
+                    
+                    <!-- Anonymous Publishing -->
+                    <div class="publishing-method-card">
+                        <div class="method-header">
+                            <span class="method-icon">🔒</span>
+                            <h3>Anonymous</h3>
+                        </div>
+                        <p class="method-description">
+                            No account, no signatures, totally anonymous. Only downside is that there will be no relationship between your posts, so any trust you establish from one post cannot be leveraged in others.
+                        </p>
+                        <a href="/publish?method=anonymous" class="method-action-btn">
+                            Publish Anonymously →
+                        </a>
+                    </div>
                 </div>
             </div>
         </section>

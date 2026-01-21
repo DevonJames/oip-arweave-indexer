@@ -758,6 +758,54 @@ if (ONION_PRESS_ENABLED) {
         }
     });
     
+    // POST /onion-press/api/records/publishAnonymous - Proxy to daemon's publishAnonymous endpoint
+    app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
+        try {
+            const response = await axios.post(`http://localhost:${port}/api/records/publishAnonymous`, req.body, {
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                timeout: 120000,
+                httpAgent,
+                httpsAgent
+            });
+            res.status(response.status).json(response.data);
+        } catch (error) {
+            console.error('PublishAnonymous proxy error:', error.message);
+            res.status(error.response?.status || 500).json({
+                error: 'Publishing failed',
+                message: error.response?.data?.message || error.message
+            });
+        }
+    });
+    
+    // POST /onion-press/api/records/publishAccount - Proxy to daemon's publishAccount endpoint
+    app.post('/onion-press/api/records/publishAccount', async (req, res) => {
+        try {
+            // Forward Authorization header for authentication
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (req.headers.authorization) {
+                headers['Authorization'] = req.headers.authorization;
+            }
+            
+            const response = await axios.post(`http://localhost:${port}/api/records/publishAccount`, req.body, {
+                headers: headers,
+                timeout: 120000,
+                httpAgent,
+                httpsAgent
+            });
+            res.status(response.status).json(response.data);
+        } catch (error) {
+            console.error('PublishAccount proxy error:', error.message);
+            res.status(error.response?.status || 500).json({
+                error: 'Publishing failed',
+                message: error.response?.data?.message || error.message
+            });
+        }
+    });
+    
     // GET /onion-press/api/host-info - Get host information
     app.get('/onion-press/api/host-info', (req, res) => {
         const hostName = process.env.COMPOSE_PROJECT_NAME || 'Onion Press';

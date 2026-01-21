@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken, optionalAuthenticateToken, userOwnsRecord, isServerAdmin, getServerPublicKey } = require('../../helpers/utils'); // Import authentication middleware
 const { enforceCalendarScope } = require('../../middleware/auth'); // Import scope enforcement
+const { findUserByEmail } = require('./user'); // Import user lookup function
 
 // const path = require('path');
 const { getRecords, searchRecordInDB, getRecordTypesSummary, deleteRecordsByDID, indexRecord, searchCreatorByAddress } = require('../../helpers/core/elasticsearch');
@@ -304,6 +305,198 @@ router.post('/newRecord', authenticateToken, async (req, res) => {
 });
 
 /**
+ * POST /api/records/publishAnonymous
+ * 
+ * Anonymous publishing endpoint for unsigned records.
+ * 
+ * Behavior depends on destination settings:
+ * - Local-only mode (Arweave/GUN off, local node on): Creates unsigned WordPress post
+ * - Arweave mode (Arweave on): Creates OIP record signed only by server's creator key
+ * 
+ * This enables completely anonymous publishing with no cryptographic identity.
+ */
+router.post('/publishAnonymous', async (req, res) => {
+    try {
+        const { payload, destinations } = req.body;
+        
+        if (!payload) {
+            return res.status(400).json({
+                error: 'Missing payload',
+                message: 'Request body must include a "payload" object'
+            });
+        }
+        
+        console.log(`📝 [PublishAnonymous] Received anonymous payload`);
+        
+        // Validate payload structure
+        if (!payload.tags || !Array.isArray(payload.tags)) {
+            return res.status(400).json({
+                error: 'Invalid payload',
+                message: 'Payload must include a "tags" array'
+            });
+        }
+        
+        // Determine publishing mode
+        const { getPublishingMode } = require('../../helpers/core/publishingMode');
+        const mode = getPublishingMode(destinations);
+        
+        // Ensure Anonymous tag is present
+        const hasAnonymousTag = payload.tags.some(t => t.name === 'Anonymous' && t.value === 'true');
+        if (!hasAnonymousTag) {
+            payload.tags.push({ name: 'Anonymous', value: 'true' });
+        }
+        
+        // Initialize publish results
+        const publishResults = {
+            arweave: null,
+            gun: null,
+            thisHost: null
+        };
+        
+        // LOCAL-ONLY MODE: WordPress-only publishing (unsigned)
+        if (mode.localOnly) {
+            console.log(`📝 [PublishAnonymous] Local-only mode: Publishing to WordPress only`);
+            
+            if (destinations?.thisHost === true) {
+                try {
+                    const wpResult = await publishToWordPress(payload, null, { anonymous: true });
+                    publishResults.thisHost = wpResult;
+                    console.log(`✅ [PublishAnonymous] Published to WordPress! Post ID: ${wpResult.postId}`);
+                } catch (error) {
+                    console.error(`❌ [PublishAnonymous] WordPress publish failed:`, error.message);
+                    publishResults.thisHost = {
+                        success: false,
+                        error: error.message
+                    };
+                }
+            }
+            
+            return res.status(200).json({
+                success: true,
+                destinations: publishResults
+            });
+        }
+        
+        // ARWEAVE MODE: Sign with server's creator key and publish to Arweave
+        if (mode.arweaveMode) {
+            console.log(`🚀 [PublishAnonymous] Arweave mode: Signing with server creator key`);
+            
+            // Get server identity for signing
+            const { getServerOipIdentity, canSign } = require('../../helpers/core/serverOipIdentity');
+            const serverIdentity = await getServerOipIdentity();
+            const { getBootstrapCreator } = require('../../helpers/core/sync-verification');
+            const serverCreator = getBootstrapCreator();
+            
+            let signedPayload = payload;
+            
+            // Sign with server creator key if available
+            if (serverIdentity && canSign(serverIdentity) && serverCreator) {
+                try {
+                    
+                    // Prepare payload with server creator DID
+                    const payloadWithCreator = JSON.parse(JSON.stringify(payload));
+                    if (!payloadWithCreator['@context']) {
+                        payloadWithCreator['@context'] = serverCreator.did;
+                    }
+                    if (!payloadWithCreator.tags) payloadWithCreator.tags = [];
+                    
+                    const hasTag = (name) => payloadWithCreator.tags.some(t => t.name === name);
+                    if (!hasTag('Index-Method')) {
+                        payloadWithCreator.tags.unshift({ name: 'Index-Method', value: 'OIP' });
+                    }
+                    if (!hasTag('Ver')) {
+                        payloadWithCreator.tags.push({ name: 'Ver', value: '0.9.0' });
+                    }
+                    if (!hasTag('Content-Type')) {
+                        payloadWithCreator.tags.push({ name: 'Content-Type', value: 'application/json' });
+                    }
+                    if (!hasTag('Creator')) {
+                        payloadWithCreator.tags.push({ name: 'Creator', value: serverCreator.did });
+                    }
+                    
+                    // Sign with server key
+                    const { signPayload } = require('../../helpers/core/oip-signing');
+                    signedPayload = signPayload(payloadWithCreator, serverIdentity.signingKey);
+                    console.log(`✅ [PublishAnonymous] Signed with server creator key: ${serverCreator.did}`);
+                } catch (error) {
+                    console.warn(`⚠️ [PublishAnonymous] Failed to sign with server key: ${error.message}`);
+                    console.warn(`⚠️ [PublishAnonymous] Publishing unsigned (anonymous mode)`);
+                }
+            } else {
+                console.log(`ℹ️ [PublishAnonymous] Server signing identity not available, publishing unsigned`);
+                if (!serverIdentity) {
+                    console.log(`ℹ️ [PublishAnonymous] No server identity found (check Arweave wallet or SERVER_CREATOR_MNEMONIC)`);
+                } else if (!canSign(serverIdentity)) {
+                    console.log(`ℹ️ [PublishAnonymous] Server identity is read-only (bootstrap creator)`);
+                }
+            }
+            
+            const dataToPublish = signedPayload.fragments ? signedPayload : { fragments: [signedPayload] };
+            const arweaveTags = signedPayload.tags.map(tag => ({
+                name: tag.name,
+                value: tag.value
+            }));
+            
+            if (destinations?.arweave !== false) {
+                try {
+                    console.log(`🚀 [PublishAnonymous] Submitting to Arweave...`);
+                    const result = await arweaveWallet.uploadFile(
+                        JSON.stringify(dataToPublish),
+                        'application/json',
+                        arweaveTags
+                    );
+                    
+                    publishResults.arweave = {
+                        success: true,
+                        transactionId: result.id,
+                        explorerUrl: `https://viewblock.io/arweave/tx/${result.id}`
+                    };
+                    console.log(`✅ [PublishAnonymous] Published to Arweave! TxID: ${result.id}`);
+                } catch (error) {
+                    console.error(`❌ [PublishAnonymous] Arweave publish failed:`, error.message);
+                    publishResults.arweave = {
+                        success: false,
+                        error: error.message
+                    };
+                }
+            }
+            
+            // Also publish to WordPress if requested
+            if (destinations?.thisHost === true) {
+                try {
+                    const wpResult = await publishToWordPress(payload, publishResults.arweave, { 
+                        anonymous: true,
+                        creatorDid: null // Anonymous mode
+                    });
+                    publishResults.thisHost = wpResult;
+                } catch (error) {
+                    console.error(`❌ [PublishAnonymous] WordPress publish failed:`, error.message);
+                    publishResults.thisHost = {
+                        success: false,
+                        error: error.message
+                    };
+                }
+            }
+        }
+        
+        // Return results
+        res.status(200).json({
+            success: true,
+            transactionId: publishResults.arweave?.transactionId,
+            explorerUrl: publishResults.arweave?.explorerUrl,
+            destinations: publishResults
+        });
+        
+    } catch (error) {
+        console.error('[PublishAnonymous] Error:', error);
+        res.status(500).json({ 
+            error: 'Failed to publish anonymous record',
+            message: error.message 
+        });
+    }
+});
+
+/**
  * POST /api/records/publishSigned
  * 
  * Login-less publishing endpoint for v0.9 pre-signed records.
@@ -434,13 +627,26 @@ router.post('/publishSigned', async (req, res) => {
             }
         }
         
+        // Determine publishing mode
+        const { getPublishingMode } = require('../../helpers/core/publishingMode');
+        const mode = getPublishingMode(destinations);
+        
         // Publish to WordPress (This Host) if requested
         if (destinations?.thisHost === true) {
             try {
                 const WORDPRESS_PROXY_ENABLED = process.env.WORDPRESS_PROXY_ENABLED === 'true';
-                if (WORDPRESS_PROXY_ENABLED) {
+                if (WORDPRESS_PROXY_ENABLED || mode.localOnly) {
                     console.log(`📝 [PublishSigned] Publishing to WordPress...`);
-                    const wpResult = await publishToWordPress(payload, publishResults.arweave);
+                    
+                    // Extract creator DID from payload
+                    const creatorDid = getTag('Creator');
+                    
+                    // In local-only mode, publish with DID identification
+                    // In Arweave mode, also publish to WordPress with DID identification
+                    const wpResult = await publishToWordPress(payload, publishResults.arweave, {
+                        anonymous: false,
+                        creatorDid: creatorDid || null
+                    });
                     publishResults.thisHost = wpResult;
                     console.log(`✅ [PublishSigned] Published to WordPress! Post ID: ${wpResult.postId}`);
                 } else {
@@ -456,6 +662,48 @@ router.post('/publishSigned', async (req, res) => {
                     error: error.message
                 };
             }
+        }
+        
+        // In Arweave mode, the payload already has writer's signature
+        // Optionally add server signature for dual signatures
+        const { getServerOipIdentity, canSign } = require('../../helpers/core/serverOipIdentity');
+        const serverIdentity = await getServerOipIdentity();
+        const { getBootstrapCreator } = require('../../helpers/core/sync-verification');
+        const serverCreator = getBootstrapCreator();
+        
+        if (mode.arweaveMode && serverIdentity && canSign(serverIdentity) && serverCreator) {
+            try {
+                // Add server signature to already user-signed payload
+                
+                const { canonicalJson } = require('../../helpers/core/oip-crypto');
+                const { sha256 } = require('@noble/hashes/sha256');
+                const { secp256k1 } = require('@noble/curves/secp256k1');
+                const base64url = require('base64url');
+                
+                const payloadBytes = canonicalJson(payload);
+                const messageHash = sha256(new TextEncoder().encode(payloadBytes));
+                
+                // Derive server key index from payload digest
+                const { deriveIndexFromPayloadDigest } = require('../../helpers/core/oip-crypto');
+                const userPayloadDigest = payload.tags.find(t => t.name === 'PayloadDigest')?.value;
+                const serverKeyIndex = deriveIndexFromPayloadDigest(userPayloadDigest);
+                const serverChildKey = serverIdentity.signingKey.deriveChild(serverKeyIndex);
+                
+                // Sign with server key
+                const serverSignature = secp256k1.sign(messageHash, serverChildKey.privateKey);
+                const serverSignatureBase64 = base64url.encode(Buffer.from(serverSignature.toCompactRawBytes()));
+                
+                // Add server signature tags
+                payload.tags.push({ name: 'ServerCreator', value: serverCreator.did });
+                payload.tags.push({ name: 'ServerCreatorSig', value: serverSignatureBase64 });
+                payload.tags.push({ name: 'ServerKeyIndex', value: serverKeyIndex.toString() });
+                
+                console.log(`✅ [PublishSigned] Added server signature: ${serverCreator.did}`);
+            } catch (error) {
+                console.warn(`⚠️ [PublishSigned] Failed to add server signature: ${error.message}`);
+            }
+        } else if (mode.arweaveMode && (!serverIdentity || !canSign(serverIdentity))) {
+            console.log(`ℹ️ [PublishSigned] Server signing not available (check Arweave wallet or SERVER_CREATOR_MNEMONIC)`);
         }
         
         // Determine overall success
@@ -485,12 +733,276 @@ router.post('/publishSigned', async (req, res) => {
 });
 
 /**
+ * POST /api/records/publishAccount
+ * 
+ * Account-based publishing endpoint for authenticated users.
+ * 
+ * Behavior depends on destination settings:
+ * - Local-only mode (Arweave/GUN off, local node on): Creates WordPress post identified by account name
+ * - Arweave mode (Arweave on): Creates OIP record signed by server's creator key AND account's wallet
+ * 
+ * Requires authentication (JWT token) and user password to decrypt wallet.
+ */
+router.post('/publishAccount', authenticateToken, async (req, res) => {
+    try {
+        const { payload, destinations, password } = req.body;
+        
+        if (!payload) {
+            return res.status(400).json({
+                error: 'Missing payload',
+                message: 'Request body must include a "payload" object'
+            });
+        }
+        
+        if (!password) {
+            return res.status(400).json({
+                error: 'Missing password',
+                message: 'Password required to decrypt user wallet for signing'
+            });
+        }
+        
+        console.log(`📝 [PublishAccount] Received account-based payload from user: ${req.user.email}`);
+        
+        // Validate payload structure
+        if (!payload.tags || !Array.isArray(payload.tags)) {
+            return res.status(400).json({
+                error: 'Invalid payload',
+                message: 'Payload must include a "tags" array'
+            });
+        }
+        
+        // Determine publishing mode
+        const { getPublishingMode } = require('../../helpers/core/publishingMode');
+        const mode = getPublishingMode(destinations);
+        
+        // Get user's OIP identity from their account
+        const { getUserOipIdentityFromRequest } = require('../../helpers/core/userOipIdentity');
+        let userIdentity = null;
+        let userDid = null;
+        
+        try {
+            userIdentity = await getUserOipIdentityFromRequest(req, password);
+            userDid = userIdentity.did;
+            console.log(`🔑 [PublishAccount] User DID: ${userDid}`);
+        } catch (error) {
+            console.error(`❌ [PublishAccount] Failed to get user identity:`, error.message);
+            return res.status(400).json({
+                error: 'Failed to get user identity',
+                message: error.message
+            });
+        }
+        
+        // Prepare payload with user's DID
+        const payloadWithCreator = JSON.parse(JSON.stringify(payload));
+        if (!payloadWithCreator['@context']) {
+            payloadWithCreator['@context'] = userDid;
+        }
+        
+        // Ensure required tags
+        if (!payloadWithCreator.tags) payloadWithCreator.tags = [];
+        const hasTag = (name) => payloadWithCreator.tags.some(t => t.name === name);
+        
+        if (!hasTag('Index-Method')) {
+            payloadWithCreator.tags.unshift({ name: 'Index-Method', value: 'OIP' });
+        }
+        if (!hasTag('Ver')) {
+            payloadWithCreator.tags.push({ name: 'Ver', value: '0.9.0' });
+        }
+        if (!hasTag('Content-Type')) {
+            payloadWithCreator.tags.push({ name: 'Content-Type', value: 'application/json' });
+        }
+        if (!hasTag('Creator')) {
+            payloadWithCreator.tags.push({ name: 'Creator', value: userDid });
+        }
+        
+        // Initialize publish results
+        const publishResults = {
+            arweave: null,
+            gun: null,
+            thisHost: null
+        };
+        
+        // LOCAL-ONLY MODE: WordPress-only publishing (identified by account)
+        if (mode.localOnly) {
+            console.log(`📝 [PublishAccount] Local-only mode: Publishing to WordPress with account identification`);
+            
+            if (destinations?.thisHost === true) {
+                try {
+                    const { getWordPressUserId } = require('../../helpers/core/wordpressUserSync');
+                    const wpUserId = await getWordPressUserId(req.user.email);
+                    
+                    const wpResult = await publishToWordPress(payloadWithCreator, null, {
+                        anonymous: false,
+                        creatorDid: null,
+                        wordpressUserId: wpUserId
+                    });
+                    publishResults.thisHost = wpResult;
+                    console.log(`✅ [PublishAccount] Published to WordPress! Post ID: ${wpResult.postId}`);
+                } catch (error) {
+                    console.error(`❌ [PublishAccount] WordPress publish failed:`, error.message);
+                    publishResults.thisHost = {
+                        success: false,
+                        error: error.message
+                    };
+                }
+            }
+            
+            return res.status(200).json({
+                success: true,
+                destinations: publishResults,
+                userDid: userDid
+            });
+        }
+        
+        // ARWEAVE MODE: Sign with both server creator key AND user's wallet
+        if (mode.arweaveMode) {
+            console.log(`🚀 [PublishAccount] Arweave mode: Signing with user wallet and server creator key`);
+            
+            // Sign with user's wallet first
+            const { signPayload } = require('../../helpers/core/oip-signing');
+            const userSignedPayload = signPayload(payloadWithCreator, userIdentity.signingKey);
+            console.log(`✅ [PublishAccount] Signed with user wallet: ${userDid}`);
+            
+            // Get server creator for additional signature
+            const { getBootstrapCreator } = require('../../helpers/core/sync-verification');
+            const serverCreator = getBootstrapCreator();
+            
+            let finalPayload = userSignedPayload;
+            let serverCreatorDid = null;
+            
+            // Get server identity for signing
+            const { getServerOipIdentity, canSign } = require('../../helpers/core/serverOipIdentity');
+            const serverIdentity = await getServerOipIdentity();
+            
+            if (serverIdentity && canSign(serverIdentity) && serverCreator) {
+                try {
+                    
+                    // Sign with server key (on the already user-signed payload)
+                    // Note: We sign the canonical JSON of the user-signed payload
+                    const { canonicalJson } = require('../../helpers/core/oip-crypto');
+                    const { sha256 } = require('@noble/hashes/sha256');
+                    const { secp256k1 } = require('@noble/curves/secp256k1');
+                    const base64url = require('base64url');
+                    
+                    const payloadBytes = canonicalJson(userSignedPayload);
+                    const messageHash = sha256(new TextEncoder().encode(payloadBytes));
+                    
+                    // Derive server key index from payload digest
+                    const { deriveIndexFromPayloadDigest } = require('../../helpers/core/oip-crypto');
+                    const userPayloadDigest = userSignedPayload.tags.find(t => t.name === 'PayloadDigest')?.value;
+                    const serverKeyIndex = deriveIndexFromPayloadDigest(userPayloadDigest);
+                    const serverChildKey = serverIdentity.signingKey.deriveChild(serverKeyIndex);
+                    
+                    // Sign with server key
+                    const serverSignature = secp256k1.sign(messageHash, serverChildKey.privateKey);
+                    const serverSignatureBase64 = base64url.encode(Buffer.from(serverSignature.toCompactRawBytes()));
+                    
+                    // Add server signature tags
+                    finalPayload = JSON.parse(JSON.stringify(userSignedPayload));
+                    finalPayload.tags.push({ name: 'ServerCreator', value: serverCreator.did });
+                    finalPayload.tags.push({ name: 'ServerCreatorSig', value: serverSignatureBase64 });
+                    finalPayload.tags.push({ name: 'ServerKeyIndex', value: serverKeyIndex.toString() });
+                    
+                    serverCreatorDid = serverCreator.did;
+                    console.log(`✅ [PublishAccount] Added server signature: ${serverCreatorDid}`);
+                } catch (error) {
+                    console.warn(`⚠️ [PublishAccount] Failed to add server signature: ${error.message}`);
+                    console.warn(`⚠️ [PublishAccount] Continuing with user signature only`);
+                    // Continue without server signature
+                }
+            } else {
+                console.log(`ℹ️ [PublishAccount] Server creator mnemonic not configured, skipping server signature`);
+                console.log(`ℹ️ [PublishAccount] Set SERVER_CREATOR_MNEMONIC env var to enable dual signatures`);
+            }
+            
+            // Prepare data for Arweave
+            const dataToPublish = finalPayload.fragments ? finalPayload : { fragments: [finalPayload] };
+            
+            // Build tags for Arweave transaction
+            const arweaveTags = finalPayload.tags.map(tag => ({
+                name: tag.name,
+                value: tag.value
+            }));
+            
+            if (destinations?.arweave !== false) {
+                try {
+                    console.log(`🚀 [PublishAccount] Submitting to Arweave...`);
+                    const result = await arweaveWallet.uploadFile(
+                        JSON.stringify(dataToPublish),
+                        'application/json',
+                        arweaveTags
+                    );
+                    
+                    publishResults.arweave = {
+                        success: true,
+                        transactionId: result.id,
+                        did: `did:arweave:${result.id}`,
+                        explorerUrl: `https://viewblock.io/arweave/tx/${result.id}`,
+                        userDid: userDid,
+                        serverCreatorDid: serverCreatorDid
+                    };
+                    console.log(`✅ [PublishAccount] Published to Arweave! TxID: ${result.id}`);
+                } catch (error) {
+                    console.error(`❌ [PublishAccount] Arweave publish failed:`, error.message);
+                    publishResults.arweave = {
+                        success: false,
+                        error: error.message
+                    };
+                }
+            }
+            
+            // Also publish to WordPress if requested
+            if (destinations?.thisHost === true) {
+                try {
+                    const { getWordPressUserId } = require('../../helpers/core/wordpressUserSync');
+                    const wpUserId = await getWordPressUserId(req.user.email);
+                    
+                    const wpResult = await publishToWordPress(finalPayload, publishResults.arweave, {
+                        anonymous: false,
+                        creatorDid: userDid,
+                        wordpressUserId: wpUserId
+                    });
+                    publishResults.thisHost = wpResult;
+                } catch (error) {
+                    console.error(`❌ [PublishAccount] WordPress publish failed:`, error.message);
+                    publishResults.thisHost = {
+                        success: false,
+                        error: error.message
+                    };
+                }
+            }
+        }
+        
+        // Return results
+        res.status(200).json({
+            success: true,
+            transactionId: publishResults.arweave?.transactionId,
+            explorerUrl: publishResults.arweave?.explorerUrl,
+            userDid: userDid,
+            serverCreatorDid: publishResults.arweave?.serverCreatorDid || null,
+            destinations: publishResults
+        });
+        
+    } catch (error) {
+        console.error('[PublishAccount] Error:', error);
+        res.status(500).json({ 
+            error: 'Failed to publish account-based record',
+            message: error.message 
+        });
+    }
+});
+
+/**
  * Publish OIP record to WordPress
  * @param {object} payload - Signed OIP payload
  * @param {object} arweaveResult - Arweave publishing result (if available)
+ * @param {object} options - Publishing options
+ * @param {boolean} options.anonymous - If true, post is anonymous
+ * @param {string} options.creatorDid - Creator DID for DID-based identification
+ * @param {number} options.wordpressUserId - WordPress user ID for account-based identification
  * @returns {Promise<object>} WordPress post creation result
  */
-async function publishToWordPress(payload, arweaveResult = null) {
+async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     const WORDPRESS_URL = process.env.WORDPRESS_URL || 'http://wordpress:80';
     const WORDPRESS_ADMIN_USER = process.env.WP_ADMIN_USER || 'admin';
     const WORDPRESS_ADMIN_PASSWORD = process.env.WP_ADMIN_PASSWORD || '';
@@ -512,6 +1024,16 @@ async function publishToWordPress(payload, arweaveResult = null) {
     const basic = record.basic || {};
     const postData = record.post || {};
     
+    // Determine identification mode
+    let identificationMode = 'anonymous';
+    if (options.creatorDid) {
+        identificationMode = 'did';
+    } else if (options.wordpressUserId) {
+        identificationMode = 'account';
+    } else if (options.anonymous) {
+        identificationMode = 'anonymous';
+    }
+    
     // Build WordPress post data
     const wpPostData = {
         title: basic.name || 'Untitled',
@@ -519,13 +1041,20 @@ async function publishToWordPress(payload, arweaveResult = null) {
         excerpt: basic.description || '',
         status: 'publish',
         meta: {
-            op_publisher_did: arweaveResult?.did || null,
+            op_publisher_did: options.creatorDid || arweaveResult?.did || null,
             op_publisher_tx_id: arweaveResult?.transactionId || null,
             op_publisher_status: 'published',
-            op_publisher_mode: 'oip-signed',
-            op_publisher_published_at: new Date().toISOString()
+            op_publisher_mode: identificationMode,
+            op_publisher_published_at: new Date().toISOString(),
+            op_publisher_anonymous: options.anonymous || false
         }
     };
+    
+    // Set WordPress author based on identification mode
+    if (identificationMode === 'account' && options.wordpressUserId) {
+        wpPostData.author = options.wordpressUserId;
+    }
+    // For anonymous and DID modes, use admin account (default)
     
     // Add tags if available
     if (basic.tagItems && Array.isArray(basic.tagItems) && basic.tagItems.length > 0) {
@@ -535,6 +1064,11 @@ async function publishToWordPress(payload, arweaveResult = null) {
     // Add author byline if available
     if (postData.bylineWriter) {
         wpPostData.meta.op_publisher_byline = postData.bylineWriter;
+    }
+    
+    // Add DID for DID-based identification
+    if (identificationMode === 'did' && options.creatorDid) {
+        wpPostData.meta.op_publisher_creator_did = options.creatorDid;
     }
     
     // Create post via WordPress REST API

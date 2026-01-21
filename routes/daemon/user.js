@@ -759,12 +759,27 @@ router.post('/login', async (req, res) => {
             }
         }
 
+        // Sync WordPress user (create/update WordPress account)
+        let wordpressUserId = null;
+        try {
+            const { syncWordPressUser } = require('../../helpers/core/wordpressUserSync');
+            const wpUser = await syncWordPressUser(user.email, null, user.email.split('@')[0]);
+            if (wpUser) {
+                wordpressUserId = wpUser.id;
+                console.log(`✅ WordPress user synced for: "${email}" (WP ID: ${wordpressUserId})`);
+            }
+        } catch (error) {
+            console.warn(`⚠️ WordPress user sync failed for "${email}":`, error.message);
+            // Don't fail login if WordPress sync fails
+        }
+
         // Authentication successful - Create JWT token
         const token = jwt.sign({ 
             userId, 
             email: user.email, 
             publicKey: user.publicKey, // Include user's public key in JWT (may be updated from migration)
-            isAdmin: user.isAdmin 
+            isAdmin: user.isAdmin,
+            wordpressUserId: wordpressUserId // Include WordPress user ID
         }, JWT_SECRET, { expiresIn: '45d' });
         
         console.log(`🔑 JWT token generated successfully for user: "${email}"`);
@@ -773,7 +788,8 @@ router.post('/login', async (req, res) => {
             success: true,
             message: 'Login successful',
             token, // Return the JWT token
-            publicKey: user.publicKey // NEW: Return public key for client awareness
+            publicKey: user.publicKey, // NEW: Return public key for client awareness
+            wordpressUserId: wordpressUserId // Include WordPress user ID
         };
         
         console.log(`✅ JWT token delivered in response for user: "${email}"`);
