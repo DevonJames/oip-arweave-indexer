@@ -16,13 +16,24 @@ if [ -n "$ELASTICSEARCH_HOST" ]; then
     ./wait-for-it.sh "${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT:-9200}" -t 120 -- echo "✅ Elasticsearch is ready"
 fi
 
-# Wait for GUN relay to be ready
-if [ -n "$GUN_PEERS" ]; then
+# Wait for GUN relay to be ready (only if GUN sync is enabled)
+# Note: Some profiles (like onion-press-server) don't include gun-relay service
+# so we check if GUN sync is enabled AND if the service is actually available
+if [ "${GUN_SYNC_ENABLED:-true}" = "false" ]; then
+    echo "⏭️  Skipping GUN relay wait (GUN_SYNC_ENABLED=false)"
+elif [ -n "$GUN_PEERS" ]; then
     GUN_HOST=$(echo $GUN_PEERS | sed 's|http://||' | sed 's|/gun||' | cut -d: -f1)
     GUN_PORT=$(echo $GUN_PEERS | sed 's|http://||' | sed 's|/gun||' | cut -d: -f2)
     if [ -n "$GUN_HOST" ] && [ -n "$GUN_PORT" ]; then
         echo "⏳ Waiting for GUN relay at ${GUN_HOST}:${GUN_PORT}..."
-        ./wait-for-it.sh "${GUN_HOST}:${GUN_PORT}" -t 60 -- echo "✅ GUN relay is ready"
+        # wait-for-it.sh returns 0 on success, non-zero on timeout/failure
+        # Suppress stderr to avoid "bad address" errors when service doesn't exist
+        if ./wait-for-it.sh "${GUN_HOST}:${GUN_PORT}" -t 10 -- echo "✅ GUN relay is ready" 2>/dev/null; then
+            : # Success - message already printed by wait-for-it.sh
+        else
+            echo "⚠️  GUN relay not available (service not in this profile or not running)"
+            echo "   Continuing anyway - GUN sync will be disabled"
+        fi
     fi
 fi
 

@@ -19,10 +19,15 @@ const arweave = Arweave.init(arweaveConfig);
 // Import gateway registry for multi-gateway failover
 const { getGatewayUrls, getGraphQLEndpoints, initializeGatewayRegistry } = require('./gateway-registry');
 
-// Initialize gateway registry on module load
-initializeGatewayRegistry().catch(err => {
-    console.warn('⚠️  Gateway registry initialization failed:', err.message);
-});
+// Initialize gateway registry on module load (only if Arweave syncing is enabled)
+// Skip initialization if ARWEAVE_SYNC_ENABLED=false (web server + login service mode)
+if (process.env.ARWEAVE_SYNC_ENABLED !== 'false') {
+    initializeGatewayRegistry().catch(err => {
+        console.warn('⚠️  Gateway registry initialization failed:', err.message);
+    });
+} else {
+    console.log('⏭️  Gateway registry initialization skipped (ARWEAVE_SYNC_ENABLED=false)');
+}
 
 // Hardcoded fallback data for critical creator registration transactions
 // These are used when the Arweave gateway is unavailable

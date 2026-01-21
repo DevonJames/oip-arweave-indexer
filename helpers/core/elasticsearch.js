@@ -44,6 +44,11 @@ let cachedGraphQLEndpoints = null;
 
 // Helper function to get GraphQL endpoints (uses gateway registry with multi-gateway failover)
 function getGraphQLEndpoints() {
+    // If Arweave syncing is disabled, return empty array
+    if (process.env.ARWEAVE_SYNC_ENABLED === 'false') {
+        return [];
+    }
+    
     // Return cached if available
     if (cachedGraphQLEndpoints && cachedGraphQLEndpoints.length > 0) {
         return cachedGraphQLEndpoints;
@@ -62,6 +67,11 @@ function getGraphQLEndpoints() {
 
 // Async version for contexts that support await
 async function getGraphQLEndpointsAsync() {
+    // If Arweave syncing is disabled, return empty array
+    if (process.env.ARWEAVE_SYNC_ENABLED === 'false') {
+        return [];
+    }
+    
     const endpoints = await getRegistryGraphQLEndpoints();
     cachedGraphQLEndpoints = endpoints;
     return endpoints;
@@ -74,6 +84,11 @@ function getGraphQLEndpoint() {
 
 // Helper function to get gateway base URLs (uses gateway registry with multi-gateway failover)
 function getGatewayBaseUrls() {
+    // If Arweave syncing is disabled, return empty array
+    if (process.env.ARWEAVE_SYNC_ENABLED === 'false') {
+        return [];
+    }
+    
     // Return cached if available
     if (cachedGatewayUrls && cachedGatewayUrls.length > 0) {
         return cachedGatewayUrls;
@@ -92,6 +107,11 @@ function getGatewayBaseUrls() {
 
 // Async version for contexts that support await
 async function getGatewayBaseUrlsAsync() {
+    // If Arweave syncing is disabled, return empty array
+    if (process.env.ARWEAVE_SYNC_ENABLED === 'false') {
+        return [];
+    }
+    
     const urls = await getRegistryGatewayUrls();
     cachedGatewayUrls = urls;
     return urls;
@@ -231,8 +251,19 @@ const GRAPHQL_CLIENT_MAX_AGE = parseInt(process.env.GRAPHQL_CLIENT_RECREATION_IN
 const nodeFetch = require('node-fetch');
 
 function createGraphQLClients() {
+    // If Arweave syncing is disabled, return empty map
+    if (process.env.ARWEAVE_SYNC_ENABLED === 'false') {
+        console.log('⏭️  [GraphQL Client] Skipping client creation (ARWEAVE_SYNC_ENABLED=false)');
+        return new Map();
+    }
+    
     const endpoints = getGraphQLEndpoints();
     const clients = new Map();
+    
+    if (endpoints.length === 0) {
+        console.log('⏭️  [GraphQL Client] No endpoints available, skipping client creation');
+        return clients;
+    }
     
     endpoints.forEach(endpoint => {
         // Determine which agent to use based on protocol
@@ -258,6 +289,11 @@ function createGraphQLClients() {
 }
 
 function getGraphQLClients() {
+    // If Arweave syncing is disabled, return empty map
+    if (process.env.ARWEAVE_SYNC_ENABLED === 'false' || process.env.ARWEAVE_SYNC_ENABLED === '0') {
+        return new Map();
+    }
+    
     const clientAge = Date.now() - graphqlClientsCreatedAt;
     
     // Recreate clients if they're too old (to clear accumulated sockets/buffers)
@@ -280,8 +316,17 @@ function getGraphQLClients() {
     return graphqlClients;
 }
 
-// Create initial GraphQL clients
-graphqlClients = createGraphQLClients();
+// Create initial GraphQL clients (only if Arweave syncing is enabled)
+// Skip GraphQL client creation if ARWEAVE_SYNC_ENABLED=false (web server + login service mode)
+const arweaveSyncEnabled = process.env.ARWEAVE_SYNC_ENABLED !== 'false' && process.env.ARWEAVE_SYNC_ENABLED !== '0';
+if (arweaveSyncEnabled) {
+    graphqlClients = createGraphQLClients();
+} else {
+    console.log('⏭️  [GraphQL Client] Skipping initial client creation (ARWEAVE_SYNC_ENABLED=false)');
+    // Create empty map to prevent errors
+    graphqlClients = new Map();
+    graphqlClientsCreatedAt = Date.now();
+}
 
 // Helper function for backward-compatible DID queries
 function createDIDQuery(targetDid) {

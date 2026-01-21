@@ -355,26 +355,39 @@ async function createNoteChunksIndex() {
  */
 async function initializeIndices() {
     try {
-        console.log('Initializing Elasticsearch indices...');
+        const arweaveSyncEnabled = process.env.ARWEAVE_SYNC_ENABLED !== 'false';
         
-        // Initialize core OIP indices first (records, templates, creatorregistrations)
-        await ensureIndexExists();
-        console.log('Core OIP indices (records, templates, creatorregistrations) initialized');
+        if (!arweaveSyncEnabled) {
+            console.log('Initializing Elasticsearch indices (web server + login mode)...');
+            console.log('⏭️  Skipping Arweave-related indices (ARWEAVE_SYNC_ENABLED=false)');
+        } else {
+            console.log('Initializing Elasticsearch indices...');
+        }
         
-        // Initialize users index
+        // Always initialize users index (needed for authentication/login)
         await ensureUserIndexExists();
         console.log('Users index initialized');
         
-        // Initialize additional indices
-        await Promise.all([
-            createContentPaymentsIndex(),
-            createNotificationsIndex(),
-            createSwapsIndex(),
-            createNotesIndex(),
-            createNoteChunksIndex()
-        ]);
+        // Only initialize Arweave-related indices if syncing is enabled
+        if (arweaveSyncEnabled) {
+            // Initialize core OIP indices (records, templates, creatorregistrations)
+            await ensureIndexExists();
+            console.log('Core OIP indices (records, templates, creatorregistrations) initialized');
+            
+            // Initialize additional indices
+            await Promise.all([
+                createContentPaymentsIndex(),
+                createNotificationsIndex(),
+                createSwapsIndex(),
+                createNotesIndex(),
+                createNoteChunksIndex()
+            ]);
+            
+            console.log('All indices initialized successfully');
+        } else {
+            console.log('✅ Indices initialized (users index only - web server + login mode)');
+        }
         
-        console.log('All indices initialized successfully');
         return true;
     } catch (error) {
         console.error('Error initializing indices:', error);
