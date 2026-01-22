@@ -620,8 +620,10 @@ if (ONION_PRESS_ENABLED) {
     app.get('/onion-press/api/wordpress/posts', async (req, res) => {
         try {
             const WORDPRESS_PROXY_ENABLED = process.env.WORDPRESS_PROXY_ENABLED === 'true';
+            console.log(`🔍 [WordPressPosts] Request received. WordPress proxy enabled: ${WORDPRESS_PROXY_ENABLED}`);
             
             if (!WORDPRESS_PROXY_ENABLED) {
+                console.log(`⚠️ [WordPressPosts] WordPress proxy not enabled`);
                 return res.status(503).json({
                     error: 'WordPress not available',
                     message: 'WordPress proxy is not enabled'
@@ -629,10 +631,12 @@ if (ONION_PRESS_ENABLED) {
             }
             
             const { limit = 20, offset = 0, search, type } = req.query;
+            console.log(`🔍 [WordPressPosts] Query params: limit=${limit}, offset=${offset}, search=${search || 'none'}, type=${type || 'none'}`);
             
             // Query WordPress REST API
             const wordpressUrl = process.env.WORDPRESS_URL || 'http://wordpress:80';
             const wpApiUrl = `${wordpressUrl}/wp-json/wp/v2/posts`;
+            console.log(`🔍 [WordPressPosts] Querying WordPress at: ${wpApiUrl}`);
             
             const params = new URLSearchParams({
                 per_page: Math.min(parseInt(limit) || 20, 100),
@@ -646,6 +650,7 @@ if (ONION_PRESS_ENABLED) {
             
             if (type && type !== 'post') {
                 // WordPress only has 'post' type by default
+                console.log(`ℹ️ [WordPressPosts] Type filter '${type}' is not 'post', returning empty results`);
                 return res.json({ records: [] });
             }
             
@@ -657,7 +662,7 @@ if (ONION_PRESS_ENABLED) {
             });
             
             if (response.status !== 200) {
-                console.error(`WordPress API returned status ${response.status}:`, response.data);
+                console.error(`❌ [WordPressPosts] WordPress API returned status ${response.status}:`, response.data);
                 return res.status(503).json({
                     error: 'WordPress API error',
                     message: `WordPress returned status ${response.status}`,
@@ -666,6 +671,7 @@ if (ONION_PRESS_ENABLED) {
             }
             
             const wpPosts = response.data || [];
+            console.log(`✅ [WordPressPosts] Retrieved ${wpPosts.length} posts from WordPress`);
             
             // Build base URL for permalinks
             const baseUrl = process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get('host')}`;
@@ -697,12 +703,13 @@ if (ONION_PRESS_ENABLED) {
                 };
             });
             
+            console.log(`✅ [WordPressPosts] Returning ${records.length} transformed records`);
             res.json({ records });
             
         } catch (error) {
-            console.error('WordPress posts API error:', error.message);
+            console.error('❌ [WordPressPosts] Error:', error.message);
             if (error.response) {
-                console.error('WordPress response:', error.response.status, error.response.data);
+                console.error('❌ [WordPressPosts] WordPress response:', error.response.status, error.response.data);
             }
             res.status(500).json({
                 error: 'Failed to fetch WordPress posts',

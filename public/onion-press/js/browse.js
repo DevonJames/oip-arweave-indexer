@@ -58,21 +58,37 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function updateAdminUI() {
     // Use the getAdminStatus function from api.js
     try {
+        // Check if user is logged in first
         const apiModule = await import('./api.js');
+        if (!apiModule.isLoggedIn()) {
+            console.log('User not logged in, hiding admin UI');
+            const settingsBtn = document.getElementById('settingsBtn');
+            if (settingsBtn) {
+                settingsBtn.classList.add('hidden');
+            }
+            return;
+        }
+        
+        console.log('Checking admin status...');
         const status = await apiModule.getAdminStatus();
+        console.log('Admin status:', status);
         const wpAdmin = status.isWordPressAdmin === true;
         
         // Show/hide settings gear icon
         const settingsBtn = document.getElementById('settingsBtn');
         if (settingsBtn) {
             if (wpAdmin) {
+                console.log('User is WordPress admin, showing settings button');
                 settingsBtn.classList.remove('hidden');
             } else {
+                console.log('User is not WordPress admin, hiding settings button');
                 settingsBtn.classList.add('hidden');
             }
+        } else {
+            console.warn('Settings button element not found');
         }
     } catch (error) {
-        console.warn('Failed to update admin UI:', error);
+        console.error('Failed to update admin UI:', error);
         // Hide admin UI on error
         const settingsBtn = document.getElementById('settingsBtn');
         if (settingsBtn) {
@@ -387,20 +403,24 @@ async function loadRecords() {
         // Load from WordPress if "thisHost" is enabled
         if (destinations.thisHost) {
             try {
+                console.log('Loading WordPress posts...');
                 const wpRecords = await getWordPressPosts({
                     limit: pageSize,
                     offset: currentPage * pageSize,
                     search: searchInput.value,
                     type: typeFilter.value
                 });
+                console.log('WordPress posts loaded:', wpRecords.length);
                 allRecords.push(...wpRecords);
                 // Update total if we got WordPress posts
                 if (wpRecords.length > 0) {
                     totalRecords = Math.max(totalRecords, allRecords.length);
                 }
             } catch (error) {
-                console.warn('Failed to load WordPress posts:', error);
+                console.error('Failed to load WordPress posts:', error);
             }
+        } else {
+            console.log('WordPress posts disabled (thisHost not enabled)');
         }
         
         // Remove duplicates by DID or post ID

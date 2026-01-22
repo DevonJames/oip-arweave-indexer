@@ -808,8 +808,11 @@ router.post('/login', async (req, res) => {
 router.get('/admin-status', authenticateToken, async (req, res) => {
     try {
         const user = req.user;
+        console.log(`🔍 [AdminStatus] Checking admin status for user: ${user.email}`);
+        console.log(`🔍 [AdminStatus] WordPress User ID: ${user.wordpressUserId || 'none'}`);
         
         if (!user || !user.wordpressUserId) {
+            console.log(`⚠️ [AdminStatus] No WordPress user ID found for user: ${user?.email || 'unknown'}`);
             return res.json({
                 isWordPressAdmin: false,
                 isAdmin: user?.isAdmin || false
@@ -817,7 +820,9 @@ router.get('/admin-status', authenticateToken, async (req, res) => {
         }
         
         const { isWordPressAdmin: checkWordPressAdmin } = require('../../helpers/core/wordpressUserSync');
+        console.log(`🔍 [AdminStatus] Checking WordPress admin status for WP User ID: ${user.wordpressUserId}`);
         const wpAdmin = await checkWordPressAdmin(user.wordpressUserId);
+        console.log(`✅ [AdminStatus] WordPress admin check result: ${wpAdmin}`);
         
         res.json({
             isWordPressAdmin: wpAdmin,
@@ -825,7 +830,7 @@ router.get('/admin-status', authenticateToken, async (req, res) => {
             wordpressUserId: user.wordpressUserId
         });
     } catch (error) {
-        console.error('Error checking admin status:', error);
+        console.error('❌ [AdminStatus] Error checking admin status:', error);
         res.status(500).json({
             error: 'Failed to check admin status',
             message: error.message

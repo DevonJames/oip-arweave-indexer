@@ -95,7 +95,28 @@ async function resetAdminSettings() {
 }
 
 async function getAdminStatus() {
-    return apiRequest('GET', `${OIP_API}/admin/status`);
+    // Use the user admin-status endpoint which checks WordPress admin
+    try {
+        // Use full path with API_BASE
+        const response = await fetch(`${API_BASE}/api/user/admin-status`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': authToken ? `Bearer ${authToken}` : ''
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Admin status check failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        // Fallback to admin/status if user endpoint fails
+        console.warn('User admin-status failed, trying admin/status:', error);
+        return await apiRequest('GET', `${OIP_API}/admin/status`);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -116,7 +137,8 @@ async function testTorConnection() {
 
 async function getWordPressPosts(params = {}) {
     const queryString = new URLSearchParams(params).toString();
-    return apiRequest('GET', `${OIP_API}/wordpress/posts?${queryString}`);
+    const result = await apiRequest('GET', `${OIP_API}/wordpress/posts?${queryString}`);
+    return result.records || [];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

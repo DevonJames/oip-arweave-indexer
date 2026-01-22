@@ -359,16 +359,21 @@ router.post('/publishAnonymous', async (req, res) => {
             
             if (destinations?.thisHost === true) {
                 try {
+                    console.log(`📝 [PublishAnonymous] Local-only mode: Publishing to WordPress only`);
+                    console.log(`🔍 [PublishAnonymous] Destinations object:`, JSON.stringify(destinations, null, 2));
                     const wpResult = await publishToWordPress(payload, null, { anonymous: true });
                     publishResults.thisHost = wpResult;
-                    console.log(`✅ [PublishAnonymous] Published to WordPress! Post ID: ${wpResult.postId}`);
+                    console.log(`✅ [PublishAnonymous] Published to WordPress! Post ID: ${wpResult.postId}, Permalink: ${wpResult.permalink || wpResult.postUrl}`);
                 } catch (error) {
                     console.error(`❌ [PublishAnonymous] WordPress publish failed:`, error.message);
+                    console.error(`❌ [PublishAnonymous] Error stack:`, error.stack);
                     publishResults.thisHost = {
                         success: false,
                         error: error.message
                     };
                 }
+            } else {
+                console.log(`ℹ️ [PublishAnonymous] WordPress publishing disabled (destinations.thisHost = ${destinations?.thisHost})`);
             }
             
             return res.status(200).json({
@@ -464,18 +469,24 @@ router.post('/publishAnonymous', async (req, res) => {
             // Also publish to WordPress if requested
             if (destinations?.thisHost === true) {
                 try {
+                    console.log(`📝 [PublishAnonymous] Arweave mode: Also publishing to WordPress`);
+                    console.log(`🔍 [PublishAnonymous] Destinations object:`, JSON.stringify(destinations, null, 2));
                     const wpResult = await publishToWordPress(payload, publishResults.arweave, { 
                         anonymous: true,
                         creatorDid: null // Anonymous mode
                     });
                     publishResults.thisHost = wpResult;
+                    console.log(`✅ [PublishAnonymous] Published to WordPress! Post ID: ${wpResult.postId}, Permalink: ${wpResult.permalink || wpResult.postUrl}`);
                 } catch (error) {
                     console.error(`❌ [PublishAnonymous] WordPress publish failed:`, error.message);
+                    console.error(`❌ [PublishAnonymous] Error stack:`, error.stack);
                     publishResults.thisHost = {
                         success: false,
                         error: error.message
                     };
                 }
+            } else {
+                console.log(`ℹ️ [PublishAnonymous] WordPress publishing disabled (destinations.thisHost = ${destinations?.thisHost})`);
             }
         }
         
@@ -1003,9 +1014,16 @@ router.post('/publishAccount', authenticateToken, async (req, res) => {
  * @returns {Promise<object>} WordPress post creation result
  */
 async function publishToWordPress(payload, arweaveResult = null, options = {}) {
+    console.log(`🔍 [PublishToWordPress] Starting WordPress publish`);
+    console.log(`🔍 [PublishToWordPress] Options:`, JSON.stringify(options, null, 2));
+    
     const WORDPRESS_URL = process.env.WORDPRESS_URL || 'http://wordpress:80';
     const WORDPRESS_ADMIN_USER = process.env.WP_ADMIN_USER || 'admin';
     const WORDPRESS_ADMIN_PASSWORD = process.env.WP_ADMIN_PASSWORD || '';
+    
+    console.log(`🔍 [PublishToWordPress] WordPress URL: ${WORDPRESS_URL}`);
+    console.log(`🔍 [PublishToWordPress] WordPress Admin User: ${WORDPRESS_ADMIN_USER}`);
+    console.log(`🔍 [PublishToWordPress] WordPress Admin Password configured: ${WORDPRESS_ADMIN_PASSWORD ? 'yes' : 'no'}`);
     
     if (!WORDPRESS_ADMIN_PASSWORD) {
         throw new Error('WordPress admin password not configured (WP_ADMIN_PASSWORD)');
@@ -1016,6 +1034,8 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     const firstFragment = fragments[0];
     const records = firstFragment.records || [];
     
+    console.log(`🔍 [PublishToWordPress] Found ${fragments.length} fragment(s), ${records.length} record(s)`);
+    
     if (records.length === 0) {
         throw new Error('No records found in payload');
     }
@@ -1023,6 +1043,8 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     const record = records[0];
     const basic = record.basic || {};
     const postData = record.post || {};
+    
+    console.log(`🔍 [PublishToWordPress] Record data - title: ${basic.name || 'none'}, description: ${basic.description ? basic.description.substring(0, 50) + '...' : 'none'}`);
     
     // Determine identification mode
     let identificationMode = 'anonymous';
@@ -1033,6 +1055,8 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     } else if (options.anonymous) {
         identificationMode = 'anonymous';
     }
+    
+    console.log(`🔍 [PublishToWordPress] Identification mode: ${identificationMode}`);
     
     // Build WordPress post data
     const wpPostData = {
@@ -1075,6 +1099,15 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     const wpApiUrl = `${WORDPRESS_URL}/wp-json/wp/v2/posts`;
     const auth = Buffer.from(`${WORDPRESS_ADMIN_USER}:${WORDPRESS_ADMIN_PASSWORD}`).toString('base64');
     
+    console.log(`🔍 [PublishToWordPress] Posting to WordPress API: ${wpApiUrl}`);
+    console.log(`🔍 [PublishToWordPress] Post data:`, JSON.stringify({
+        title: wpPostData.title,
+        content_length: wpPostData.content?.length || 0,
+        excerpt_length: wpPostData.excerpt?.length || 0,
+        status: wpPostData.status,
+        identificationMode: identificationMode
+    }, null, 2));
+    
     try {
         const response = await axios.post(wpApiUrl, wpPostData, {
             headers: {
@@ -1085,6 +1118,12 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
         });
         
         const wpPost = response.data;
+        console.log(`✅ [PublishToWordPress] WordPress post created successfully! Post ID: ${wpPost.id}`);
+        console.log(`🔍 [PublishToWordPress] WordPress response:`, JSON.stringify({
+            id: wpPost.id,
+            link: wpPost.link,
+            status: wpPost.status
+        }, null, 2));
         
         // Build permalink if WordPress didn't provide it
         let permalink = wpPost.link;
@@ -1092,8 +1131,10 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
             const baseUrl = process.env.PUBLIC_API_BASE_URL || 'http://localhost:3005';
             const wordpressPath = process.env.WORDPRESS_PROXY_PATH || '/wordpress';
             permalink = `${baseUrl}${wordpressPath}/?p=${wpPost.id}`;
+            console.log(`⚠️ [PublishToWordPress] WordPress didn't provide link, constructed: ${permalink}`);
         }
         
+        console.log(`✅ [PublishToWordPress] Returning success with permalink: ${permalink}`);
         return {
             success: true,
             postId: wpPost.id,

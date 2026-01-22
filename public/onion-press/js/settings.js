@@ -48,6 +48,8 @@ async function initSettings() {
     await loadDefaultDestinations();
     loadSettings();
     
+    console.log('Destinations loaded:', destinations);
+    
     // Update UI with current settings
     updateSettingsUI();
     
@@ -92,13 +94,19 @@ async function loadDefaultDestinations() {
         const response = await fetch('/onion-press/api/destinations/defaults');
         if (response.ok) {
             const data = await response.json();
+            console.log('Default destinations from server:', data.destinations);
             if (data.destinations) {
                 // Set defaults from server (only if no saved settings exist)
                 const saved = localStorage.getItem('onionpress_destinations');
                 if (!saved) {
                     destinations = { ...data.destinations };
+                    console.log('Using server defaults:', destinations);
+                } else {
+                    console.log('Using saved settings:', JSON.parse(saved));
                 }
             }
+        } else {
+            console.warn('Failed to load default destinations, status:', response.status);
         }
     } catch (error) {
         console.warn('Failed to load default destinations:', error);
