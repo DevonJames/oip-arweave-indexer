@@ -1043,15 +1043,79 @@ async function getWordPressAppPassword() {
     try {
         // First, verify we can authenticate with WordPress REST API
         // Try to get the current user to verify credentials
-        const meResponse = await axios.get(`${WORDPRESS_URL}/wp-json/wp/v2/users/me`, {
-            auth: {
-                username: WORDPRESS_ADMIN_USER,
-                password: WORDPRESS_ADMIN_PASSWORD
-            },
-            timeout: 10000,
-            validateStatus: () => true,
-            maxRedirects: 0
-        });
+        // Try both endpoint formats in case WordPress permalinks are misconfigured
+        let meResponse = null;
+        let authSuccess = false;
+        
+        for (const endpoint of [
+            `${WORDPRESS_URL}/wp-json/wp/v2/users/me`,
+            `${WORDPRESS_URL}/index.php?rest_route=/wp/v2/users/me`
+        ]) {
+            try {
+                console.log(`🔍 [WordPress Auth] Trying endpoint: ${endpoint}`);
+                meResponse = await axios.get(endpoint, {
+                    auth: {
+                        username: WORDPRESS_ADMIN_USER,
+                        password: WORDPRESS_ADMIN_PASSWORD
+                    },
+                    timeout: 10000,
+                    validateStatus: () => true,
+                    maxRedirects: 5, // Allow redirects (WordPress might redirect)
+                    transformResponse: [(data) => {
+                        // Keep response as-is to detect HTML
+                        return data;
+                    }]
+                });
+                
+                // Check if we got HTML instead of JSON (redirect to login page)
+                if (typeof meResponse.data === 'string' && (
+                    meResponse.data.trim().startsWith('<!DOCTYPE') ||
+                    meResponse.data.trim().startsWith('<html')
+                )) {
+                    console.warn(`⚠️ [WordPress Auth] ${endpoint} returned HTML, trying next endpoint...`);
+                    continue;
+                }
+                
+                // Check if we got a valid JSON response
+                if (meResponse.status === 200 && typeof meResponse.data === 'object' && meResponse.data?.id) {
+                    authSuccess = true;
+                    break;
+                }
+                
+                // If we got a redirect (301, 302), try following it
+                if (meResponse.status === 301 || meResponse.status === 302) {
+                    const location = meResponse.headers.location;
+                    console.log(`🔄 [WordPress Auth] Got redirect ${meResponse.status} to: ${location}`);
+                    // Try the redirected URL
+                    try {
+                        const redirectUrl = location.startsWith('http') ? location : `${WORDPRESS_URL}${location}`;
+                        meResponse = await axios.get(redirectUrl, {
+                            auth: {
+                                username: WORDPRESS_ADMIN_USER,
+                                password: WORDPRESS_ADMIN_PASSWORD
+                            },
+                            timeout: 10000,
+                            validateStatus: () => true,
+                            maxRedirects: 5
+                        });
+                        if (meResponse.status === 200 && typeof meResponse.data === 'object' && meResponse.data?.id) {
+                            authSuccess = true;
+                            break;
+                        }
+                    } catch (redirectError) {
+                        console.warn(`⚠️ [WordPress Auth] Failed to follow redirect: ${redirectError.message}`);
+                        continue;
+                    }
+                }
+            } catch (endpointError) {
+                console.warn(`⚠️ [WordPress Auth] Error with endpoint ${endpoint}: ${endpointError.message}`);
+                continue;
+            }
+        }
+        
+        if (!authSuccess || !meResponse) {
+            throw new Error(`WordPress authentication failed: Could not authenticate with any endpoint. Last status: ${meResponse?.status || 'unknown'}`);
+        }
         
         // If authentication fails, the password is wrong or user doesn't exist
         if (meResponse.status === 401 || meResponse.status === 403) {
@@ -1074,35 +1138,54 @@ async function getWordPressAppPassword() {
         }
         
         // Try to create an Application Password
+        // Try both endpoint formats
+        let appPasswordResponse = null;
+        let appPasswordCreated = false;
+        
         try {
-            const appPasswordResponse = await axios.post(
+            for (const endpoint of [
                 `${WORDPRESS_URL}/wp-json/wp/v2/users/${adminUserId}/application-passwords`,
-                {
-                    name: 'OIP Daemon Integration',
-                    app_id: 'oip-daemon'
-                },
-                {
-                    auth: {
-                        username: WORDPRESS_ADMIN_USER,
-                        password: WORDPRESS_ADMIN_PASSWORD
-                    },
-                    timeout: 10000,
-                    validateStatus: () => true,
-                    maxRedirects: 0
+                `${WORDPRESS_URL}/index.php?rest_route=/wp/v2/users/${adminUserId}/application-passwords`
+            ]) {
+                try {
+                    appPasswordResponse = await axios.post(
+                        endpoint,
+                        {
+                            name: 'OIP Daemon Integration',
+                            app_id: 'oip-daemon'
+                        },
+                        {
+                            auth: {
+                                username: WORDPRESS_ADMIN_USER,
+                                password: WORDPRESS_ADMIN_PASSWORD
+                            },
+                            timeout: 10000,
+                            validateStatus: () => true,
+                            maxRedirects: 5 // Allow redirects
+                        }
+                    );
+                    
+                    if (appPasswordResponse.status === 201 && appPasswordResponse.data?.password) {
+                        appPasswordCreated = true;
+                        break;
+                    }
+                } catch (createError) {
+                    console.warn(`⚠️ [WordPress Auth] Error creating app password at ${endpoint}: ${createError.message}`);
+                    continue;
                 }
-            );
+            }
             
-            if (appPasswordResponse.status === 201 && appPasswordResponse.data?.password) {
+            if (appPasswordCreated && appPasswordResponse) {
                 wpAppPasswordCache = appPasswordResponse.data.password.replace(/\s+/g, ''); // Remove spaces
                 console.log(`✅ [WordPress Auth] Created Application Password successfully`);
                 console.log(`💡 [WordPress Auth] Tip: Set WP_APP_PASSWORD=${wpAppPasswordCache} in your .env to reuse this password`);
                 return wpAppPasswordCache;
-            } else if (appPasswordResponse.status === 400 && appPasswordResponse.data?.code === 'application_passwords_disabled') {
+            } else if (appPasswordResponse && appPasswordResponse.status === 400 && appPasswordResponse.data?.code === 'application_passwords_disabled') {
                 console.warn(`⚠️ [WordPress Auth] Application Passwords are disabled in WordPress. Using regular password.`);
                 wpAppPasswordCache = WORDPRESS_ADMIN_PASSWORD;
                 return wpAppPasswordCache;
             } else {
-                console.warn(`⚠️ [WordPress Auth] Could not create Application Password (status ${appPasswordResponse.status}). Using regular password.`);
+                console.warn(`⚠️ [WordPress Auth] Could not create Application Password (status ${appPasswordResponse?.status || 'unknown'}). Using regular password.`);
                 wpAppPasswordCache = WORDPRESS_ADMIN_PASSWORD;
                 return wpAppPasswordCache;
             }
@@ -1253,7 +1336,7 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
                     },
                     timeout: 30000,
                     validateStatus: () => true, // Don't throw on non-2xx
-                    maxRedirects: 0, // Don't follow redirects - WordPress REST API shouldn't redirect
+                    maxRedirects: 5, // Allow redirects (WordPress might redirect due to permalink settings)
                     // Force axios to not transform response
                     transformResponse: [(data) => {
                         // Keep response as-is to detect HTML
