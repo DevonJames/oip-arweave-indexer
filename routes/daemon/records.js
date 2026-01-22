@@ -1030,7 +1030,7 @@ async function getWordPressAppPassword() {
     const WORDPRESS_ADMIN_PASSWORD = process.env.WP_ADMIN_PASSWORD || '';
     
     if (!WORDPRESS_ADMIN_PASSWORD) {
-        throw new Error('WordPress admin password not configured (WP_ADMIN_PASSWORD)');
+        throw new Error('WordPress admin password not configured (WP_ADMIN_PASSWORD). WordPress requires server credentials to create posts, even for anonymous content. The post content will be anonymous, but WordPress needs server authentication to allow post creation.');
     }
     
     // Check if Application Password is provided via env var
@@ -1048,11 +1048,14 @@ async function getWordPressAppPassword() {
         let authSuccess = false;
         
         for (const endpoint of [
+            `${WORDPRESS_URL}/wp-json/wp/v2/users/me/`,  // Try with trailing slash first (WordPress redirects to this)
             `${WORDPRESS_URL}/wp-json/wp/v2/users/me`,
             `${WORDPRESS_URL}/index.php?rest_route=/wp/v2/users/me`
         ]) {
             try {
                 console.log(`🔍 [WordPress Auth] Trying endpoint: ${endpoint}`);
+                console.log(`🔍 [WordPress Auth] Using credentials: user="${WORDPRESS_ADMIN_USER}", password length=${WORDPRESS_ADMIN_PASSWORD.length}`);
+                
                 meResponse = await axios.get(endpoint, {
                     auth: {
                         username: WORDPRESS_ADMIN_USER,
@@ -1067,19 +1070,46 @@ async function getWordPressAppPassword() {
                     }]
                 });
                 
-                // Check if we got HTML instead of JSON (redirect to login page)
-                if (typeof meResponse.data === 'string' && (
-                    meResponse.data.trim().startsWith('<!DOCTYPE') ||
-                    meResponse.data.trim().startsWith('<html')
-                )) {
-                    console.warn(`⚠️ [WordPress Auth] ${endpoint} returned HTML, trying next endpoint...`);
-                    continue;
+                console.log(`🔍 [WordPress Auth] Response status: ${meResponse.status}`);
+                console.log(`🔍 [WordPress Auth] Response Content-Type: ${meResponse.headers['content-type'] || 'unknown'}`);
+                console.log(`🔍 [WordPress Auth] Response data type: ${typeof meResponse.data}`);
+                
+                // Check if we got HTML instead of JSON (redirect to login page or error page)
+                if (typeof meResponse.data === 'string') {
+                    const isHtml = meResponse.data.trim().startsWith('<!DOCTYPE') ||
+                                   meResponse.data.trim().startsWith('<html') ||
+                                   meResponse.data.includes('<body') ||
+                                   (meResponse.headers['content-type'] && meResponse.headers['content-type'].includes('text/html'));
+                    
+                    if (isHtml) {
+                        console.warn(`⚠️ [WordPress Auth] ${endpoint} returned HTML (likely login page or error)`);
+                        console.warn(`⚠️ [WordPress Auth] HTML preview: ${meResponse.data.substring(0, 200)}`);
+                        // If we got 401 with HTML, it's definitely an auth failure
+                        if (meResponse.status === 401) {
+                            throw new Error(`WordPress authentication failed: Invalid credentials for user "${WORDPRESS_ADMIN_USER}". WordPress returned HTML login page (401). Please verify WP_ADMIN_USER and WP_ADMIN_PASSWORD in your .env file.`);
+                        }
+                        continue;
+                    }
+                    
+                    // Try to parse as JSON if it's a string
+                    try {
+                        meResponse.data = JSON.parse(meResponse.data);
+                    } catch (parseError) {
+                        console.warn(`⚠️ [WordPress Auth] Failed to parse response as JSON: ${parseError.message}`);
+                        continue;
+                    }
                 }
                 
                 // Check if we got a valid JSON response
                 if (meResponse.status === 200 && typeof meResponse.data === 'object' && meResponse.data?.id) {
                     authSuccess = true;
                     break;
+                }
+                
+                // Handle 401/403 explicitly
+                if (meResponse.status === 401 || meResponse.status === 403) {
+                    const errorMsg = meResponse.data?.message || meResponse.data?.code || 'Authentication failed';
+                    throw new Error(`WordPress authentication failed: Invalid credentials for user "${WORDPRESS_ADMIN_USER}". Status: ${meResponse.status}, Error: ${errorMsg}. Please verify WP_ADMIN_USER and WP_ADMIN_PASSWORD in your .env file.`);
                 }
                 
                 // If we got a redirect (301, 302), try following it
@@ -1108,18 +1138,33 @@ async function getWordPressAppPassword() {
                     }
                 }
             } catch (endpointError) {
+                // If it's an auth error, throw it immediately
+                if (endpointError.message.includes('authentication failed') || endpointError.message.includes('Invalid credentials')) {
+                    throw endpointError;
+                }
                 console.warn(`⚠️ [WordPress Auth] Error with endpoint ${endpoint}: ${endpointError.message}`);
                 continue;
             }
         }
         
         if (!authSuccess || !meResponse) {
-            throw new Error(`WordPress authentication failed: Could not authenticate with any endpoint. Last status: ${meResponse?.status || 'unknown'}`);
+            // If we got HTML responses, WordPress is likely rejecting the authentication
+            const lastResponseWasHtml = typeof meResponse?.data === 'string' && (
+                meResponse.data.trim().startsWith('<!DOCTYPE') ||
+                meResponse.data.trim().startsWith('<html')
+            );
+            
+            if (lastResponseWasHtml || meResponse?.status === 401) {
+                throw new Error(`WordPress server authentication failed: Invalid credentials for user "${WORDPRESS_ADMIN_USER}". WordPress requires server credentials to create posts, even for anonymous content. The post content will be anonymous, but WordPress needs server authentication.\n\nWordPress returned HTML login page (status ${meResponse?.status || 'unknown'}). This usually means:\n1. The password is incorrect (you set it to "mypassword" - verify it matches)\n2. WordPress REST API requires Application Passwords (not regular passwords)\n3. The user doesn't have REST API access\n\nTo fix:\n1. Verify password: docker exec -it onionpress-wordpress-1 wp user check-password ${WORDPRESS_ADMIN_USER} mypassword --allow-root\n2. Or create Application Password in WordPress admin (Profile → Application Passwords) and set WP_APP_PASSWORD in .env\n3. Make sure WP_ADMIN_USER=${WORDPRESS_ADMIN_USER} and WP_ADMIN_PASSWORD match your WordPress admin credentials`);
+            }
+            
+            throw new Error(`WordPress authentication failed: Could not authenticate with any endpoint. Last status: ${meResponse?.status || 'unknown'}. Response type: ${typeof meResponse?.data}`);
         }
         
         // If authentication fails, the password is wrong or user doesn't exist
         if (meResponse.status === 401 || meResponse.status === 403) {
-            throw new Error(`WordPress authentication failed: Invalid credentials for user "${WORDPRESS_ADMIN_USER}". Status: ${meResponse.status}. Please verify WP_ADMIN_USER and WP_ADMIN_PASSWORD in your .env file.`);
+            const errorMsg = meResponse.data?.message || meResponse.data?.code || 'Authentication failed';
+            throw new Error(`WordPress authentication failed: Invalid credentials for user "${WORDPRESS_ADMIN_USER}". Status: ${meResponse.status}, Error: ${errorMsg}. Please verify WP_ADMIN_USER and WP_ADMIN_PASSWORD in your .env file.`);
         }
         
         if (meResponse.status !== 200 || !meResponse.data?.id) {
@@ -1229,7 +1274,16 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     console.log(`🔍 [PublishToWordPress] WordPress Admin User: ${WORDPRESS_ADMIN_USER}`);
     
     // Get Application Password (or fallback to regular password)
-    const authPassword = await getWordPressAppPassword();
+    // Note: WordPress REST API requires server authentication to create posts,
+    // even for anonymous content. The post content is anonymous, but WordPress
+    // needs server credentials to allow post creation.
+    let authPassword;
+    try {
+        authPassword = await getWordPressAppPassword();
+    } catch (authError) {
+        // If authentication fails, provide a clearer error message
+        throw new Error(`WordPress server authentication failed: ${authError.message}. WordPress requires server credentials (WP_ADMIN_USER/WP_ADMIN_PASSWORD) to create posts, even for anonymous content. The post content will be anonymous, but the server needs to authenticate to create it.`);
+    }
     
     // Extract record data from payload
     const fragments = payload.fragments || [payload];
