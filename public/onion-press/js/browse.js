@@ -58,9 +58,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function updateAdminUI() {
     // Use the getAdminStatus function from api.js
     try {
-        // Check if user is logged in first
-        const apiModule = await import('./api.js');
-        if (!apiModule.isLoggedIn()) {
+        // Check if user is logged in first - use the global function
+        if (typeof isLoggedIn === 'function' && !isLoggedIn()) {
             console.log('User not logged in, hiding admin UI');
             const settingsBtn = document.getElementById('settingsBtn');
             if (settingsBtn) {
@@ -70,6 +69,7 @@ async function updateAdminUI() {
         }
         
         console.log('Checking admin status...');
+        const apiModule = await import('./api.js');
         const status = await apiModule.getAdminStatus();
         console.log('Admin status:', status);
         const wpAdmin = status.isWordPressAdmin === true;

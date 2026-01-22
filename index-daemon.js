@@ -616,6 +616,34 @@ if (ONION_PRESS_ENABLED) {
         });
     });
     
+    // Proxy /onion-press/api/user/admin-status to /api/user/admin-status
+    const { authenticateToken } = require('./helpers/utils');
+    app.get('/onion-press/api/user/admin-status', authenticateToken, async (req, res) => {
+        // Import and call the admin-status handler directly
+        const adminStatusHandler = require('./routes/daemon/user').router.stack.find(layer => 
+            layer.route && layer.route.path === '/admin-status'
+        );
+        if (adminStatusHandler) {
+            adminStatusHandler.route.stack[0].handle(req, res);
+        } else {
+            // Fallback: manually call the handler
+            const user = req.user;
+            if (!user || !user.wordpressUserId) {
+                return res.json({
+                    isWordPressAdmin: false,
+                    isAdmin: user?.isAdmin || false
+                });
+            }
+            const { isWordPressAdmin: checkWordPressAdmin } = require('./helpers/core/wordpressUserSync');
+            const wpAdmin = await checkWordPressAdmin(user.wordpressUserId);
+            res.json({
+                isWordPressAdmin: wpAdmin,
+                isAdmin: user.isAdmin || false,
+                wordpressUserId: user.wordpressUserId
+            });
+        }
+    });
+    
     // GET /onion-press/api/wordpress/posts - Get WordPress posts
     app.get('/onion-press/api/wordpress/posts', async (req, res) => {
         try {
@@ -670,7 +698,34 @@ if (ONION_PRESS_ENABLED) {
                 });
             }
             
-            const wpPosts = response.data || [];
+            // WordPress REST API returns an array directly
+            let wpPosts = response.data;
+            
+            // Check if response.data is actually a number (total count) instead of array
+            if (typeof wpPosts === 'number') {
+                console.error(`❌ [WordPressPosts] WordPress API returned a number (${wpPosts}) instead of array. This might be a count.`);
+                console.error(`❌ [WordPressPosts] Full response:`, JSON.stringify(response.data, null, 2));
+                console.error(`❌ [WordPressPosts] Response headers:`, response.headers);
+                // Return empty array if we got a count
+                wpPosts = [];
+            } else if (!Array.isArray(wpPosts)) {
+                console.error(`❌ [WordPressPosts] WordPress API returned non-array:`, typeof wpPosts);
+                console.error(`❌ [WordPressPosts] Response data:`, JSON.stringify(wpPosts, null, 2));
+                // Try to extract array from response
+                if (wpPosts && Array.isArray(wpPosts.posts)) {
+                    wpPosts = wpPosts.posts;
+                } else if (wpPosts && Array.isArray(wpPosts.data)) {
+                    wpPosts = wpPosts.data;
+                } else {
+                    console.error(`❌ [WordPressPosts] Could not extract posts array from response`);
+                    return res.status(500).json({
+                        error: 'Invalid WordPress API response',
+                        message: 'WordPress API did not return an array of posts',
+                        responseType: typeof wpPosts,
+                        responseData: wpPosts
+                    });
+                }
+            }
             console.log(`✅ [WordPressPosts] Retrieved ${wpPosts.length} posts from WordPress`);
             
             // Build base URL for permalinks

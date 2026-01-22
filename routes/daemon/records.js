@@ -1114,30 +1114,42 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
                 'Content-Type': 'application/json',
                 'Authorization': `Basic ${auth}`
             },
-            timeout: 30000
+            timeout: 30000,
+            validateStatus: () => true // Don't throw on non-2xx
         });
         
+        if (response.status !== 201 && response.status !== 200) {
+            console.error(`❌ [PublishToWordPress] WordPress API returned status ${response.status}:`, response.data);
+            throw new Error(`WordPress API error: ${response.status} - ${JSON.stringify(response.data)}`);
+        }
+        
         const wpPost = response.data;
-        console.log(`✅ [PublishToWordPress] WordPress post created successfully! Post ID: ${wpPost.id}`);
-        console.log(`🔍 [PublishToWordPress] WordPress response:`, JSON.stringify({
-            id: wpPost.id,
-            link: wpPost.link,
-            status: wpPost.status
-        }, null, 2));
+        console.log(`✅ [PublishToWordPress] WordPress post created successfully!`);
+        console.log(`🔍 [PublishToWordPress] WordPress response status: ${response.status}`);
+        console.log(`🔍 [PublishToWordPress] WordPress response data type:`, typeof wpPost);
+        console.log(`🔍 [PublishToWordPress] WordPress response data:`, JSON.stringify(wpPost, null, 2));
+        
+        // Extract post ID and link - WordPress REST API uses different field names
+        const postId = wpPost.id || wpPost.ID || null;
+        let permalink = wpPost.link || (typeof wpPost.link === 'string' ? wpPost.link : null) || wpPost.guid?.rendered || null;
+        
+        if (!postId) {
+            console.error(`❌ [PublishToWordPress] WordPress response missing post ID. Full response:`, JSON.stringify(wpPost, null, 2));
+            throw new Error('WordPress API did not return a post ID');
+        }
         
         // Build permalink if WordPress didn't provide it
-        let permalink = wpPost.link;
-        if (!permalink && wpPost.id) {
+        if (!permalink || typeof permalink !== 'string') {
             const baseUrl = process.env.PUBLIC_API_BASE_URL || 'http://localhost:3005';
             const wordpressPath = process.env.WORDPRESS_PROXY_PATH || '/wordpress';
-            permalink = `${baseUrl}${wordpressPath}/?p=${wpPost.id}`;
+            permalink = `${baseUrl}${wordpressPath}/?p=${postId}`;
             console.log(`⚠️ [PublishToWordPress] WordPress didn't provide link, constructed: ${permalink}`);
         }
         
-        console.log(`✅ [PublishToWordPress] Returning success with permalink: ${permalink}`);
+        console.log(`✅ [PublishToWordPress] Returning success with postId: ${postId}, permalink: ${permalink}`);
         return {
             success: true,
-            postId: wpPost.id,
+            postId: postId,
             postUrl: permalink,
             permalink: permalink
         };
