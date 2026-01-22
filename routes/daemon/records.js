@@ -1096,45 +1096,92 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     }
     
     // Create post via WordPress REST API
+    // Use internal Docker URL for direct access (bypasses proxy)
     const wpApiUrl = `${WORDPRESS_URL}/wp-json/wp/v2/posts`;
     const auth = Buffer.from(`${WORDPRESS_ADMIN_USER}:${WORDPRESS_ADMIN_PASSWORD}`).toString('base64');
     
-    console.log(`🔍 [PublishToWordPress] Posting to WordPress API: ${wpApiUrl}`);
+    console.log(`🔍 [PublishToWordPress] WordPress API URL: ${wpApiUrl}`);
+    console.log(`🔍 [PublishToWordPress] WordPress Admin User: ${WORDPRESS_ADMIN_USER}`);
+    console.log(`🔍 [PublishToWordPress] WordPress Admin Password configured: ${WORDPRESS_ADMIN_PASSWORD ? 'yes' : 'no'}`);
     console.log(`🔍 [PublishToWordPress] Post data:`, JSON.stringify({
         title: wpPostData.title,
         content_length: wpPostData.content?.length || 0,
         excerpt_length: wpPostData.excerpt?.length || 0,
         status: wpPostData.status,
-        identificationMode: identificationMode
+        identificationMode: identificationMode,
+        meta_keys: Object.keys(wpPostData.meta || {})
     }, null, 2));
     
     try {
         const response = await axios.post(wpApiUrl, wpPostData, {
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Basic ${auth}`
+                'Authorization': `Basic ${auth}`,
+                'Accept': 'application/json'
             },
             timeout: 30000,
-            validateStatus: () => true // Don't throw on non-2xx
+            validateStatus: () => true, // Don't throw on non-2xx
+            maxRedirects: 0 // Don't follow redirects - WordPress REST API shouldn't redirect
         });
         
+        // Check if WordPress returned HTML instead of JSON (even with 200 status)
+        const contentType = response.headers['content-type'] || '';
+        const responseSize = typeof response.data === 'string' ? response.data.length : JSON.stringify(response.data).length;
+        const isHtmlResponse = typeof response.data === 'string' && (
+            response.data.trim().startsWith('<!DOCTYPE') ||
+            response.data.trim().startsWith('<html') ||
+            response.data.includes('<body') ||
+            contentType.includes('text/html')
+        );
+        
+        if (isHtmlResponse || (!contentType.includes('application/json') && !contentType.includes('application/vnd.api+json'))) {
+            console.error(`❌ [PublishToWordPress] WordPress returned HTML instead of JSON`);
+            console.error(`❌ [PublishToWordPress] Content-Type: ${contentType}`);
+            console.error(`❌ [PublishToWordPress] Response status: ${response.status}`);
+            console.error(`❌ [PublishToWordPress] Response size: ${responseSize} bytes (expected < 5000 for JSON)`);
+            console.error(`❌ [PublishToWordPress] Response headers:`, JSON.stringify(response.headers, null, 2));
+            
+            // Try to extract error message from HTML
+            if (typeof response.data === 'string') {
+                const errorMatch = response.data.match(/<title>(.*?)<\/title>/i) || 
+                                 response.data.match(/<h1[^>]*>(.*?)<\/h1>/i) ||
+                                 response.data.match(/error[^>]*>(.*?)</i);
+                if (errorMatch) {
+                    console.error(`❌ [PublishToWordPress] HTML error title: ${errorMatch[1]}`);
+                }
+                console.error(`❌ [PublishToWordPress] Response preview (first 1000 chars): ${response.data.substring(0, 1000)}`);
+            }
+            
+            throw new Error(`WordPress REST API returned HTML instead of JSON (${responseSize} bytes). This usually means: 1) Authentication failed (check WP_ADMIN_USER and WP_ADMIN_PASSWORD), 2) REST API is disabled, or 3) WordPress is redirecting. Content-Type: ${contentType}`);
+        }
+        
         if (response.status !== 201 && response.status !== 200) {
-            console.error(`❌ [PublishToWordPress] WordPress API returned status ${response.status}:`, response.data);
-            throw new Error(`WordPress API error: ${response.status} - ${JSON.stringify(response.data)}`);
+            console.error(`❌ [PublishToWordPress] WordPress API returned status ${response.status}`);
+            console.error(`❌ [PublishToWordPress] Response data:`, typeof response.data === 'string' ? response.data.substring(0, 500) : JSON.stringify(response.data, null, 2));
+            throw new Error(`WordPress API error: ${response.status} - ${typeof response.data === 'string' ? response.data.substring(0, 200) : JSON.stringify(response.data)}`);
+        }
+        
+        // Check if response.data is actually an object (JSON) or a string (HTML)
+        if (typeof response.data === 'string') {
+            console.error(`❌ [PublishToWordPress] WordPress returned string instead of JSON object`);
+            console.error(`❌ [PublishToWordPress] Response preview: ${response.data.substring(0, 500)}`);
+            throw new Error('WordPress API returned a string instead of JSON. This usually indicates an error page or redirect.');
         }
         
         const wpPost = response.data;
         console.log(`✅ [PublishToWordPress] WordPress post created successfully!`);
         console.log(`🔍 [PublishToWordPress] WordPress response status: ${response.status}`);
         console.log(`🔍 [PublishToWordPress] WordPress response data type:`, typeof wpPost);
-        console.log(`🔍 [PublishToWordPress] WordPress response data:`, JSON.stringify(wpPost, null, 2));
+        console.log(`🔍 [PublishToWordPress] WordPress response keys:`, Object.keys(wpPost || {}));
         
         // Extract post ID and link - WordPress REST API uses different field names
         const postId = wpPost.id || wpPost.ID || null;
         let permalink = wpPost.link || (typeof wpPost.link === 'string' ? wpPost.link : null) || wpPost.guid?.rendered || null;
         
         if (!postId) {
-            console.error(`❌ [PublishToWordPress] WordPress response missing post ID. Full response:`, JSON.stringify(wpPost, null, 2));
+            console.error(`❌ [PublishToWordPress] WordPress response missing post ID.`);
+            console.error(`❌ [PublishToWordPress] Response keys:`, Object.keys(wpPost || {}));
+            console.error(`❌ [PublishToWordPress] Response preview:`, JSON.stringify(wpPost, null, 2).substring(0, 1000));
             throw new Error('WordPress API did not return a post ID');
         }
         

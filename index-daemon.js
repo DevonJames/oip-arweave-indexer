@@ -617,16 +617,25 @@ if (ONION_PRESS_ENABLED) {
     });
     
     // Proxy /onion-press/api/user/admin-status to /api/user/admin-status
-    const { authenticateToken } = require('./helpers/utils');
-    app.get('/onion-press/api/user/admin-status', authenticateToken, async (req, res) => {
-        // Import and call the admin-status handler directly
-        const adminStatusHandler = require('./routes/daemon/user').router.stack.find(layer => 
-            layer.route && layer.route.path === '/admin-status'
-        );
-        if (adminStatusHandler) {
-            adminStatusHandler.route.stack[0].handle(req, res);
-        } else {
-            // Fallback: manually call the handler
+    // Use a simpler approach - just forward the request
+    app.get('/onion-press/api/user/admin-status', async (req, res, next) => {
+        // Manually authenticate token without requiring wallet file
+        const jwt = require('jsonwebtoken');
+        const authHeader = req.headers.authorization;
+        
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.json({
+                isWordPressAdmin: false,
+                isAdmin: false
+            });
+        }
+        
+        try {
+            const token = authHeader.substring(7);
+            const verified = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key_here');
+            req.user = verified;
+            
+            // Now call the actual handler
             const user = req.user;
             if (!user || !user.wordpressUserId) {
                 return res.json({
@@ -634,12 +643,19 @@ if (ONION_PRESS_ENABLED) {
                     isAdmin: user?.isAdmin || false
                 });
             }
+            
             const { isWordPressAdmin: checkWordPressAdmin } = require('./helpers/core/wordpressUserSync');
             const wpAdmin = await checkWordPressAdmin(user.wordpressUserId);
             res.json({
                 isWordPressAdmin: wpAdmin,
                 isAdmin: user.isAdmin || false,
                 wordpressUserId: user.wordpressUserId
+            });
+        } catch (error) {
+            console.error('Admin status auth error:', error.message);
+            res.json({
+                isWordPressAdmin: false,
+                isAdmin: false
             });
         }
     });
@@ -686,8 +702,35 @@ if (ONION_PRESS_ENABLED) {
                 httpAgent,
                 httpsAgent,
                 timeout: 10000,
-                validateStatus: () => true // Don't throw on non-2xx status
+                validateStatus: () => true, // Don't throw on non-2xx status
+                maxRedirects: 0, // Don't follow redirects - WordPress REST API shouldn't redirect
+                headers: {
+                    'Accept': 'application/json'
+                }
             });
+            
+            // Check if WordPress returned HTML instead of JSON (common when REST API is disabled or redirecting)
+            const contentType = response.headers['content-type'] || '';
+            const isHtmlResponse = typeof response.data === 'string' && (
+                response.data.trim().startsWith('<!DOCTYPE') ||
+                response.data.trim().startsWith('<html') ||
+                response.data.includes('<body') ||
+                contentType.includes('text/html')
+            );
+            
+            if (isHtmlResponse || (!contentType.includes('application/json') && !contentType.includes('application/vnd.api+json'))) {
+                console.error(`❌ [WordPressPosts] WordPress returned HTML instead of JSON`);
+                console.error(`❌ [WordPressPosts] Content-Type: ${contentType}`);
+                console.error(`❌ [WordPressPosts] Response status: ${response.status}`);
+                console.error(`❌ [WordPressPosts] Response size: ${typeof response.data === 'string' ? response.data.length : 'unknown'} bytes`);
+                console.error(`❌ [WordPressPosts] Response preview: ${typeof response.data === 'string' ? response.data.substring(0, 200) : 'non-string'}`);
+                return res.status(503).json({
+                    error: 'WordPress REST API not available',
+                    message: 'WordPress returned HTML instead of JSON. The REST API may be disabled or WordPress may be redirecting.',
+                    contentType: contentType,
+                    status: response.status
+                });
+            }
             
             if (response.status !== 200) {
                 console.error(`❌ [WordPressPosts] WordPress API returned status ${response.status}:`, response.data);
@@ -710,7 +753,7 @@ if (ONION_PRESS_ENABLED) {
                 wpPosts = [];
             } else if (!Array.isArray(wpPosts)) {
                 console.error(`❌ [WordPressPosts] WordPress API returned non-array:`, typeof wpPosts);
-                console.error(`❌ [WordPressPosts] Response data:`, JSON.stringify(wpPosts, null, 2));
+                console.error(`❌ [WordPressPosts] Response data preview:`, typeof wpPosts === 'string' ? wpPosts.substring(0, 200) : JSON.stringify(wpPosts, null, 2).substring(0, 500));
                 // Try to extract array from response
                 if (wpPosts && Array.isArray(wpPosts.posts)) {
                     wpPosts = wpPosts.posts;
@@ -722,7 +765,7 @@ if (ONION_PRESS_ENABLED) {
                         error: 'Invalid WordPress API response',
                         message: 'WordPress API did not return an array of posts',
                         responseType: typeof wpPosts,
-                        responseData: wpPosts
+                        responsePreview: typeof wpPosts === 'string' ? wpPosts.substring(0, 200) : 'non-string'
                     });
                 }
             }

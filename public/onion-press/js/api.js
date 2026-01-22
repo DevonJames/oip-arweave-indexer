@@ -97,8 +97,8 @@ async function resetAdminSettings() {
 async function getAdminStatus() {
     // Use the user admin-status endpoint which checks WordPress admin
     try {
-        // Use full path with API_BASE
-        const response = await fetch(`${API_BASE}/api/user/admin-status`, {
+        // Use OIP_API which handles /onion-press/api path correctly
+        const response = await fetch(`${API_BASE}${OIP_API}/user/admin-status`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',

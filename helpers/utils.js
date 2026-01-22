@@ -434,8 +434,9 @@ const authenticateToken = (req, res, next) => {
         const verified = jwt.verify(token, process.env.JWT_SECRET);
         
         // Add publisherPubKey to the user object for GUN record verification
-        if (!verified.publisherPubKey) {
-            // Extract publisherPubKey from Arweave wallet
+        // Only extract if needed (for GUN operations) and wallet file exists
+        if (!verified.publisherPubKey && (req.params.soul || req.query.soul)) {
+            // Extract publisherPubKey from Arweave wallet only if needed for GUN verification
             try {
                 const walletPath = getWalletFilePath();
                 const jwk = JSON.parse(fs.readFileSync(walletPath));
@@ -446,8 +447,9 @@ const authenticateToken = (req, res, next) => {
                 verified.publisherAddress = myAddress;
                 verified.didAddress = `did:arweave:${myAddress}`;
             } catch (error) {
-                console.error('Error extracting publisher public key:', error);
-                return res.status(500).json({ error: 'Failed to extract publisher credentials' });
+                // Don't fail authentication if wallet file doesn't exist - it's only needed for GUN operations
+                console.warn('Warning: Could not extract publisher public key (wallet file may not exist):', error.message);
+                // Continue without publisherPubKey - it's only needed for GUN record verification
             }
         }
         
