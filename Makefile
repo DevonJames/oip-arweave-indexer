@@ -1,7 +1,7 @@
 # OIP Arweave Makefile
 # Alternative interface for managing Docker deployments
 
-.PHONY: help up down build logs status clean start-ngrok check-ngrok
+.PHONY: help up down build logs status clean start-ngrok check-ngrok mac-client mac-client-stop
 .DEFAULT_GOAL := help
 
 # Colors
@@ -59,6 +59,8 @@ help: ## Show this help message
 	@echo "  🚀 Frontend dev: ./scripts/dev-frontend.sh [port] [path]"
 	@echo ""
 	@echo "$(YELLOW)Mac Client Services:$(NC)"
+	@echo "  make mac-client                # Start Mac client (simplest way to run locally)"
+	@echo "  make mac-client-stop           # Stop Mac client services"
 	@echo "  make mac-stt-services          # Start all Mac STT services with logging"
 	@echo "  make mac-stop                  # Stop all Mac STT services"
 	@echo "  make mac-status                # Check Mac STT services status"
@@ -1247,6 +1249,14 @@ dev-logs-chatterbox: ## Development: Show logs for container with Chatterbox TTS
 	fi
 
 # Mac Client Services Management
+mac-client: ## Start Mac client (voice processor + interface server) - simplest way to run locally
+	@echo "$(BLUE)🍎 Starting Mac Client...$(NC)"
+	@cd mac-client && ./start_interface_only.sh
+
+mac-client-stop: ## Stop Mac client services
+	@echo "$(BLUE)🛑 Stopping Mac Client...$(NC)"
+	@cd mac-client && ./stop_interface_only.sh
+
 mac-stt-services: ## Start Mac STT services (Smart Turn, STT, Interface Server) with logging
 	@echo "$(BLUE)🍎 Starting Mac STT Services Stack...$(NC)"
 	@echo "$(YELLOW)📱 This starts the client-side services for Mac voice interface$(NC)"

@@ -364,6 +364,37 @@
             50% { box-shadow: 0 0 0 12px rgba(95, 252, 159, 0); }
         }
 
+        .mute-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-panel);
+            color: var(--text-secondary);
+            font-size: 16px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 8px;
+        }
+
+        .mute-btn:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .mute-btn.muted {
+            background: rgba(255, 92, 92, 0.15);
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        .mute-btn.muted:hover {
+            background: rgba(255, 92, 92, 0.25);
+        }
+
         /* ===============================
            ALFRED VISUALIZATION PANEL
         =============================== */
@@ -1798,6 +1829,14 @@
             
             <div class="chat-input-area">
                 <input type="text" id="chatInput" class="chat-input" placeholder="Ask Alfred anything..." />
+                <button class="mute-btn" id="muteBtn" onclick="alfredNotesApp.toggleMicMute()" title="Mute/Unmute microphone">
+                    <svg id="muteIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                    </svg>
+                </button>
                 <button class="voice-btn" id="voiceBtn" onclick="alfredNotesApp.toggleVoiceInput()">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
@@ -2167,7 +2206,7 @@
                         <span class="setting-description">The URL of your Alfred/Alexandria server</span>
                     </div>
                     <div class="setting-value full-width">
-                        <input type="text" id="backendUrl" class="full-input" placeholder="https://api.oip.onl" />
+                        <input type="text" id="backendUrl" class="full-input" placeholder="https://alexandria.io" />
                     </div>
                 </div>
                 <div class="setting-item">
@@ -2389,6 +2428,7 @@
                 voiceFinalText: '',
                 voiceSilenceFrames: 0,
                 voiceHadSpeech: false,
+                isMicMuted: false,
                 // Connection state
                 backendConnected: false,
                 voiceProcessorConnected: false,
@@ -2399,7 +2439,7 @@
 
             // Configuration
             config: {
-                backendUrl: localStorage.getItem('backend_url') || 'https://api.oip.onl',
+                backendUrl: localStorage.getItem('backend_url') || 'https://alexandria.io',
                 voiceProcessorUrl: localStorage.getItem('voice_processor_url') || 'http://localhost:8765',
                 token: localStorage.getItem('alfred_jwt_token') || ''
             },
@@ -3168,6 +3208,49 @@
                     this.stopVoiceInput(true);
                 } else {
                     this.startVoiceInput();
+                }
+            },
+
+            // Toggle microphone mute (temporarily mute without ending conversation)
+            toggleMicMute() {
+                const muteBtn = document.getElementById('muteBtn');
+                const muteIcon = document.getElementById('muteIcon');
+                
+                this.state.isMicMuted = !this.state.isMicMuted;
+                
+                // Mute/unmute the actual audio tracks
+                if (this.state.voiceStream) {
+                    this.state.voiceStream.getAudioTracks().forEach(track => {
+                        track.enabled = !this.state.isMicMuted;
+                    });
+                }
+                
+                // Update button appearance
+                if (this.state.isMicMuted) {
+                    muteBtn.classList.add('muted');
+                    muteBtn.title = 'Unmute microphone';
+                    // Change icon to muted mic (with slash)
+                    muteIcon.innerHTML = `
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                        <line x1="1" y1="1" x2="23" y2="23" stroke-width="2.5"></line>
+                    `;
+                    console.log('🔇 Microphone muted');
+                    this.showToast('Microphone muted', 'warning');
+                } else {
+                    muteBtn.classList.remove('muted');
+                    muteBtn.title = 'Mute microphone';
+                    // Change icon back to normal mic
+                    muteIcon.innerHTML = `
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                    `;
+                    console.log('🔊 Microphone unmuted');
+                    this.showToast('Microphone unmuted', 'success');
                 }
             },
 
