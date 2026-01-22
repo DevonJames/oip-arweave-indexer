@@ -652,36 +652,62 @@ if (ONION_PRESS_ENABLED) {
             const response = await axios.get(`${wpApiUrl}?${params.toString()}`, {
                 httpAgent,
                 httpsAgent,
-                timeout: 10000
+                timeout: 10000,
+                validateStatus: () => true // Don't throw on non-2xx status
             });
+            
+            if (response.status !== 200) {
+                console.error(`WordPress API returned status ${response.status}:`, response.data);
+                return res.status(503).json({
+                    error: 'WordPress API error',
+                    message: `WordPress returned status ${response.status}`,
+                    details: response.data
+                });
+            }
             
             const wpPosts = response.data || [];
             
+            // Build base URL for permalinks
+            const baseUrl = process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get('host')}`;
+            const wordpressPath = process.env.WORDPRESS_PROXY_PATH || '/wordpress';
+            
             // Transform WordPress posts to OIP-like format
-            const records = wpPosts.map(post => ({
-                wordpress: {
-                    postId: post.id,
-                    title: post.title?.rendered || '',
-                    excerpt: post.excerpt?.rendered || '',
-                    content: post.content?.rendered || '',
-                    postDate: post.date,
-                    permalink: post.link,
-                    tags: post._embedded?.['wp:term']?.[0]?.map(t => t.name) || [],
-                    author: post._embedded?.author?.[0]?.name || ''
-                },
-                id: `wp-${post.id}`,
-                oip: {
-                    indexedAt: post.date
+            const records = wpPosts.map(post => {
+                // Build permalink if not provided by WordPress
+                let permalink = post.link;
+                if (!permalink && post.id) {
+                    permalink = `${baseUrl}${wordpressPath}/?p=${post.id}`;
                 }
-            }));
+                
+                return {
+                    wordpress: {
+                        postId: post.id,
+                        title: post.title?.rendered || '',
+                        excerpt: post.excerpt?.rendered || '',
+                        content: post.content?.rendered || '',
+                        postDate: post.date,
+                        permalink: permalink,
+                        tags: post._embedded?.['wp:term']?.[0]?.map(t => t.name) || [],
+                        author: post._embedded?.author?.[0]?.name || ''
+                    },
+                    id: `wp-${post.id}`,
+                    oip: {
+                        indexedAt: post.date
+                    }
+                };
+            });
             
             res.json({ records });
             
         } catch (error) {
             console.error('WordPress posts API error:', error.message);
+            if (error.response) {
+                console.error('WordPress response:', error.response.status, error.response.data);
+            }
             res.status(500).json({
                 error: 'Failed to fetch WordPress posts',
-                message: error.message
+                message: error.message,
+                details: error.response?.data
             });
         }
     });

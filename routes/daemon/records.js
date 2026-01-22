@@ -1086,11 +1086,19 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
         
         const wpPost = response.data;
         
+        // Build permalink if WordPress didn't provide it
+        let permalink = wpPost.link;
+        if (!permalink && wpPost.id) {
+            const baseUrl = process.env.PUBLIC_API_BASE_URL || 'http://localhost:3005';
+            const wordpressPath = process.env.WORDPRESS_PROXY_PATH || '/wordpress';
+            permalink = `${baseUrl}${wordpressPath}/?p=${wpPost.id}`;
+        }
+        
         return {
             success: true,
             postId: wpPost.id,
-            postUrl: wpPost.link,
-            permalink: wpPost.link
+            postUrl: permalink,
+            permalink: permalink
         };
     } catch (error) {
         if (error.response) {

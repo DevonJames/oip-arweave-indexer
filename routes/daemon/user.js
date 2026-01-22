@@ -801,6 +801,38 @@ router.post('/login', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/user/admin-status
+ * Check if the logged-in user is a WordPress admin
+ */
+router.get('/admin-status', authenticateToken, async (req, res) => {
+    try {
+        const user = req.user;
+        
+        if (!user || !user.wordpressUserId) {
+            return res.json({
+                isWordPressAdmin: false,
+                isAdmin: user?.isAdmin || false
+            });
+        }
+        
+        const { isWordPressAdmin: checkWordPressAdmin } = require('../../helpers/core/wordpressUserSync');
+        const wpAdmin = await checkWordPressAdmin(user.wordpressUserId);
+        
+        res.json({
+            isWordPressAdmin: wpAdmin,
+            isAdmin: user.isAdmin || false,
+            wordpressUserId: user.wordpressUserId
+        });
+    } catch (error) {
+        console.error('Error checking admin status:', error);
+        res.status(500).json({
+            error: 'Failed to check admin status',
+            message: error.message
+        });
+    }
+});
+
 // Reset Password endpoint
 router.post('/reset-password', async (req, res) => {
     const { email, newPassword } = req.body;

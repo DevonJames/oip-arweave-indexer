@@ -56,15 +56,26 @@ document.addEventListener('DOMContentLoaded', async () => {
  * Update UI based on admin status
  */
 async function updateAdminUI() {
-    const { isWordPressAdmin } = await import('./api.js');
-    const wpAdmin = await isWordPressAdmin();
-    
-    // Show/hide settings gear icon
-    const settingsBtn = document.getElementById('settingsBtn');
-    if (settingsBtn) {
-        if (wpAdmin) {
-            settingsBtn.classList.remove('hidden');
-        } else {
+    // Use the getAdminStatus function from api.js
+    try {
+        const apiModule = await import('./api.js');
+        const status = await apiModule.getAdminStatus();
+        const wpAdmin = status.isWordPressAdmin === true;
+        
+        // Show/hide settings gear icon
+        const settingsBtn = document.getElementById('settingsBtn');
+        if (settingsBtn) {
+            if (wpAdmin) {
+                settingsBtn.classList.remove('hidden');
+            } else {
+                settingsBtn.classList.add('hidden');
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to update admin UI:', error);
+        // Hide admin UI on error
+        const settingsBtn = document.getElementById('settingsBtn');
+        if (settingsBtn) {
             settingsBtn.classList.add('hidden');
         }
     }

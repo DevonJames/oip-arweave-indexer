@@ -213,3 +213,22 @@ function setAuthToken(token) {
     localStorage.setItem('onionpress_token', token);
 }
 
+async function isWordPressAdmin() {
+    try {
+        const wpUserId = localStorage.getItem('onionpress_user_wpId');
+        if (!wpUserId) {
+            return false;
+        }
+        
+        const status = await getAdminStatus();
+        return status.isWordPressAdmin === true;
+    } catch (error) {
+        console.warn('Failed to check WordPress admin status:', error);
+        return false;
+    }
+}
+
+function clearAdminStatus() {
+    // Clear any admin-related cached data
+    localStorage.removeItem('onionpress_admin_status');
+}
