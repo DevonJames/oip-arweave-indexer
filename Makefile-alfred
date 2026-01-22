@@ -1,0 +1,59 @@
+# Alfred Voice Client Makefile
+# Simplified makefile for running the Alfred voice conversation widget locally
+
+.PHONY: help start stop status
+.DEFAULT_GOAL := help
+
+# Colors
+GREEN := \033[0;32m
+YELLOW := \033[1;33m
+BLUE := \033[0;34m
+RED := \033[0;31m
+NC := \033[0m
+
+help: ## Show this help message
+	@echo "$(BLUE)Alfred Voice Client$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Usage:$(NC) make -f Makefile-alfred [target]"
+	@echo ""
+	@echo "$(YELLOW)Available targets:$(NC)"
+	@echo "  $(GREEN)start$(NC)   Start Mac client (voice processor + interface server)"
+	@echo "  $(GREEN)stop$(NC)    Stop Mac client services"
+	@echo "  $(GREEN)status$(NC)  Check if services are running"
+	@echo ""
+	@echo "$(YELLOW)Quick start:$(NC)"
+	@echo "  make -f Makefile-alfred start"
+	@echo ""
+	@echo "$(YELLOW)Available interfaces:$(NC)"
+	@echo "  http://localhost:3001/alfred-speaks.html    $(GREEN)(standalone voice widget)$(NC)"
+	@echo "  http://localhost:3001/alfreds-notes-mac.html $(GREEN)(full notes app)$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Create an alias for easier use:$(NC)"
+	@echo "  alias alfred='make -f Makefile-alfred'"
+	@echo "  alfred start / alfred stop / alfred status"
+
+start: ## Start Mac client (voice processor + interface server)
+	@echo "$(BLUE)🍎 Starting Alfred Voice Client...$(NC)"
+	@cd mac-client && ./start_interface_only.sh
+
+stop: ## Stop Mac client services
+	@echo "$(BLUE)🛑 Stopping Alfred Voice Client...$(NC)"
+	@cd mac-client && ./stop_interface_only.sh
+
+status: ## Check if services are running
+	@echo "$(BLUE)Alfred Voice Client Status:$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Voice Processor (port 8015):$(NC)"
+	@if curl -s --max-time 2 http://localhost:8015/health >/dev/null 2>&1; then \
+		echo "  $(GREEN)✅ Running$(NC)"; \
+	else \
+		echo "  $(RED)❌ Not running$(NC)"; \
+	fi
+	@echo ""
+	@echo "$(YELLOW)Interface Server (port 3001):$(NC)"
+	@if curl -s --max-time 2 http://localhost:3001/ >/dev/null 2>&1; then \
+		echo "  $(GREEN)✅ Running$(NC)"; \
+		echo "  $(BLUE)🌐 Open: http://localhost:3001/alfred-speaks.html$(NC)"; \
+	else \
+		echo "  $(RED)❌ Not running$(NC)"; \
+	fi

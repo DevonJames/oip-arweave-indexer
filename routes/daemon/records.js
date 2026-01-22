@@ -1013,21 +1013,140 @@ router.post('/publishAccount', authenticateToken, async (req, res) => {
  * @param {number} options.wordpressUserId - WordPress user ID for account-based identification
  * @returns {Promise<object>} WordPress post creation result
  */
+// Cache for WordPress Application Password (to avoid creating multiple)
+let wpAppPasswordCache = null;
+
+/**
+ * Get or create WordPress Application Password for admin user
+ * WordPress REST API requires Application Passwords for Basic Auth
+ */
+async function getWordPressAppPassword() {
+    if (wpAppPasswordCache) {
+        return wpAppPasswordCache;
+    }
+    
+    const WORDPRESS_URL = process.env.WORDPRESS_URL || 'http://wordpress:80';
+    const WORDPRESS_ADMIN_USER = process.env.WP_ADMIN_USER || 'admin';
+    const WORDPRESS_ADMIN_PASSWORD = process.env.WP_ADMIN_PASSWORD || '';
+    
+    if (!WORDPRESS_ADMIN_PASSWORD) {
+        throw new Error('WordPress admin password not configured (WP_ADMIN_PASSWORD)');
+    }
+    
+    // Check if Application Password is provided via env var
+    if (process.env.WP_APP_PASSWORD) {
+        wpAppPasswordCache = process.env.WP_APP_PASSWORD;
+        console.log(`✅ [WordPress Auth] Using Application Password from WP_APP_PASSWORD env var`);
+        return wpAppPasswordCache;
+    }
+    
+    try {
+        // First, verify we can authenticate with WordPress REST API
+        // Try to get the current user to verify credentials
+        const meResponse = await axios.get(`${WORDPRESS_URL}/wp-json/wp/v2/users/me`, {
+            auth: {
+                username: WORDPRESS_ADMIN_USER,
+                password: WORDPRESS_ADMIN_PASSWORD
+            },
+            timeout: 10000,
+            validateStatus: () => true,
+            maxRedirects: 0
+        });
+        
+        // If authentication fails, the password is wrong or user doesn't exist
+        if (meResponse.status === 401 || meResponse.status === 403) {
+            throw new Error(`WordPress authentication failed: Invalid credentials for user "${WORDPRESS_ADMIN_USER}". Status: ${meResponse.status}. Please verify WP_ADMIN_USER and WP_ADMIN_PASSWORD in your .env file.`);
+        }
+        
+        if (meResponse.status !== 200 || !meResponse.data?.id) {
+            throw new Error(`WordPress authentication failed: Unexpected response status ${meResponse.status}`);
+        }
+        
+        const adminUserId = meResponse.data.id;
+        const adminCapabilities = meResponse.data.capabilities || {};
+        
+        console.log(`✅ [WordPress Auth] Authenticated as user ID: ${adminUserId}`);
+        console.log(`🔍 [WordPress Auth] User capabilities:`, Object.keys(adminCapabilities).filter(cap => adminCapabilities[cap]));
+        
+        // Check if user has publish_posts capability
+        if (!adminCapabilities.publish_posts && !adminCapabilities.administrator) {
+            throw new Error(`WordPress user "${WORDPRESS_ADMIN_USER}" does not have publish_posts capability. User needs administrator role.`);
+        }
+        
+        // Try to create an Application Password
+        try {
+            const appPasswordResponse = await axios.post(
+                `${WORDPRESS_URL}/wp-json/wp/v2/users/${adminUserId}/application-passwords`,
+                {
+                    name: 'OIP Daemon Integration',
+                    app_id: 'oip-daemon'
+                },
+                {
+                    auth: {
+                        username: WORDPRESS_ADMIN_USER,
+                        password: WORDPRESS_ADMIN_PASSWORD
+                    },
+                    timeout: 10000,
+                    validateStatus: () => true,
+                    maxRedirects: 0
+                }
+            );
+            
+            if (appPasswordResponse.status === 201 && appPasswordResponse.data?.password) {
+                wpAppPasswordCache = appPasswordResponse.data.password.replace(/\s+/g, ''); // Remove spaces
+                console.log(`✅ [WordPress Auth] Created Application Password successfully`);
+                console.log(`💡 [WordPress Auth] Tip: Set WP_APP_PASSWORD=${wpAppPasswordCache} in your .env to reuse this password`);
+                return wpAppPasswordCache;
+            } else if (appPasswordResponse.status === 400 && appPasswordResponse.data?.code === 'application_passwords_disabled') {
+                console.warn(`⚠️ [WordPress Auth] Application Passwords are disabled in WordPress. Using regular password.`);
+                wpAppPasswordCache = WORDPRESS_ADMIN_PASSWORD;
+                return wpAppPasswordCache;
+            } else {
+                console.warn(`⚠️ [WordPress Auth] Could not create Application Password (status ${appPasswordResponse.status}). Using regular password.`);
+                wpAppPasswordCache = WORDPRESS_ADMIN_PASSWORD;
+                return wpAppPasswordCache;
+            }
+        } catch (createError) {
+            // If creation fails, check if it's because Application Passwords are disabled
+            if (createError.response?.status === 400 && createError.response?.data?.code === 'application_passwords_disabled') {
+                console.warn(`⚠️ [WordPress Auth] Application Passwords are disabled in WordPress. Using regular password.`);
+                wpAppPasswordCache = WORDPRESS_ADMIN_PASSWORD;
+                return wpAppPasswordCache;
+            }
+            
+            // If creation fails for other reasons, try using regular password
+            console.warn(`⚠️ [WordPress Auth] Could not create Application Password: ${createError.message}`);
+            console.warn(`⚠️ [WordPress Auth] Will try using regular password. If this fails, you may need to manually create an Application Password in WordPress admin.`);
+            wpAppPasswordCache = WORDPRESS_ADMIN_PASSWORD;
+            return wpAppPasswordCache;
+        }
+        
+    } catch (error) {
+        // If it's an authentication error, throw it (don't fallback)
+        if (error.message.includes('authentication failed') || error.message.includes('Invalid credentials')) {
+            throw error;
+        }
+        
+        console.error(`❌ [WordPress Auth] Error getting Application Password: ${error.message}`);
+        console.error(`❌ [WordPress Auth] Stack:`, error.stack);
+        // Fallback to regular password as last resort
+        console.warn(`⚠️ [WordPress Auth] Falling back to regular password (may not work if WordPress requires Application Passwords)`);
+        return WORDPRESS_ADMIN_PASSWORD;
+    }
+}
+
 async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     console.log(`🔍 [PublishToWordPress] Starting WordPress publish`);
     console.log(`🔍 [PublishToWordPress] Options:`, JSON.stringify(options, null, 2));
     
     const WORDPRESS_URL = process.env.WORDPRESS_URL || 'http://wordpress:80';
     const WORDPRESS_ADMIN_USER = process.env.WP_ADMIN_USER || 'admin';
-    const WORDPRESS_ADMIN_PASSWORD = process.env.WP_ADMIN_PASSWORD || '';
     
     console.log(`🔍 [PublishToWordPress] WordPress URL: ${WORDPRESS_URL}`);
     console.log(`🔍 [PublishToWordPress] WordPress Admin User: ${WORDPRESS_ADMIN_USER}`);
-    console.log(`🔍 [PublishToWordPress] WordPress Admin Password configured: ${WORDPRESS_ADMIN_PASSWORD ? 'yes' : 'no'}`);
     
-    if (!WORDPRESS_ADMIN_PASSWORD) {
-        throw new Error('WordPress admin password not configured (WP_ADMIN_PASSWORD)');
-    }
+    // Get Application Password (or fallback to regular password)
+    const authPassword = await getWordPressAppPassword();
     
     // Extract record data from payload
     const fragments = payload.fragments || [payload];
@@ -1100,7 +1219,7 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     // Try both endpoint formats in case WordPress permalinks are misconfigured
     const wpApiUrl1 = `${WORDPRESS_URL}/wp-json/wp/v2/posts`;
     const wpApiUrl2 = `${WORDPRESS_URL}/index.php?rest_route=/wp/v2/posts`;
-    const auth = Buffer.from(`${WORDPRESS_ADMIN_USER}:${WORDPRESS_ADMIN_PASSWORD}`).toString('base64');
+    const auth = Buffer.from(`${WORDPRESS_ADMIN_USER}:${authPassword}`).toString('base64');
     
     console.log(`🔍 [PublishToWordPress] WordPress API URL (primary): ${wpApiUrl1}`);
     console.log(`🔍 [PublishToWordPress] WordPress API URL (fallback): ${wpApiUrl2}`);

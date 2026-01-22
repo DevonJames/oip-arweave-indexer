@@ -901,7 +901,6 @@ if (ONION_PRESS_ENABLED) {
     app.get('/onion-press/api/tor/status', async (req, res) => {
         try {
             const targetUrl = `${ONION_PRESS_URL}/api/tor/status`;
-            console.log(`[TOR Status] Proxying to: ${targetUrl}`);
             
             const response = await axios.get(targetUrl, {
                 timeout: 10000,
@@ -910,26 +909,34 @@ if (ONION_PRESS_ENABLED) {
                 validateStatus: () => true // Don't throw on non-2xx
             });
             
-            console.log(`[TOR Status] Response: ${response.status}`, response.data);
             res.status(response.status).json(response.data);
         } catch (error) {
-            console.error('[TOR Status] Proxy error:', error.message);
-            console.error('[TOR Status] Error code:', error.code);
-            console.error('[TOR Status] Error details:', {
-                message: error.message,
-                code: error.code,
-                response: error.response?.data,
-                status: error.response?.status
-            });
+            // Handle DNS/connection errors gracefully (service may not be in this profile)
+            const isServiceUnavailable = error.code === 'EAI_AGAIN' || 
+                                         error.code === 'ECONNREFUSED' || 
+                                         error.code === 'ENOTFOUND';
             
-            // Return disconnected status if onion-press-service is unavailable
-            res.status(200).json({
-                connected: false,
-                error: 'Onion Press service unavailable',
-                message: error.message,
-                code: error.code,
-                timestamp: new Date().toISOString()
-            });
+            if (isServiceUnavailable) {
+                // Silently return disconnected status - this is expected when onion-press-service isn't in the profile
+                res.status(200).json({
+                    connected: false,
+                    error: 'Onion Press service unavailable',
+                    message: 'TOR service requires onion-press-server profile',
+                    timestamp: new Date().toISOString()
+                });
+            } else {
+                // Log unexpected errors
+                console.error('[TOR Status] Proxy error:', error.message);
+                console.error('[TOR Status] Error code:', error.code);
+                
+                res.status(200).json({
+                    connected: false,
+                    error: 'Onion Press service unavailable',
+                    message: error.message,
+                    code: error.code,
+                    timestamp: new Date().toISOString()
+                });
+            }
         }
     });
     
@@ -1117,7 +1124,8 @@ if (ONION_PRESS_ENABLED) {
             }
             
             // If onion-press-service is not available, return stub response
-            if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+            // Handle DNS resolution failures (EAI_AGAIN) and connection errors
+            if (error.code === 'EAI_AGAIN' || error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
                 // For publish destinations endpoint, return local settings
                 if (req.url.startsWith('/publish/destinations')) {
                     return res.status(200).json({

@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alfred Speaks - Voice Conversation Widget</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Neo-retro dark palette */
+            --bg-primary: #0f0f14;
+            --bg-panel: #16161e;
+            --bg-elevated: #1c1c27;
+            --text-primary: #f4f4f8;
+            --text-secondary: #a9a9bc;
+            --text-tertiary: #6b6b81;
+            --border-subtle: rgba(95, 252, 249, 0.15);
+            --border-strong: rgba(95, 252, 249, 0.35);
+            --accent-cyan: #5ffcf9;
+            --accent-pink: #ff6bcb;
+            --secondary-purple: #b084ff;
+            --green: #5ffc9f;
+            --red: #ff5c5c;
+            --transition-fast: 180ms ease;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
+            --shadow-soft: 0 10px 32px rgba(0, 0, 0, 0.85);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        /* ===============================
+           CONNECTION STATUS
+        =============================== */
+        .status-bar {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 16px;
+            font-size: 11px;
+            color: var(--text-tertiary);
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--red);
+        }
+
+        .status-dot.connected {
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green);
+        }
+
+        /* ===============================
+           MAIN CONTAINER
+        =============================== */
+        .alfred-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        /* ===============================
+           ALFRED VISUALIZATION PANEL
+        =============================== */
+        .alfred-viz-panel {
+            width: 320px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-soft);
+            overflow: hidden;
+            transition: all var(--transition-fast);
+        }
+
+        .alfred-viz-panel.speaking {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 30px rgba(95, 252, 249, 0.2);
+        }
+
+        .alfred-viz-header {
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .alfred-viz-title {
+            font-family: "Press Start 2P", monospace;
+            font-size: 9px;
+            letter-spacing: 0.15em;
+            color: var(--accent-cyan);
+        }
+
+        .alfred-viz-content {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .alfred-avatar-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+
+        .alfred-avatar-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .alfred-soundwave-overlay {
+            position: absolute;
+            left: 50%;
+            top: calc(33% + 45px);
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .alfred-soundwave-overlay.active {
+            opacity: 1;
+        }
+
+        .alfred-viz-status {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .alfred-viz-status.speaking {
+            color: var(--accent-cyan);
+        }
+
+        /* ===============================
+           CHAT MESSAGES
+        =============================== */
+        .chat-messages {
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 12px;
+            background: var(--bg-panel);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .chat-message {
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            line-height: 1.5;
+            max-width: 85%;
+        }
+
+        .chat-message.user {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--secondary-purple));
+            color: var(--bg-primary);
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat-message.assistant {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-message.streaming {
+            opacity: 0.8;
+        }
+
+        /* ===============================
+           CHAT INPUT AREA
+        =============================== */
+        .chat-input-area {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-panel);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .chat-input {
+            flex: 1;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 12px 16px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        .chat-input.speech-detected {
+            border-color: var(--green);
+            box-shadow: 0 0 0 2px rgba(95, 252, 159, 0.2);
+        }
+
+        /* Voice button */
+        .voice-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--secondary-purple));
+            color: var(--bg-primary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .voice-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(95, 252, 249, 0.4);
+        }
+
+        .voice-btn.listening {
+            background: linear-gradient(135deg, var(--green), #30d158);
+            animation: pulse-green 1.5s infinite;
+        }
+
+        @keyframes pulse-green {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(95, 252, 159, 0.4); }
+            50% { box-shadow: 0 0 0 12px rgba(95, 252, 159, 0); }
+        }
+
+        /* Mute button */
+        .mute-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-panel);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mute-btn:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .mute-btn.muted {
+            background: rgba(255, 92, 92, 0.15);
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        /* ===============================
+           SETTINGS PANEL
+        =============================== */
+        .settings-panel {
+            width: 100%;
+            padding: 16px;
+            background: var(--bg-panel);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .settings-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-tertiary);
+            margin-bottom: 12px;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .setting-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .setting-input {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 6px 10px;
+            color: var(--text-primary);
+            font-size: 12px;
+            font-family: inherit;
+            width: 180px;
+        }
+
+        .setting-input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        .setting-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .setting-checkbox input {
+            accent-color: var(--accent-cyan);
+        }
+
+        /* ===============================
+           TOAST NOTIFICATION
+        =============================== */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-panel);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            z-index: 1000;
+            transition: opacity 0.3s ease;
+        }
+
+        .toast.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div class="status-item">
+            <div class="status-dot" id="backendStatus"></div>
+            <span>Backend</span>
+        </div>
+        <div class="status-item">
+            <div class="status-dot" id="voiceProcessorStatus"></div>
+            <span>Voice Processor</span>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="alfred-container">
+        <!-- Alfred Visualization Panel -->
+        <div id="alfredVizPanel" class="alfred-viz-panel">
+            <div class="alfred-viz-header">
+                <div class="alfred-viz-title">ALFRED</div>
+            </div>
+            <div class="alfred-viz-content">
+                <div class="alfred-avatar-container">
+                    <img src="/alfred.png" alt="Alfred" class="alfred-avatar-img">
+                    <canvas id="alfredSoundwave" class="alfred-soundwave-overlay" width="84" height="24"></canvas>
+                </div>
+                <div id="alfredVizStatus" class="alfred-viz-status">Ready to speak</div>
+            </div>
+        </div>
+
+        <!-- Chat Messages -->
+        <div id="chatMessages" class="chat-messages">
+            <div class="chat-message assistant">
+                Hello! I'm Alfred. How can I help you today?
+            </div>
+        </div>
+
+        <!-- Chat Input Area -->
+        <div class="chat-input-area">
+            <input type="text" id="chatInput" class="chat-input" placeholder="Ask Alfred anything..." 
+                   onkeypress="if(event.key === 'Enter') alfredSpeaks.sendMessage(this.value); this.value='';" />
+            <button class="mute-btn" id="muteBtn" onclick="alfredSpeaks.toggleMicMute()" title="Mute/Unmute microphone">
+                <svg id="muteIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+            </button>
+            <button class="voice-btn" id="voiceBtn" onclick="alfredSpeaks.toggleVoiceInput()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel">
+            <div class="settings-title">Settings</div>
+            <div class="setting-row">
+                <span class="setting-label">Backend URL</span>
+                <input type="text" id="backendUrl" class="setting-input" value="https://alexandria.io" />
+            </div>
+            <div class="setting-row">
+                <span class="setting-label">Voice Processor URL</span>
+                <input type="text" id="voiceProcessorUrl" class="setting-input" value="http://localhost:8015" />
+            </div>
+            <div class="setting-row">
+                <span class="setting-label">Voice ID (ElevenLabs)</span>
+                <input type="text" id="voiceId" class="setting-input" value="qXcNpxDCD6dKvASibF0r" />
+            </div>
+            <div class="setting-row">
+                <label class="setting-checkbox">
+                    <input type="checkbox" id="autoPlayAudio" checked />
+                    <span class="setting-label">Auto-play audio responses</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast hidden" id="toast">
+        <span id="toastIcon">✓</span>
+        <span id="toastMessage">Success!</span>
+    </div>
+
+    <script>
+        /**
+         * Alfred Speaks - Voice Conversation Widget
+         * Standalone widget for voice conversations with Alfred AI assistant
+         */
+        const alfredSpeaks = {
+            // State
+            state: {
+                conversationHistory: [],
+                isVoiceListening: false,
+                isStreamingAudio: false,
+                isMicMuted: false,
+                soundwaveAnimationId: null,
+                audioContext: null,
+                audioAnalyser: null,
+                audioSource: null,
+                currentAudio: null,
+                // Voice input state
+                voiceStream: null,
+                voiceAudioContext: null,
+                voiceAudioSource: null,
+                voiceScriptProcessor: null,
+                voiceMediaRecorder: null,
+                voiceAudioChunks: [],
+                voiceFinalText: '',
+                voiceSilenceFrames: 0,
+                voiceHadSpeech: false,
+                // Connection state
+                backendConnected: false,
+                voiceProcessorConnected: false
+            },
+
+            // Configuration
+            config: {
+                backendUrl: localStorage.getItem('alfred_backend_url') || 'https://alexandria.io',
+                voiceProcessorUrl: localStorage.getItem('alfred_voice_processor_url') || 'http://localhost:8015',
+                token: localStorage.getItem('alfred_jwt_token') || '',
+                voiceId: localStorage.getItem('alfred_voice_id') || 'qXcNpxDCD6dKvASibF0r'
+            },
+
+            // Initialize
+            async init() {
+                console.log('🚀 Initializing Alfred Speaks Widget');
+                
+                // Load saved settings
+                this.loadSettings();
+                
+                // Check connections
+                await this.checkConnections();
+                
+                // Set up audio context
+                this.initAudioContext();
+                
+                // Set up settings change handlers
+                this.setupSettingsHandlers();
+                
+                console.log('✅ Alfred Speaks initialized');
+            },
+
+            // Load settings from inputs
+            loadSettings() {
+                const backendUrl = document.getElementById('backendUrl');
+                const voiceProcessorUrl = document.getElementById('voiceProcessorUrl');
+                const voiceId = document.getElementById('voiceId');
+                
+                if (backendUrl) {
+                    backendUrl.value = this.config.backendUrl;
+                }
+                if (voiceProcessorUrl) {
+                    voiceProcessorUrl.value = this.config.voiceProcessorUrl;
+                }
+                if (voiceId) {
+                    voiceId.value = this.config.voiceId;
+                }
+            },
+
+            // Setup settings change handlers
+            setupSettingsHandlers() {
+                const backendUrl = document.getElementById('backendUrl');
+                const voiceProcessorUrl = document.getElementById('voiceProcessorUrl');
+                const voiceId = document.getElementById('voiceId');
+                
+                if (backendUrl) {
+                    backendUrl.addEventListener('change', () => {
+                        this.config.backendUrl = backendUrl.value;
+                        localStorage.setItem('alfred_backend_url', backendUrl.value);
+                        this.checkConnections();
+                    });
+                }
+                if (voiceProcessorUrl) {
+                    voiceProcessorUrl.addEventListener('change', () => {
+                        this.config.voiceProcessorUrl = voiceProcessorUrl.value;
+                        localStorage.setItem('alfred_voice_processor_url', voiceProcessorUrl.value);
+                        this.checkConnections();
+                    });
+                }
+                if (voiceId) {
+                    voiceId.addEventListener('change', () => {
+                        this.config.voiceId = voiceId.value;
+                        localStorage.setItem('alfred_voice_id', voiceId.value);
+                    });
+                }
+            },
+
+            // Check backend and voice processor connections
+            async checkConnections() {
+                // Check backend
+                try {
+                    const response = await fetch(`${this.config.backendUrl}/api/health`, { timeout: 5000 });
+                    this.state.backendConnected = response.ok;
+                } catch (e) {
+                    this.state.backendConnected = false;
+                }
+                document.getElementById('backendStatus').classList.toggle('connected', this.state.backendConnected);
+
+                // Check voice processor
+                try {
+                    const response = await fetch(`${this.config.voiceProcessorUrl}/health`, { timeout: 5000 });
+                    this.state.voiceProcessorConnected = response.ok;
+                } catch (e) {
+                    this.state.voiceProcessorConnected = false;
+                }
+                document.getElementById('voiceProcessorStatus').classList.toggle('connected', this.state.voiceProcessorConnected);
+            },
+
+            // Initialize Web Audio API
+            initAudioContext() {
+                if (!this.state.audioContext) {
+                    this.state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (!this.state.audioAnalyser) {
+                    this.state.audioAnalyser = this.state.audioContext.createAnalyser();
+                    this.state.audioAnalyser.fftSize = 64;
+                    this.state.audioAnalyser.smoothingTimeConstant = 0.8;
+                }
+            },
+
+            // Send message
+            async sendMessage(message) {
+                if (!message || !message.trim()) return;
+                
+                // Clear input
+                document.getElementById('chatInput').value = '';
+                
+                // Add user message to UI
+                this.addMessageToChat('user', message);
+                
+                // Add to conversation history
+                this.state.conversationHistory.push({
+                    role: 'user',
+                    content: message
+                });
+                
+                // Check if auto-play is enabled
+                const autoPlayEnabled = document.getElementById('autoPlayAudio')?.checked ?? true;
+                
+                if (autoPlayEnabled) {
+                    await this.sendStreamingMessage(message);
+                } else {
+                    await this.sendSyncMessage(message);
+                }
+            },
+
+            // Send message without streaming
+            async sendSyncMessage(message) {
+                const voiceConfig = {
+                    engine: 'elevenlabs',
+                    voice_id: this.config.voiceId
+                };
+                
+                const autoPlayEnabled = document.getElementById('autoPlayAudio')?.checked ?? true;
+                
+                const messageId = `msg-${Date.now()}`;
+                this.addMessageToChat('assistant', 'Thinking...', messageId, true);
+                
+                if (autoPlayEnabled) {
+                    this.startSoundwaveVisualization();
+                }
+                
+                try {
+                    const requestBody = {
+                        question: message,
+                        model: 'grok-2-mini',
+                        conversationHistory: this.state.conversationHistory.slice(-10)
+                    };
+                    
+                    if (autoPlayEnabled) {
+                        requestBody.return_audio = true;
+                        requestBody.engine = voiceConfig.engine;
+                        requestBody.voice_id = voiceConfig.voice_id;
+                        requestBody.speed = 1;
+                    }
+                    
+                    const response = await fetch(`${this.config.backendUrl}/api/notes/converse`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.config.token}`
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        const answer = data.answer || 'No response';
+                        this.updateMessage(messageId, answer, false);
+                        
+                        this.state.conversationHistory.push({
+                            role: 'assistant',
+                            content: answer
+                        });
+                        
+                        if (data.audio_data && autoPlayEnabled) {
+                            this.playAudioChunk(data.audio_data, 'mp3');
+                        } else if (autoPlayEnabled) {
+                            this.stopSoundwaveVisualization();
+                            setTimeout(() => this.startVoiceInput(), 500);
+                        }
+                    } else {
+                        this.updateMessage(messageId, `Error: ${data.error || 'Unknown error'}`, false);
+                        if (autoPlayEnabled) this.stopSoundwaveVisualization();
+                    }
+                } catch (error) {
+                    console.error('Chat error:', error);
+                    this.updateMessage(messageId, `Error: ${error.message}`, false);
+                    if (autoPlayEnabled) this.stopSoundwaveVisualization();
+                }
+            },
+
+            // Send message with streaming
+            async sendStreamingMessage(message) {
+                const voiceConfig = {
+                    engine: 'elevenlabs',
+                    voice_id: this.config.voiceId
+                };
+                
+                const messageId = `msg-${Date.now()}`;
+                this.addMessageToChat('assistant', 'Thinking...', messageId, true);
+                
+                try {
+                    const response = await fetch(`${this.config.backendUrl}/api/notes/converse-stream-inline`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.config.token}`
+                        },
+                        body: JSON.stringify({
+                            question: message,
+                            model: 'grok-2-mini',
+                            voice_mode: true,
+                            voice_config: voiceConfig,
+                            conversationHistory: this.state.conversationHistory.slice(-10)
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        if (response.status === 404) {
+                            const messageEl = document.getElementById(messageId);
+                            if (messageEl) messageEl.remove();
+                            await this.sendSyncMessage(message);
+                            return;
+                        }
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    let fullText = '';
+                    
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        
+                        buffer += decoder.decode(value, { stream: true });
+                        
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || '';
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+                                    
+                                    switch (data.type) {
+                                        case 'started':
+                                            console.log('🎤 Stream started');
+                                            break;
+                                            
+                                        case 'textChunk':
+                                            fullText = data.accumulated || (fullText + ' ' + data.text);
+                                            this.updateMessage(messageId, fullText.trim(), !data.final);
+                                            break;
+                                            
+                                        case 'audioGenerating':
+                                            this.startSoundwaveVisualization();
+                                            break;
+                                            
+                                        case 'audioChunk':
+                                            if (data.audio_data) {
+                                                this.playAudioChunk(data.audio_data, data.format || 'mp3');
+                                            }
+                                            break;
+                                            
+                                        case 'complete':
+                                            this.state.conversationHistory.push({
+                                                role: 'assistant',
+                                                content: fullText.trim()
+                                            });
+                                            if (!this.state.isStreamingAudio && document.getElementById('autoPlayAudio')?.checked) {
+                                                setTimeout(() => this.startVoiceInput(), 500);
+                                            }
+                                            break;
+                                            
+                                        case 'error':
+                                            this.updateMessage(messageId, `Error: ${data.error}`, false);
+                                            this.stopSoundwaveVisualization();
+                                            break;
+                                    }
+                                } catch (e) { /* ignore parse errors */ }
+                            }
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error('Streaming error:', error);
+                    this.updateMessage(messageId, `Error: ${error.message}`, false);
+                    this.stopSoundwaveVisualization();
+                }
+            },
+
+            // Add message to chat
+            addMessageToChat(role, content, id = null, streaming = false) {
+                const messagesContainer = document.getElementById('chatMessages');
+                const messageEl = document.createElement('div');
+                messageEl.className = `chat-message ${role}${streaming ? ' streaming' : ''}`;
+                if (id) messageEl.id = id;
+                messageEl.textContent = content;
+                messagesContainer.appendChild(messageEl);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            },
+
+            // Update existing message
+            updateMessage(messageId, content, streaming = false) {
+                const messageEl = document.getElementById(messageId);
+                if (messageEl) {
+                    messageEl.textContent = content;
+                    messageEl.classList.toggle('streaming', streaming);
+                    
+                    const messagesContainer = document.getElementById('chatMessages');
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+            },
+
+            // Play audio chunk
+            playAudioChunk(audioData, format) {
+                if (!audioData) return;
+                
+                try {
+                    this.initAudioContext();
+                    
+                    const audioBytes = atob(audioData);
+                    const audioBuffer = new Uint8Array(audioBytes.length);
+                    for (let i = 0; i < audioBytes.length; i++) {
+                        audioBuffer[i] = audioBytes.charCodeAt(i);
+                    }
+                    
+                    const blob = new Blob([audioBuffer], { type: `audio/${format || 'mp3'}` });
+                    const audioUrl = URL.createObjectURL(blob);
+                    
+                    const audio = new Audio(audioUrl);
+                    this.state.currentAudio = audio;
+                    
+                    if (this.state.audioContext.state === 'suspended') {
+                        this.state.audioContext.resume();
+                    }
+                    
+                    if (this.state.audioSource) {
+                        try { this.state.audioSource.disconnect(); } catch (e) {}
+                    }
+                    
+                    try {
+                        const source = this.state.audioContext.createMediaElementSource(audio);
+                        source.connect(this.state.audioAnalyser);
+                        this.state.audioAnalyser.connect(this.state.audioContext.destination);
+                        this.state.audioSource = source;
+                    } catch (e) {
+                        console.error('Failed to connect audio source:', e);
+                    }
+                    
+                    this.state.isStreamingAudio = true;
+                    this.startSoundwaveVisualization();
+                    
+                    audio.onended = () => {
+                        this.state.isStreamingAudio = false;
+                        this.stopSoundwaveVisualization();
+                        URL.revokeObjectURL(audioUrl);
+                        
+                        if (document.getElementById('autoPlayAudio')?.checked) {
+                            setTimeout(() => this.startVoiceInput(), 500);
+                        }
+                    };
+                    
+                    audio.onerror = (e) => {
+                        console.error('Audio playback error:', e);
+                        this.state.isStreamingAudio = false;
+                        this.stopSoundwaveVisualization();
+                        URL.revokeObjectURL(audioUrl);
+                    };
+                    
+                    audio.play().catch(err => {
+                        console.error('Failed to start audio playback:', err);
+                        this.state.isStreamingAudio = false;
+                        this.stopSoundwaveVisualization();
+                    });
+                    
+                } catch (error) {
+                    console.error('Failed to play audio:', error);
+                    this.state.isStreamingAudio = false;
+                }
+            },
+
+            // Start soundwave visualization
+            startSoundwaveVisualization() {
+                const canvas = document.getElementById('alfredSoundwave');
+                const overlay = document.querySelector('.alfred-soundwave-overlay');
+                const status = document.getElementById('alfredVizStatus');
+                const panel = document.getElementById('alfredVizPanel');
+
+                if (!canvas || !this.state.audioAnalyser) return;
+
+                const ctx = canvas.getContext('2d');
+                const analyser = this.state.audioAnalyser;
+
+                if (overlay) overlay.classList.add('active');
+                if (status) {
+                    status.classList.add('speaking');
+                    status.textContent = 'Speaking...';
+                }
+                if (panel) panel.classList.add('speaking');
+
+                const timeData = new Uint8Array(analyser.fftSize);
+                const freqData = new Uint8Array(analyser.frequencyBinCount);
+
+                const BASE_Y = canvas.height / 2;
+                const LINE_LENGTH = canvas.width * 0.9;
+                const START_X = (canvas.width - LINE_LENGTH) / 2;
+                const END_X = START_X + LINE_LENGTH;
+
+                const MAX_CURVE = canvas.height * 8;
+                const BAR_COUNT = 12;
+                const BAR_SPACING = LINE_LENGTH / (BAR_COUNT + 1);
+                const BAR_MAX_HEIGHT = canvas.height * 0.75;
+
+                let smoothedEnergy = 0;
+                let phase = 0;
+
+                const animate = () => {
+                    if (!this.state.isStreamingAudio) return;
+
+                    analyser.getByteTimeDomainData(timeData);
+                    analyser.getByteFrequencyData(freqData);
+
+                    let sum = 0;
+                    for (let i = 0; i < timeData.length; i++) {
+                        const v = (timeData[i] - 128) / 128;
+                        sum += v * v;
+                    }
+                    const rms = Math.sqrt(sum / timeData.length);
+                    smoothedEnergy += (rms - smoothedEnergy) * 0.15;
+
+                    phase += 0.04 + smoothedEnergy * 0.35;
+
+                    const curveDepth = Math.min(MAX_CURVE, smoothedEnergy * canvas.height * 1.2);
+
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    // Main tension line with gradient
+                    const lineGradient = ctx.createLinearGradient(START_X, 0, END_X, 0);
+                    const alpha = 0.6 + smoothedEnergy;
+                    lineGradient.addColorStop(0, `rgba(70,70,70,${alpha})`);
+                    lineGradient.addColorStop(0.15, `rgba(70,70,70,${alpha})`);
+                    lineGradient.addColorStop(0.5, `rgba(77,254,249,${alpha})`);
+                    lineGradient.addColorStop(0.85, `rgba(70,70,70,${alpha})`);
+                    lineGradient.addColorStop(1, `rgba(70,70,70,${alpha})`);
+                    
+                    ctx.strokeStyle = lineGradient;
+                    ctx.lineWidth = 2;
+                    ctx.lineCap = 'round';
+                    ctx.shadowColor = 'rgba(77,254,249,0.25)';
+                    ctx.shadowBlur = 6;
+
+                    ctx.beginPath();
+                    ctx.moveTo(START_X, BASE_Y);
+
+                    const controlX = canvas.width / 2;
+                    const waveOffset = Math.sin(phase) * curveDepth;
+
+                    ctx.quadraticCurveTo(controlX, BASE_Y + waveOffset, END_X, BASE_Y);
+                    ctx.stroke();
+
+                    ctx.shadowBlur = 0;
+
+                    // Micro bars
+                    for (let i = 0; i < BAR_COUNT; i++) {
+                        const t = i / (BAR_COUNT - 1);
+                        const centerWeight = Math.abs(t - 0.5) * 2;
+                        const freqIndex = Math.floor(centerWeight * freqData.length * 0.35);
+                        const value = freqData[freqIndex] / 255;
+
+                        const barHeight = value * BAR_MAX_HEIGHT * (0.4 + smoothedEnergy);
+                        if (barHeight < 1) continue;
+
+                        const x = START_X + BAR_SPACING * (i + 1);
+                        const y = BASE_Y - barHeight / 2;
+
+                        const BAR_WIDTH = 10;
+                        
+                        const centerFactor = 1 - Math.pow(centerWeight, 2);
+                        const r = Math.round(70 + centerFactor * 7);
+                        const g = Math.round(70 + centerFactor * 184);
+                        const b = Math.round(70 + centerFactor * 179);
+                        ctx.fillStyle = `rgba(${r},${g},${b},0.65)`;
+
+                        ctx.fillRect(x - BAR_WIDTH / 2, y, BAR_WIDTH, barHeight);
+                    }
+
+                    this.state.soundwaveAnimationId = requestAnimationFrame(animate);
+                };
+
+                animate();
+            },
+
+            // Stop soundwave visualization
+            stopSoundwaveVisualization() {
+                const canvas = document.getElementById('alfredSoundwave');
+                const overlay = document.querySelector('.alfred-soundwave-overlay');
+                const status = document.getElementById('alfredVizStatus');
+                const panel = document.getElementById('alfredVizPanel');
+                
+                this.state.isStreamingAudio = false;
+                
+                if (this.state.soundwaveAnimationId) {
+                    cancelAnimationFrame(this.state.soundwaveAnimationId);
+                    this.state.soundwaveAnimationId = null;
+                }
+                
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+                
+                if (overlay) overlay.classList.remove('active');
+                if (status) {
+                    status.classList.remove('speaking');
+                    status.textContent = 'Ready to speak';
+                }
+                if (panel) panel.classList.remove('speaking');
+            },
+
+            // Toggle voice input
+            toggleVoiceInput() {
+                if (this.state.isVoiceListening) {
+                    this.stopVoiceInput(true);
+                } else {
+                    this.startVoiceInput();
+                }
+            },
+
+            // Toggle microphone mute
+            toggleMicMute() {
+                const muteBtn = document.getElementById('muteBtn');
+                const muteIcon = document.getElementById('muteIcon');
+                
+                this.state.isMicMuted = !this.state.isMicMuted;
+                
+                if (this.state.voiceStream) {
+                    this.state.voiceStream.getAudioTracks().forEach(track => {
+                        track.enabled = !this.state.isMicMuted;
+                    });
+                }
+                
+                if (this.state.isMicMuted) {
+                    muteBtn.classList.add('muted');
+                    muteBtn.title = 'Unmute microphone';
+                    muteIcon.innerHTML = `
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                        <line x1="1" y1="1" x2="23" y2="23" stroke-width="2.5"></line>
+                    `;
+                    this.showToast('Microphone muted', 'warning');
+                } else {
+                    muteBtn.classList.remove('muted');
+                    muteBtn.title = 'Mute microphone';
+                    muteIcon.innerHTML = `
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                    `;
+                    this.showToast('Microphone unmuted', 'success');
+                }
+            },
+
+            // Initialize persistent voice stream
+            async initVoiceStream() {
+                if (this.state.voiceStream) {
+                    return true;
+                }
+                
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            channelCount: 1,
+                            sampleRate: 16000,
+                            echoCancellation: true,
+                            noiseSuppression: true
+                        }
+                    });
+                    
+                    this.state.voiceStream = stream;
+                    this.state.voiceAudioContext = new AudioContext({ sampleRate: 16000 });
+                    this.state.voiceAudioSource = this.state.voiceAudioContext.createMediaStreamSource(stream);
+                    
+                    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+                        ? 'audio/webm;codecs=opus' : 'audio/webm';
+                    this.state.voiceMediaRecorder = new MediaRecorder(stream, { mimeType });
+                    
+                    this.state.voiceMediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) {
+                            this.state.voiceAudioChunks.push(e.data);
+                        }
+                    };
+                    
+                    this.state.voiceMediaRecorder.onstop = async () => {
+                        if (this.state.voiceAudioChunks.length > 0 && this.state.voiceHadSpeech) {
+                            await this.transcribeAndSendVoice();
+                        }
+                    };
+                    
+                    return true;
+                    
+                } catch (error) {
+                    console.error('Failed to initialize voice stream:', error);
+                    this.showToast('Microphone access denied', 'error');
+                    return false;
+                }
+            },
+
+            // Start voice input
+            async startVoiceInput() {
+                const voiceBtn = document.getElementById('voiceBtn');
+                const chatInput = document.getElementById('chatInput');
+                
+                if (!this.state.voiceProcessorConnected) {
+                    this.showToast('Voice processor not running', 'error');
+                    return;
+                }
+                
+                try {
+                    if (!await this.initVoiceStream()) {
+                        return;
+                    }
+                    
+                    if (this.state.voiceAudioContext && this.state.voiceAudioContext.state === 'suspended') {
+                        await this.state.voiceAudioContext.resume();
+                    }
+                    
+                    if (!this.state.voiceMediaRecorder || this.state.voiceMediaRecorder.state !== 'inactive') {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        if (this.state.voiceMediaRecorder?.state !== 'inactive') {
+                            this.showToast('Voice recorder busy', 'warning');
+                            return;
+                        }
+                    }
+                    
+                    this.state.voiceFinalText = '';
+                    this.state.voiceSilenceFrames = 0;
+                    this.state.voiceHadSpeech = false;
+                    this.state.voiceAudioChunks = [];
+                    
+                    this.state.voiceMediaRecorder.start();
+                    
+                    if (this.state.voiceScriptProcessor) {
+                        this.state.voiceScriptProcessor.disconnect();
+                    }
+                    
+                    const bufferSize = 4096;
+                    this.state.voiceScriptProcessor = this.state.voiceAudioContext.createScriptProcessor(bufferSize, 1, 1);
+                    
+                    const SPEECH_THRESHOLD = 0.01;
+                    const SILENCE_FRAMES_TO_SEND = 3;
+                    
+                    this.state.voiceScriptProcessor.onaudioprocess = (e) => {
+                        if (!this.state.isVoiceListening) return;
+                        
+                        const inputData = e.inputBuffer.getChannelData(0);
+                        
+                        let sum = 0;
+                        for (let i = 0; i < inputData.length; i++) {
+                            sum += inputData[i] * inputData[i];
+                        }
+                        const energy = Math.sqrt(sum / inputData.length);
+                        
+                        const hasSpeech = energy > SPEECH_THRESHOLD;
+                        
+                        if (hasSpeech) {
+                            chatInput.classList.add('speech-detected');
+                            this.state.voiceSilenceFrames = 0;
+                            this.state.voiceHadSpeech = true;
+                            chatInput.placeholder = 'Listening... (speaking detected)';
+                        } else {
+                            chatInput.classList.remove('speech-detected');
+                            this.state.voiceSilenceFrames++;
+                            chatInput.placeholder = `Listening... ${this.state.voiceHadSpeech ? '(pause detected)' : '(waiting for speech)'}`;
+                            
+                            if (this.state.voiceHadSpeech && this.state.voiceSilenceFrames >= SILENCE_FRAMES_TO_SEND) {
+                                this.stopVoiceInput(false);
+                            }
+                        }
+                    };
+                    
+                    this.state.voiceAudioSource.connect(this.state.voiceScriptProcessor);
+                    this.state.voiceScriptProcessor.connect(this.state.voiceAudioContext.destination);
+                    
+                    voiceBtn.classList.add('listening');
+                    this.state.isVoiceListening = true;
+                    chatInput.placeholder = 'Listening... (speak now)';
+                    
+                } catch (error) {
+                    console.error('Failed to start voice input:', error);
+                    this.showToast('Voice input error', 'error');
+                }
+            },
+
+            // Transcribe and send voice
+            async transcribeAndSendVoice() {
+                const chatInput = document.getElementById('chatInput');
+                
+                try {
+                    const audioBlob = new Blob(this.state.voiceAudioChunks, { 
+                        type: this.state.voiceMediaRecorder?.mimeType || 'audio/webm' 
+                    });
+                    
+                    chatInput.placeholder = 'Transcribing...';
+                    
+                    const formData = new FormData();
+                    formData.append('file', audioBlob, 'recording.webm');
+                    formData.append('language', 'en');
+                    formData.append('task', 'transcribe');
+                    
+                    const response = await fetch(`${this.config.voiceProcessorUrl}/transcribe_file`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Transcription failed: HTTP ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    const transcribedText = result.text?.trim();
+                    
+                    if (transcribedText) {
+                        this.sendMessage(transcribedText);
+                    } else {
+                        this.showToast('No speech detected', 'warning');
+                    }
+                    
+                } catch (error) {
+                    console.error('Transcription failed:', error);
+                    this.showToast('Transcription failed', 'error');
+                } finally {
+                    chatInput.placeholder = 'Ask Alfred anything...';
+                }
+            },
+
+            // Stop voice input
+            stopVoiceInput(sendManually = false) {
+                const voiceBtn = document.getElementById('voiceBtn');
+                const chatInput = document.getElementById('chatInput');
+                
+                this.state.isVoiceListening = false;
+                voiceBtn.classList.remove('listening');
+                chatInput.classList.remove('speech-detected');
+                
+                if (this.state.voiceScriptProcessor) {
+                    this.state.voiceScriptProcessor.disconnect();
+                }
+                
+                if (this.state.voiceMediaRecorder && this.state.voiceMediaRecorder.state !== 'inactive') {
+                    this.state.voiceMediaRecorder.stop();
+                }
+                
+                if (sendManually && !this.state.voiceHadSpeech) {
+                    chatInput.placeholder = 'Ask Alfred anything...';
+                }
+            },
+
+            // Show toast notification
+            showToast(message, type = 'info') {
+                const toast = document.getElementById('toast');
+                const toastIcon = document.getElementById('toastIcon');
+                const toastMessage = document.getElementById('toastMessage');
+                
+                toastIcon.textContent = type === 'error' ? '✗' : type === 'warning' ? '⚠' : '✓';
+                toastMessage.textContent = message;
+                
+                toast.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 3000);
+            }
+        };
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            alfredSpeaks.init();
+        });
+    </script>
+</body>
+</html>

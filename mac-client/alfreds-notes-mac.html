@@ -2242,7 +2242,8 @@
                     <span class="setting-label">Voice Selection</span>
                     <div class="setting-value">
                         <select id="voiceId">
-                            <option value="onwK4e9ZLuTAKqWW03F9" selected>ElevenLabs - Adam (Default)</option>
+                            <option value="qXcNpxDCD6dKvASibF0r" selected>ElevenLabs - Alfred (Default)</option>
+                            <!-- <option value="onwK4e9ZLuTAKqWW03F9" selected>ElevenLabs - Adam (Default)</option> -->
                             <option value="21m00Tcm4TlvDq8ikWAM">ElevenLabs - Rachel</option>
                             <option value="af_heart">Kokoro - Heart</option>
                             <option value="bf_emma">Kokoro - Emma</option>
@@ -3108,71 +3109,296 @@
             },
 
             // Start soundwave visualization (extracted for reusability)
+            // startSoundwaveVisualization() {
+            //     const canvas = document.getElementById('alfredSoundwave');
+            //     const overlay = document.querySelector('.alfred-soundwave-overlay');
+            //     const status = document.getElementById('alfredVizStatus');
+            //     const panel = document.getElementById('alfredVizPanel');
+                
+            //     if (!canvas || !this.state.audioAnalyser) return;
+                
+            //     const ctx = canvas.getContext('2d');
+                
+            //     if (overlay) overlay.classList.add('active');
+            //     if (status) {
+            //         status.classList.add('speaking');
+            //         status.textContent = 'Speaking...';
+            //     }
+            //     if (panel) panel.classList.add('speaking');
+                
+            //     // 16-bar center-weighted visualization
+            //     const totalBars = 16;
+            //     const barWidth = canvas.width / totalBars;
+            //     const bufferLength = this.state.audioAnalyser.frequencyBinCount;
+            //     const dataArray = new Uint8Array(bufferLength);
+                
+            //     // Center-weighted frequency mapping
+            //     const maxFreqBin = Math.floor(bufferLength * 0.5);
+            //     const frequencyMap = [];
+            //     const centerBar = (totalBars - 1) / 2;
+            //     for (let i = 0; i < totalBars; i++) {
+            //         const distFromCenter = Math.abs(i - centerBar) / centerBar;
+            //         frequencyMap[i] = Math.floor(distFromCenter * maxFreqBin);
+            //     }
+                
+            //     const animate = () => {
+            //         if (!this.state.isStreamingAudio) return;
+                    
+            //         this.state.audioAnalyser.getByteFrequencyData(dataArray);
+            //         ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+            //         for (let i = 0; i < totalBars; i++) {
+            //             const dataIndex = frequencyMap[i];
+            //             const value = dataArray[dataIndex];
+            //             const normalizedHeight = value / 255;
+            //             const height = normalizedHeight * canvas.height * 0.8 + canvas.height * 0.15;
+            //             const y = (canvas.height - height) / 2;
+                        
+            //             const gradient = ctx.createLinearGradient(0, y, 0, y + height);
+            //             const alpha = 0.7 + (normalizedHeight * 0.3);
+            //             gradient.addColorStop(0, `rgba(100, 100, 100, ${alpha})`);
+            //             gradient.addColorStop(0.5, `rgba(50, 50, 50, ${alpha})`);
+            //             gradient.addColorStop(1, `rgba(20, 20, 20, ${alpha})`);
+                        
+            //             ctx.fillStyle = gradient;
+            //             ctx.shadowColor = '#333333';
+            //             ctx.shadowBlur = 3 + (normalizedHeight * 5);
+                        
+            //             const x = i * barWidth + barWidth * 0.1;
+            //             ctx.fillRect(x, y, barWidth * 0.8, height);
+            //             ctx.shadowBlur = 0;
+            //         }
+                    
+            //         this.state.soundwaveAnimationId = requestAnimationFrame(animate);
+            //     };
+                
+            //     animate();
+            // },
+            // startSoundwaveVisualization() {
+            //     const canvas = document.getElementById('alfredSoundwave');
+            //     const overlay = document.querySelector('.alfred-soundwave-overlay');
+            //     const status = document.getElementById('alfredVizStatus');
+            //     const panel = document.getElementById('alfredVizPanel');
+
+            //     if (!canvas || !this.state.audioAnalyser) return;
+
+            //     const ctx = canvas.getContext('2d');
+
+            //     if (overlay) overlay.classList.add('active');
+            //     if (status) {
+            //         status.classList.add('speaking');
+            //         status.textContent = 'Speaking...';
+            //     }
+            //     if (panel) panel.classList.add('speaking');
+
+            //     const analyser = this.state.audioAnalyser;
+            //     const bufferLength = analyser.fftSize;
+            //     const timeData = new Uint8Array(bufferLength);
+
+            //     // Smoothing state
+            //     let smoothedEnergy = 0;
+            //     let phase = 0;
+
+            //     const BASE_Y = canvas.height / 2;
+            //     const LINE_LENGTH = canvas.width * 0.9;
+            //     const START_X = (canvas.width - LINE_LENGTH) / 2;
+            //     const END_X = START_X + LINE_LENGTH;
+
+            //     const MAX_CURVE = canvas.height * 0.18; // hard clamp to avoid mouths
+
+            //     const animate = () => {
+            //         if (!this.state.isStreamingAudio) return;
+
+            //         analyser.getByteTimeDomainData(timeData);
+
+            //         // --- RMS energy (speech-safe) ---
+            //         let sum = 0;
+            //         for (let i = 0; i < bufferLength; i++) {
+            //             const v = (timeData[i] - 128) / 128;
+            //             sum += v * v;
+            //         }
+            //         const rms = Math.sqrt(sum / bufferLength);
+
+            //         // Heavy smoothing
+            //         smoothedEnergy += (rms - smoothedEnergy) * 0.15;
+
+            //         // Phase advances even at low volume → always alive
+            //         phase += 0.04 + smoothedEnergy * 0.4;
+
+            //         // Map energy to curve depth (clamped)
+            //         const curveDepth = Math.min(
+            //             MAX_CURVE,
+            //             smoothedEnergy * canvas.height * 1.2
+            //         );
+
+            //         ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            //         // Subtle glow
+            //         ctx.shadowColor = 'rgba(120,120,120,0.35)';
+            //         ctx.shadowBlur = 6;
+
+            //         ctx.strokeStyle = `rgba(90,90,90,${0.6 + smoothedEnergy})`;
+            //         // ctx.lineWidth = 2;
+            //         ctx.lineWidth = 2 + smoothedEnergy * 1.2;
+            //         ctx.lineCap = 'round';
+
+            //         ctx.beginPath();
+            //         ctx.moveTo(START_X, BASE_Y);
+
+            //         // Symmetric, anchored curve
+            //         const controlX = canvas.width / 2;
+            //         const waveOffset = Math.sin(phase) * curveDepth;
+
+            //         ctx.quadraticCurveTo(
+            //             controlX,
+            //             BASE_Y + waveOffset,
+            //             END_X,
+            //             BASE_Y
+            //         );
+
+            //         ctx.stroke();
+
+            //         ctx.shadowBlur = 0;
+
+            //         this.state.soundwaveAnimationId = requestAnimationFrame(animate);
+            //     };
+
+            //     animate();
+            // },
+            
             startSoundwaveVisualization() {
                 const canvas = document.getElementById('alfredSoundwave');
                 const overlay = document.querySelector('.alfred-soundwave-overlay');
                 const status = document.getElementById('alfredVizStatus');
                 const panel = document.getElementById('alfredVizPanel');
-                
+
                 if (!canvas || !this.state.audioAnalyser) return;
-                
+
                 const ctx = canvas.getContext('2d');
-                
+                const analyser = this.state.audioAnalyser;
+
                 if (overlay) overlay.classList.add('active');
                 if (status) {
                     status.classList.add('speaking');
                     status.textContent = 'Speaking...';
                 }
                 if (panel) panel.classList.add('speaking');
-                
-                // 16-bar center-weighted visualization
-                const totalBars = 16;
-                const barWidth = canvas.width / totalBars;
-                const bufferLength = this.state.audioAnalyser.frequencyBinCount;
-                const dataArray = new Uint8Array(bufferLength);
-                
-                // Center-weighted frequency mapping
-                const maxFreqBin = Math.floor(bufferLength * 0.5);
-                const frequencyMap = [];
-                const centerBar = (totalBars - 1) / 2;
-                for (let i = 0; i < totalBars; i++) {
-                    const distFromCenter = Math.abs(i - centerBar) / centerBar;
-                    frequencyMap[i] = Math.floor(distFromCenter * maxFreqBin);
-                }
-                
+
+                const timeData = new Uint8Array(analyser.fftSize);
+                const freqData = new Uint8Array(analyser.frequencyBinCount);
+
+                // Geometry
+                const BASE_Y = canvas.height / 2;
+                const LINE_LENGTH = canvas.width * 0.9;
+                const START_X = (canvas.width - LINE_LENGTH) / 2;
+                const END_X = START_X + LINE_LENGTH;
+
+                // Line constraints
+                const MAX_CURVE = canvas.height * 8;
+
+                // Bar configuration
+                const BAR_COUNT = 12;
+                const BAR_SPACING = LINE_LENGTH / (BAR_COUNT + 1);
+                const BAR_MAX_HEIGHT = canvas.height * .75;
+
+                let smoothedEnergy = 0;
+                let phase = 0;
+                // phase += 0.02;
+
                 const animate = () => {
                     if (!this.state.isStreamingAudio) return;
-                    
-                    this.state.audioAnalyser.getByteFrequencyData(dataArray);
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    
-                    for (let i = 0; i < totalBars; i++) {
-                        const dataIndex = frequencyMap[i];
-                        const value = dataArray[dataIndex];
-                        const normalizedHeight = value / 255;
-                        const height = normalizedHeight * canvas.height * 0.8 + canvas.height * 0.15;
-                        const y = (canvas.height - height) / 2;
-                        
-                        const gradient = ctx.createLinearGradient(0, y, 0, y + height);
-                        const alpha = 0.7 + (normalizedHeight * 0.3);
-                        gradient.addColorStop(0, `rgba(100, 100, 100, ${alpha})`);
-                        gradient.addColorStop(0.5, `rgba(50, 50, 50, ${alpha})`);
-                        gradient.addColorStop(1, `rgba(20, 20, 20, ${alpha})`);
-                        
-                        ctx.fillStyle = gradient;
-                        ctx.shadowColor = '#333333';
-                        ctx.shadowBlur = 3 + (normalizedHeight * 5);
-                        
-                        const x = i * barWidth + barWidth * 0.1;
-                        ctx.fillRect(x, y, barWidth * 0.8, height);
-                        ctx.shadowBlur = 0;
+
+                    analyser.getByteTimeDomainData(timeData);
+                    analyser.getByteFrequencyData(freqData);
+
+                    // --- RMS for main line ---
+                    let sum = 0;
+                    for (let i = 0; i < timeData.length; i++) {
+                        const v = (timeData[i] - 128) / 128;
+                        sum += v * v;
                     }
+                    const rms = Math.sqrt(sum / timeData.length);
+                    smoothedEnergy += (rms - smoothedEnergy) * 0.15;
+
+                    phase += 0.04 + smoothedEnergy * 0.35;
+
+                    const curveDepth = Math.min(
+                        MAX_CURVE,
+                        smoothedEnergy * canvas.height * 1.2
+                    );
+
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    // === MAIN TENSION LINE (gradient: grey edges → cyan center → grey edges) ===
+                    const lineGradient = ctx.createLinearGradient(START_X, 0, END_X, 0);
+                    const alpha = 0.6 + smoothedEnergy;
+                    lineGradient.addColorStop(0, `rgba(70,70,70,${alpha})`);         // Dark grey at left edge
+                    lineGradient.addColorStop(0.15, `rgba(70,70,70,${alpha})`);      // Grey holds early
+                    lineGradient.addColorStop(0.5, `rgba(77,254,249,${alpha})`);     // Cyan in center
+                    lineGradient.addColorStop(0.85, `rgba(70,70,70,${alpha})`);      // Grey holds late
+                    lineGradient.addColorStop(1, `rgba(70,70,70,${alpha})`);         // Dark grey at right edge
                     
+                    ctx.strokeStyle = lineGradient;
+                    ctx.lineWidth = 2;
+                    ctx.lineCap = 'round';
+                    ctx.shadowColor = 'rgba(77,254,249,0.25)';  // Subtle blue glow
+                    ctx.shadowBlur = 6;
+
+                    ctx.beginPath();
+                    ctx.moveTo(START_X, BASE_Y);
+
+                    const controlX = canvas.width / 2;
+                    const waveOffset = Math.sin(phase) * curveDepth;
+
+                    ctx.quadraticCurveTo(
+                        controlX,
+                        BASE_Y + waveOffset,
+                        END_X,
+                        BASE_Y
+                    );
+                    ctx.stroke();
+
+                    ctx.shadowBlur = 0;
+
+                    // === MICRO BARS (gradient: grey center → blue edges) ===
+                    for (let i = 0; i < BAR_COUNT; i++) {
+                        // Center-weighted frequency pick (center gets bass = more energy)
+                        const t = i / (BAR_COUNT - 1);
+                        const centerWeight = Math.abs(t - 0.5) * 2;  // Inverted: center=0, edges=1
+                        const freqIndex = Math.floor(centerWeight * freqData.length * 0.35);
+                        const value = freqData[freqIndex] / 255;
+
+                        // Bars are subordinate to line
+                        const barHeight = value * BAR_MAX_HEIGHT * (0.4 + smoothedEnergy);
+                        if (barHeight < 1) continue;
+
+                        const x = START_X + BAR_SPACING * (i + 1);
+                        const y = BASE_Y - barHeight / 2;
+
+                        const BAR_WIDTH = 10;
+                        
+                        // Color: cyan in center, grey at edges (inverted)
+                        // centerWeight: 0 = center, 1 = edges
+                        const centerFactor = 1 - Math.pow(centerWeight, 2);  // High in center, low at edges
+                        const r = Math.round(70 + centerFactor * 7);         // 70 → 77
+                        const g = Math.round(70 + centerFactor * 184);       // 70 → 254
+                        const b = Math.round(70 + centerFactor * 179);       // 70 → 249
+                        ctx.fillStyle = `rgba(${r},${g},${b},0.65)`;
+
+                        ctx.fillRect(
+                            x - BAR_WIDTH / 2,
+                            y,
+                            BAR_WIDTH,
+                            barHeight
+                        );
+                    }
+
                     this.state.soundwaveAnimationId = requestAnimationFrame(animate);
                 };
-                
+
                 animate();
             },
+
 
             // Stop soundwave visualization
             stopSoundwaveVisualization() {

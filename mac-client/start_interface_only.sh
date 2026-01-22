@@ -167,9 +167,9 @@ echo "   📡 Direct connection to your existing ALFRED backend"
 echo "   ⚡ No complex local services required"
 echo ""
 echo -e "${BLUE}📱 Available Interfaces:${NC}"
-echo "   🚀 Main Voice Interface:    http://localhost:3001/enhanced"
+echo "   🚀 Alfred Speaks:           http://localhost:3001/alfred-speaks.html"
+echo "   🎙️  Full Notes App:         http://localhost:3001/alfreds-notes-mac.html"
 echo "   📊 System Health:           http://localhost:3001/health"
-echo "   🎤 WebRTC Test (if needed): http://localhost:3001/webrtc"
 echo ""
 echo -e "${BLUE}🔧 How It Works (Correct Architecture):${NC}"
 echo "   1. Interface captures your REAL voice with advanced audio settings"
@@ -195,7 +195,7 @@ echo -e "${GREEN}🎤 Ready to test with your REAL voice!${NC}"
 
 # Optionally open the interface
 if command -v open &> /dev/null; then
-    echo -e "${BLUE}🌐 Opening ALFRED Voice Interface...${NC}"
+    echo -e "${BLUE}🌐 Opening ALFRED's Notes Interface...${NC}"
     sleep 2
-    open "http://localhost:3001/enhanced"
+    open "http://localhost:3001/alfreds-notes-mac.html"
 fi

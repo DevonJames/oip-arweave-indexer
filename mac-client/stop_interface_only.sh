@@ -14,6 +14,42 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Stop unified voice processor
+if [ -f "logs/unified-voice-processor.pid" ]; then
+    pid=$(cat "logs/unified-voice-processor.pid")
+    
+    if kill -0 $pid 2>/dev/null; then
+        echo -e "${BLUE}🛑 Stopping Voice Processor (PID: $pid)...${NC}"
+        kill $pid
+        
+        sleep 2
+        if kill -0 $pid 2>/dev/null; then
+            echo -e "${YELLOW}⚠️  Force killing Voice Processor...${NC}"
+            kill -9 $pid
+        fi
+        
+        echo -e "${GREEN}✅ Voice Processor stopped${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Voice Processor was not running${NC}"
+    fi
+    
+    rm -f "logs/unified-voice-processor.pid"
+else
+    echo -e "${YELLOW}⚠️  Voice Processor PID file not found${NC}"
+fi
+
+# Free port 8015 if anything is still using it
+pid=$(lsof -ti:8015 2>/dev/null || true)
+if [ -n "$pid" ]; then
+    echo -e "${BLUE}🛑 Freeing port 8015 (PID: $pid)...${NC}"
+    kill $pid 2>/dev/null || true
+    sleep 1
+    if kill -0 $pid 2>/dev/null; then
+        kill -9 $pid 2>/dev/null || true
+    fi
+    echo -e "${GREEN}✅ Port 8015 freed${NC}"
+fi
+
 # Stop interface server
 if [ -f "logs/interface-server.pid" ]; then
     pid=$(cat "logs/interface-server.pid")
@@ -56,14 +92,20 @@ echo -e "${GREEN}🎉 ALFRED Voice Interface Stopped!${NC}"
 echo "=================================="
 echo ""
 echo -e "${BLUE}📊 Status:${NC}"
-if lsof -Pi :3001 -sTCP:LISTEN -t >/dev/null 2>&1; then
-    echo -e "   Port 3001: ${RED}❌ Still in use${NC}"
+if lsof -Pi :8015 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo -e "   Port 8015 (Voice Processor): ${RED}❌ Still in use${NC}"
 else
-    echo -e "   Port 3001: ${GREEN}✅ Free${NC}"
+    echo -e "   Port 8015 (Voice Processor): ${GREEN}✅ Free${NC}"
+fi
+if lsof -Pi :3001 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo -e "   Port 3001 (Interface Server): ${RED}❌ Still in use${NC}"
+else
+    echo -e "   Port 3001 (Interface Server): ${GREEN}✅ Free${NC}"
 fi
 
 echo ""
-echo -e "${BLUE}📝 Log File Preserved:${NC}"
+echo -e "${BLUE}📝 Log Files Preserved:${NC}"
+echo "   Voice Processor:  logs/unified-voice-processor.log"
 echo "   Interface Server: logs/interface-server.log"
 echo ""
 echo -e "${YELLOW}💡 To restart:${NC}"
