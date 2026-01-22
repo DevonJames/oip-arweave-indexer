@@ -5,9 +5,15 @@
  */
 
 // Detect if we're being served from /onion-press/ path or standalone
-const isProxied = window.location.pathname.startsWith('/onion-press');
+// When ONION_PRESS_DEFAULT=true, the page is served at / but APIs are still at /onion-press/api
+// Check if we're on the Onion Press interface (either /onion-press/ or / when default)
+const isOnionPressPage = window.location.pathname.startsWith('/onion-press') || 
+                         window.location.pathname === '/' ||
+                         window.location.pathname.startsWith('/publish') ||
+                         document.querySelector('body[data-onion-press]') !== null;
 const API_BASE = window.location.origin;
-const OIP_API = isProxied ? '/onion-press/api' : '/api';
+// Always use /onion-press/api for Onion Press APIs (even when served from /)
+const OIP_API = '/onion-press/api';
 
 // Auth token storage
 let authToken = localStorage.getItem('onionpress_token');

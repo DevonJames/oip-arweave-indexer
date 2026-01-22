@@ -1097,10 +1097,13 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     
     // Create post via WordPress REST API
     // Use internal Docker URL for direct access (bypasses proxy)
-    const wpApiUrl = `${WORDPRESS_URL}/wp-json/wp/v2/posts`;
+    // Try both endpoint formats in case WordPress permalinks are misconfigured
+    const wpApiUrl1 = `${WORDPRESS_URL}/wp-json/wp/v2/posts`;
+    const wpApiUrl2 = `${WORDPRESS_URL}/index.php?rest_route=/wp/v2/posts`;
     const auth = Buffer.from(`${WORDPRESS_ADMIN_USER}:${WORDPRESS_ADMIN_PASSWORD}`).toString('base64');
     
-    console.log(`🔍 [PublishToWordPress] WordPress API URL: ${wpApiUrl}`);
+    console.log(`🔍 [PublishToWordPress] WordPress API URL (primary): ${wpApiUrl1}`);
+    console.log(`🔍 [PublishToWordPress] WordPress API URL (fallback): ${wpApiUrl2}`);
     console.log(`🔍 [PublishToWordPress] WordPress Admin User: ${WORDPRESS_ADMIN_USER}`);
     console.log(`🔍 [PublishToWordPress] WordPress Admin Password configured: ${WORDPRESS_ADMIN_PASSWORD ? 'yes' : 'no'}`);
     console.log(`🔍 [PublishToWordPress] Post data:`, JSON.stringify({
@@ -1112,19 +1115,62 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
         meta_keys: Object.keys(wpPostData.meta || {})
     }, null, 2));
     
-    try {
-        const response = await axios.post(wpApiUrl, wpPostData, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Basic ${auth}`,
-                'Accept': 'application/json'
-            },
-            timeout: 30000,
-            validateStatus: () => true, // Don't throw on non-2xx
-            maxRedirects: 0 // Don't follow redirects - WordPress REST API shouldn't redirect
-        });
-        
-        // Check if WordPress returned HTML instead of JSON (even with 200 status)
+    // Try primary endpoint first, fallback to index.php format if needed
+    let response;
+    let wpApiUrl = wpApiUrl1;
+    let lastError = null;
+    
+    for (const url of [wpApiUrl1, wpApiUrl2]) {
+        try {
+            wpApiUrl = url;
+            console.log(`🔍 [PublishToWordPress] Attempting: ${url}`);
+            response = await axios.post(url, wpPostData, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Basic ${auth}`,
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest' // Helps WordPress identify API requests
+                },
+                timeout: 30000,
+                validateStatus: () => true, // Don't throw on non-2xx
+                maxRedirects: 0, // Don't follow redirects - WordPress REST API shouldn't redirect
+                // Force axios to not transform response
+                transformResponse: [(data) => {
+                    // Keep response as-is to detect HTML
+                    return data;
+                }]
+            });
+            
+            // Check if we got JSON (object) or HTML (string)
+            if (typeof response.data === 'object' && response.data !== null && !Array.isArray(response.data)) {
+                // Got JSON object - success!
+                break;
+            }
+            
+            // If we got HTML, try next URL
+            if (typeof response.data === 'string' && (
+                response.data.trim().startsWith('<!DOCTYPE') ||
+                response.data.trim().startsWith('<html')
+            )) {
+                console.warn(`⚠️ [PublishToWordPress] ${url} returned HTML, trying fallback...`);
+                lastError = new Error(`WordPress returned HTML instead of JSON from ${url}`);
+                continue;
+            }
+            
+            // If we got a valid response, break
+            break;
+        } catch (error) {
+            console.warn(`⚠️ [PublishToWordPress] Error with ${url}:`, error.message);
+            lastError = error;
+            continue;
+        }
+    }
+    
+    if (!response) {
+        throw lastError || new Error('Failed to connect to WordPress REST API');
+    }
+    
+    // Check if WordPress returned HTML instead of JSON (even with 200 status)
         const contentType = response.headers['content-type'] || '';
         const responseSize = typeof response.data === 'string' ? response.data.length : JSON.stringify(response.data).length;
         const isHtmlResponse = typeof response.data === 'string' && (
