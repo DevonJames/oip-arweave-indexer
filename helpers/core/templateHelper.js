@@ -10,6 +10,9 @@ const {getCurrentBlockHeight} = require('./arweave');
 const arweaveWallet = require('./arweave-wallet');
 const publisherManager = require('../publisher-manager');
 const mediaManager = require('./media-manager');
+const { getServerOipIdentity, canSign } = require('./serverOipIdentity');
+const { signRecord } = require('./oip-signing');
+const { OIP_VERSION } = require('./oip-crypto');
 
 // const templatesConfig = require('../../config/templates.config');
 // const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
@@ -798,8 +801,17 @@ function getContentTypeFromUrl(url) {
     return contentTypeMap[extension];
 }
 
-async function publishNewTemplate(template, blockchain = 'arweave') {
+async function publishNewTemplate(template, blockchain = 'arweave', options = {}) {
     try {
+        // Default to v0.9 unless explicitly requested v0.8
+        const useV09 = options.version !== '0.8' && options.version !== '0.8.0';
+        
+        if (useV09) {
+            // Use v0.9 publishing by default
+            return await publishNewTemplateV09(template, blockchain);
+        }
+        
+        // Legacy v0.8 publishing (for backward compatibility)
         // console.log(getFileInfo(), getLineNumber(), 'publishNewTemplate', template, { blockchain });
 
         const templateName = Object.keys(template)[0];
@@ -871,6 +883,109 @@ async function publishNewTemplate(template, blockchain = 'arweave') {
 
     } catch (error) {
         console.error('Error publishing template:', error);
+        throw error;
+    }
+}
+
+/**
+ * Publishes a v0.9 template using OIP v0.9 signing (HD wallet, DID-based).
+ * 
+ * @param {object} template - Template object with template name as key
+ * @param {string} blockchain - Blockchain to publish to (default: 'arweave')
+ * @returns {Promise<object>} Publishing result with transaction ID and DID
+ */
+async function publishNewTemplateV09(template, blockchain = 'arweave') {
+    try {
+        // Get server's OIP identity for signing
+        const serverIdentity = await getServerOipIdentity();
+        
+        if (!serverIdentity || !canSign(serverIdentity)) {
+            throw new Error('Server OIP identity not available or cannot sign. Set SERVER_CREATOR_MNEMONIC or use bootstrap creator.');
+        }
+
+        const templateName = Object.keys(template)[0];
+        const templateNoName = Object.values(template)[0];
+        const templateString = JSON.stringify(templateNoName);
+
+        // Build v0.9 payload structure
+        const payload = {
+            '@context': serverIdentity.did,
+            tags: [
+                { name: 'Content-Type', value: 'application/json' },
+                { name: 'Index-Method', value: 'OIP' },
+                { name: 'Ver', value: OIP_VERSION },
+                { name: 'Type', value: 'Template' },
+                { name: 'TemplateName', value: templateName },
+                { name: 'Creator', value: serverIdentity.did }
+            ],
+            fragments: [] // Templates don't use fragments, but we need the structure
+        };
+
+        // Sign the payload with v0.9 signing
+        const signedPayload = signRecord(payload, serverIdentity.signingKey, serverIdentity.did);
+
+        // Extract tags for Arweave transaction
+        const tags = signedPayload.tags;
+
+        // Use the publisher manager to publish to the specified blockchain
+        const publishResult = await publisherManager.publish(templateString, {
+            blockchain: blockchain,
+            tags: tags,
+            waitForConfirmation: true
+        });
+
+        // Get current block height for indexing
+        const currentBlock = await getCurrentBlockHeight();
+        
+        // Extract signature data
+        const sigData = {
+            creatorSig: tags.find(t => t.name === 'CreatorSig')?.value,
+            keyIndex: tags.find(t => t.name === 'KeyIndex')?.value,
+            payloadDigest: tags.find(t => t.name === 'PayloadDigest')?.value
+        };
+        
+        // Prepare template data structure for indexing
+        const templateData = {
+            TxId: publishResult.id,
+            creator: serverIdentity.did,
+            creatorSig: sigData.creatorSig,
+            keyIndex: sigData.keyIndex,
+            payloadDigest: sigData.payloadDigest,
+            template: templateName,
+            fields: templateString
+        };
+
+        const templateToIndex = {
+            data: templateData,
+            oip: {
+                didTx: `did:arweave:${publishResult.id}`,
+                inArweaveBlock: currentBlock,
+                indexedAt: new Date().toISOString(),
+                recordStatus: "pending confirmation in Arweave",
+                ver: OIP_VERSION,
+                creator: {
+                    didAddress: serverIdentity.did,
+                    creatorSig: sigData.creatorSig,
+                    keyIndex: sigData.keyIndex,
+                    payloadDigest: sigData.payloadDigest
+                }
+            }
+        };
+
+        return {
+            transactionId: publishResult.id,
+            didTx: `did:arweave:${publishResult.id}`,
+            did: `did:arweave:${publishResult.id}`,
+            blockchain: publishResult.blockchain,
+            provider: publishResult.provider,
+            url: publishResult.url,
+            tags: tags,
+            signedPayload: signedPayload,
+            templateToIndex: templateToIndex
+        };
+
+    } catch (error) {
+        console.error('Error publishing v0.9 template:', error);
         throw error;
     }
 }
@@ -1824,6 +1939,7 @@ module.exports = {
     resolveRecords,
     publishNewRecord,
     publishNewTemplate,
+    publishNewTemplateV09,
     publishToGun,
     indexTemplate,
     publishVideoFiles,

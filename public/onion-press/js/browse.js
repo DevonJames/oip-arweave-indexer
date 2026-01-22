@@ -56,11 +56,11 @@ document.addEventListener('DOMContentLoaded', async () => {
  * Update UI based on admin status
  */
 async function updateAdminUI() {
-    // Use the getAdminStatus function from api.js
     try {
-        // Check if user is logged in first - use the global function
-        if (typeof isLoggedIn === 'function' && !isLoggedIn()) {
-            console.log('User not logged in, hiding admin UI');
+        // Check if user is logged in first
+        // Since scripts are loaded synchronously, isLoggedIn should be available globally from api.js
+        if (typeof isLoggedIn !== 'function') {
+            console.warn('⚠️ isLoggedIn function not available, hiding admin UI');
             const settingsBtn = document.getElementById('settingsBtn');
             if (settingsBtn) {
                 settingsBtn.classList.add('hidden');
@@ -68,27 +68,56 @@ async function updateAdminUI() {
             return;
         }
         
-        console.log('Checking admin status...');
-        const apiModule = await import('./api.js');
-        const status = await apiModule.getAdminStatus();
-        console.log('Admin status:', status);
+        if (!isLoggedIn()) {
+            console.log('👤 User not logged in, hiding admin UI');
+            const settingsBtn = document.getElementById('settingsBtn');
+            if (settingsBtn) {
+                settingsBtn.classList.add('hidden');
+            }
+            return;
+        }
+        
+        console.log('✅ User is logged in, checking admin status...');
+        
+        // getAdminStatus is available globally from api.js (loaded before browse.js)
+        if (typeof getAdminStatus !== 'function') {
+            console.error('❌ getAdminStatus function not available');
+            const settingsBtn = document.getElementById('settingsBtn');
+            if (settingsBtn) {
+                settingsBtn.classList.add('hidden');
+            }
+            return;
+        }
+        
+        const status = await getAdminStatus();
+        console.log('📊 Admin status response:', status);
+        
         const wpAdmin = status.isWordPressAdmin === true;
+        console.log(`🔐 WordPress admin check result: ${wpAdmin}`);
         
         // Show/hide settings gear icon
         const settingsBtn = document.getElementById('settingsBtn');
         if (settingsBtn) {
             if (wpAdmin) {
-                console.log('User is WordPress admin, showing settings button');
+                console.log('✅ User is WordPress admin, showing settings button');
                 settingsBtn.classList.remove('hidden');
+                // Ensure admin-only class is present for styling
+                if (!settingsBtn.classList.contains('admin-only')) {
+                    settingsBtn.classList.add('admin-only');
+                }
             } else {
-                console.log('User is not WordPress admin, hiding settings button');
+                console.log('❌ User is not WordPress admin, hiding settings button');
                 settingsBtn.classList.add('hidden');
             }
         } else {
-            console.warn('Settings button element not found');
+            console.warn('⚠️ Settings button element (#settingsBtn) not found in DOM');
         }
     } catch (error) {
-        console.error('Failed to update admin UI:', error);
+        console.error('❌ Failed to update admin UI:', error);
+        console.error('Error details:', error.message);
+        if (error.stack) {
+            console.error('Stack trace:', error.stack);
+        }
         // Hide admin UI on error
         const settingsBtn = document.getElementById('settingsBtn');
         if (settingsBtn) {

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../../helpers/utils'); // Import the authentication middleware
 const { getTemplatesInDB } = require('../../helpers/core/elasticsearch');
-const { publishNewTemplate, indexTemplate } = require('../../helpers/core/templateHelper');
+const { publishNewTemplate, publishNewTemplateV09, indexTemplate } = require('../../helpers/core/templateHelper');
 const templatesConfig = require('../../config/templates.config');
 
 
@@ -290,8 +290,13 @@ router.post('/newTemplate', authenticateToken, async (req, res) => {
         const template = req.body;
         const blockchain = req.body.blockchain || 'arweave'; // Accept blockchain parameter
         
-        // Publish template to Arweave
-        const newTemplate = await publishNewTemplate(template, blockchain);
+        // v0.9 is now the default. Only use v0.8 if explicitly requested
+        const options = {
+            version: req.body.version || '0.9' // Default to v0.9
+        };
+        
+        // Publish template to Arweave (defaults to v0.9)
+        const newTemplate = await publishNewTemplate(template, blockchain, options);
         
         // Index template to Elasticsearch with pending status
         if (newTemplate.templateToIndex) {

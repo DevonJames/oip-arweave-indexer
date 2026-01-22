@@ -206,9 +206,27 @@ function isLoggedIn() {
     if (!authToken) return false;
     
     try {
-        const payload = JSON.parse(atob(authToken));
-        return payload.exp > Date.now();
-    } catch {
+        // Handle JWT token format (Bearer token or base64 encoded)
+        let payload;
+        if (authToken.includes('.')) {
+            // JWT format: header.payload.signature
+            const parts = authToken.split('.');
+            if (parts.length !== 3) return false;
+            payload = JSON.parse(atob(parts[1]));
+        } else {
+            // Base64 encoded JSON (legacy format)
+            payload = JSON.parse(atob(authToken));
+        }
+        
+        // JWT exp is in seconds, Date.now() is in milliseconds
+        if (payload.exp) {
+            return payload.exp * 1000 > Date.now();
+        }
+        
+        // If no exp, assume valid (for backward compatibility)
+        return true;
+    } catch (error) {
+        console.warn('Error checking login status:', error);
         return false;
     }
 }
