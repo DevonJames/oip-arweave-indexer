@@ -127,34 +127,74 @@ app.use('/onion-press/api/tor', torRoutes);
 app.use('/onion-press/api/debug', debugRoutes);
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// WordPress API - Proxy to daemon
+// Proxy routes to daemon
 // ═══════════════════════════════════════════════════════════════════════════════
 const axios = require('axios');
 const OIP_DAEMON_URL = process.env.OIP_DAEMON_URL || 'http://oip-daemon-service:3005';
 
-// Proxy WordPress posts API to daemon (which uses wp-cli)
-// Handle both /api/wordpress/posts and /onion-press/api/wordpress/posts
-app.get('/onion-press/api/wordpress/posts', async (req, res) => {
+/**
+ * Generic proxy function to forward requests to daemon
+ */
+async function proxyToDaemon(req, res, endpoint) {
     try {
         const queryString = new URLSearchParams(req.query).toString();
-        const targetUrl = `${OIP_DAEMON_URL}/onion-press/api/wordpress/posts${queryString ? '?' + queryString : ''}`;
+        const targetUrl = `${OIP_DAEMON_URL}${endpoint}${queryString ? '?' + queryString : ''}`;
         
-        console.log(`🔍 [WordPressPosts Proxy] Proxying to daemon: ${targetUrl}`);
+        console.log(`🔍 [Proxy] ${req.method} ${req.path} -> ${targetUrl}`);
         
-        const response = await axios.get(targetUrl, {
+        const config = {
+            method: req.method,
+            url: targetUrl,
             timeout: 30000,
-            validateStatus: () => true
-        });
+            validateStatus: () => true,
+            headers: {
+                'Content-Type': req.headers['content-type'] || 'application/json',
+                'Authorization': req.headers.authorization || ''
+            }
+        };
+        
+        if (req.body && Object.keys(req.body).length > 0) {
+            config.data = req.body;
+        }
+        
+        const response = await axios(config);
+        
+        if (response.status !== 200) {
+            console.warn(`⚠️ [Proxy] Non-200 status: ${response.status} for ${endpoint}`);
+        }
         
         res.status(response.status).json(response.data);
         
     } catch (error) {
-        console.error('❌ [WordPressPosts Proxy] Error:', error.message);
-        res.status(error.response?.status || 500).json({
-            error: 'Failed to fetch WordPress posts',
-            message: error.message
+        console.error(`❌ [Proxy] Error proxying ${endpoint}:`, error.message);
+        console.error(`❌ [Proxy] Error code:`, error.code);
+        console.error(`❌ [Proxy] Error response:`, error.response?.data);
+        
+        const statusCode = error.response?.status || 500;
+        const errorMessage = error.response?.data?.message || error.message || 'Proxy request failed';
+        
+        res.status(statusCode).json({
+            error: 'Proxy request failed',
+            message: errorMessage,
+            endpoint: endpoint,
+            details: error.response?.data || { code: error.code, message: error.message }
         });
     }
+}
+
+// Proxy WordPress posts API to daemon (which uses wp-cli)
+app.get('/onion-press/api/wordpress/posts', async (req, res) => {
+    await proxyToDaemon(req, res, '/onion-press/api/wordpress/posts');
+});
+
+// Proxy host-info API to daemon
+app.get('/onion-press/api/host-info', async (req, res) => {
+    await proxyToDaemon(req, res, '/onion-press/api/host-info');
+});
+
+// Proxy destinations defaults API to daemon
+app.get('/onion-press/api/destinations/defaults', async (req, res) => {
+    await proxyToDaemon(req, res, '/onion-press/api/destinations/defaults');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
