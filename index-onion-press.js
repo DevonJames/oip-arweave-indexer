@@ -68,6 +68,11 @@ const corsOptions = {
             return callback(null, true);
         }
         
+        // Allow all .onion domains (TOR hidden services)
+        if (origin.includes('.onion')) {
+            return callback(null, true);
+        }
+        
         // Allowed origins
         const allowedOrigins = [
             'http://localhost:3000',
@@ -125,6 +130,132 @@ app.use('/onion-press/api/admin', adminRoutes);
 app.use('/onion-press/api/browse', browseRoutes);
 app.use('/onion-press/api/tor', torRoutes);
 app.use('/onion-press/api/debug', debugRoutes);
+
+// Implement publishAnonymous directly (WordPress-only mode when daemon unavailable)
+app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
+    try {
+        const { payload, destinations } = req.body;
+        
+        if (!payload) {
+            return res.status(400).json({
+                error: 'Missing payload',
+                message: 'Request body must include a "payload" object'
+            });
+        }
+        
+        console.log(`📝 [PublishAnonymous] Received anonymous payload`);
+        
+        // Validate payload structure
+        if (!payload.tags || !Array.isArray(payload.tags)) {
+            return res.status(400).json({
+                error: 'Invalid payload',
+                message: 'Payload must include a "tags" array'
+            });
+        }
+        
+        // For TOR service, default to WordPress-only publishing (local-only mode)
+        const publishToWordPress = destinations?.thisHost !== false;
+        
+        if (!publishToWordPress) {
+            return res.status(400).json({
+                error: 'No destination enabled',
+                message: 'WordPress publishing (thisHost) must be enabled for anonymous publishing'
+            });
+        }
+        
+        // Extract record data from fragments
+        const fragment = payload.fragments?.[0];
+        if (!fragment || !fragment.records || fragment.records.length === 0) {
+            return res.status(400).json({
+                error: 'Invalid payload',
+                message: 'Payload must include at least one fragment with records'
+            });
+        }
+        
+        const recordData = fragment.records[0];
+        const recordType = payload.tags.find(t => t.name === 'Record-Type')?.value || 'post';
+        
+        // Build WordPress post data
+        const wpPostData = {
+            title: recordData.basic?.name || recordData.post?.title || 'Untitled',
+            content: recordData.basic?.description || recordData.post?.content || '',
+            excerpt: recordData.basic?.description || recordData.post?.excerpt || '',
+            status: 'publish'
+        };
+        
+        // Publish to WordPress via REST API
+        const wordpressUrl = process.env.WORDPRESS_URL || 'http://wordpress:80';
+        const wpApiUrl = `${wordpressUrl}/wp-json/wp/v2/posts`;
+        
+        // Get WordPress admin credentials for authentication
+        const WORDPRESS_ADMIN_USER = process.env.WP_ADMIN_USER || 'admin';
+        const WORDPRESS_ADMIN_PASSWORD = process.env.WP_ADMIN_PASSWORD || '';
+        
+        if (!WORDPRESS_ADMIN_PASSWORD) {
+            return res.status(500).json({
+                error: 'WordPress authentication not configured',
+                message: 'WP_ADMIN_PASSWORD environment variable is required'
+            });
+        }
+        
+        console.log(`📝 [PublishAnonymous] Publishing to WordPress: ${wpApiUrl}`);
+        
+        // Create WordPress post via REST API
+        const wpResponse = await axios.post(wpApiUrl, wpPostData, {
+            auth: {
+                username: WORDPRESS_ADMIN_USER,
+                password: WORDPRESS_ADMIN_PASSWORD
+            },
+            timeout: 30000,
+            validateStatus: () => true
+        });
+        
+        if (wpResponse.status !== 201 && wpResponse.status !== 200) {
+            console.error(`❌ [PublishAnonymous] WordPress API error: ${wpResponse.status}`, wpResponse.data);
+            return res.status(500).json({
+                error: 'WordPress publish failed',
+                message: wpResponse.data?.message || `WordPress returned status ${wpResponse.status}`,
+                details: wpResponse.data
+            });
+        }
+        
+        const wpPost = wpResponse.data;
+        const baseUrl = process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get('host')}`;
+        const wordpressPath = process.env.WORDPRESS_PROXY_PATH || '/wordpress';
+        const permalink = wpPost.link || `${baseUrl}${wordpressPath}/?p=${wpPost.id}`;
+        
+        console.log(`✅ [PublishAnonymous] Published to WordPress! Post ID: ${wpPost.id}, Permalink: ${permalink}`);
+        
+        res.status(200).json({
+            success: true,
+            destinations: {
+                thisHost: {
+                    success: true,
+                    postId: wpPost.id,
+                    permalink: permalink,
+                    postUrl: permalink
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ [PublishAnonymous] Error:', error.message);
+        console.error('❌ [PublishAnonymous] Stack:', error.stack);
+        
+        res.status(500).json({
+            error: 'Failed to publish anonymous record',
+            message: error.message
+        });
+    }
+});
+
+app.post('/onion-press/api/records/publishSigned', async (req, res) => {
+    await proxyToDaemon(req, res, '/api/records/publishSigned');
+});
+
+app.post('/onion-press/api/records/publishAccount', async (req, res) => {
+    await proxyToDaemon(req, res, '/api/records/publishAccount');
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Proxy routes to daemon
