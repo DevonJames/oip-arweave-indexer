@@ -859,6 +859,37 @@ function op_publisher_init() {
 }
 add_action('plugins_loaded', 'op_publisher_init');
 
+// Allow Application Passwords and Basic Auth over HTTP for internal Docker access
+// WordPress by default may block Basic Auth when site URL is HTTPS but accessed via HTTP
+add_filter('application_password_is_api_request', '__return_true');
+add_filter('wp_is_application_passwords_available', '__return_true');
+
+// Force WordPress to accept Basic Auth headers even over HTTP
+// This is needed because WordPress may reject Basic Auth when site URL is HTTPS but accessed via HTTP internally
+add_filter('determine_current_user', function($user_id) {
+    // Check for Basic Auth headers (PHP_AUTH_USER/PHP_AUTH_PW are set by Apache when Basic Auth is used)
+    if (isset($_SERVER['PHP_AUTH_USER']) && isset($_SERVER['PHP_AUTH_PW'])) {
+        $username = $_SERVER['PHP_AUTH_USER'];
+        $password = $_SERVER['PHP_AUTH_PW'];
+        
+        // Try Application Password authentication first
+        if (function_exists('wp_authenticate_application_password')) {
+            $user = wp_authenticate_application_password(null, $username, $password);
+            if (!is_wp_error($user) && $user instanceof WP_User) {
+                return $user->ID;
+            }
+        }
+        
+        // Fallback to regular password authentication
+        $user = wp_authenticate($username, $password);
+        if (!is_wp_error($user) && $user instanceof WP_User) {
+            return $user->ID;
+        }
+    }
+    
+    return $user_id;
+}, 1, 1); // Priority 1 to run early, 1 parameter
+
 // Activation hook
 register_activation_hook(__FILE__, function() {
     // Set default options
