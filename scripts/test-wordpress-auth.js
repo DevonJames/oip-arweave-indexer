@@ -89,11 +89,32 @@ async function testAuth(username, password, method) {
                 }
             } else if (response.status === 401) {
                 console.log(`   ❌ 401 Unauthorized`);
-                if (response.data && typeof response.data === 'object') {
-                    console.log(`   Error: ${JSON.stringify(response.data)}`);
+                // Try to show the error response
+                if (response.data) {
+                    if (typeof response.data === 'string') {
+                        // Check if it's HTML
+                        if (response.data.includes('<html') || response.data.includes('<!DOCTYPE')) {
+                            console.log(`   Response is HTML (likely login page)`);
+                            console.log(`   Preview: ${response.data.substring(0, 200)}`);
+                        } else {
+                            try {
+                                const errorData = JSON.parse(response.data);
+                                console.log(`   Error: ${JSON.stringify(errorData, null, 2)}`);
+                            } catch (e) {
+                                console.log(`   Error response: ${response.data.substring(0, 200)}`);
+                            }
+                        }
+                    } else if (typeof response.data === 'object') {
+                        console.log(`   Error: ${JSON.stringify(response.data, null, 2)}`);
+                    }
                 }
+                // Show response headers for debugging
+                console.log(`   Response headers: ${JSON.stringify(response.headers, null, 2)}`);
             } else {
                 console.log(`   ❌ Status ${response.status}`);
+                if (response.data) {
+                    console.log(`   Response: ${typeof response.data === 'string' ? response.data.substring(0, 200) : JSON.stringify(response.data)}`);
+                }
             }
         } catch (error) {
             console.log(`   ❌ Error: ${error.message}`);
@@ -103,7 +124,41 @@ async function testAuth(username, password, method) {
     return { success: false };
 }
 
+async function testRESTAPI() {
+    console.log('\n🔍 Testing WordPress REST API availability...');
+    try {
+        // Test without auth first
+        const response = await axios.get(`${WORDPRESS_URL}/wp-json/`, {
+            validateStatus: () => true,
+            timeout: 5000
+        });
+        
+        if (response.status === 200) {
+            console.log('✅ WordPress REST API is accessible');
+            if (response.data && response.data.name) {
+                console.log(`   Site: ${response.data.name}`);
+            }
+            if (response.data && response.data.routes) {
+                const routes = Object.keys(response.data.routes);
+                console.log(`   Available routes: ${routes.length}`);
+                if (routes.includes('/wp/v2/users/me')) {
+                    console.log('   ✅ /wp/v2/users/me endpoint exists');
+                } else {
+                    console.log('   ⚠️  /wp/v2/users/me endpoint not found');
+                }
+            }
+        } else {
+            console.log(`⚠️  WordPress REST API returned status ${response.status}`);
+        }
+    } catch (error) {
+        console.log(`❌ Cannot reach WordPress REST API: ${error.message}`);
+    }
+}
+
 async function main() {
+    // First test if REST API is available
+    await testRESTAPI();
+    
     const results = [];
     
     // Test Application Password if set
