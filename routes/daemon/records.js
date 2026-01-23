@@ -1362,7 +1362,7 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     console.log(`🔍 [PublishToWordPress] WordPress API URL (primary): ${wpApiUrl1}`);
     console.log(`🔍 [PublishToWordPress] WordPress API URL (fallback): ${wpApiUrl2}`);
     console.log(`🔍 [PublishToWordPress] WordPress Admin User: ${WORDPRESS_ADMIN_USER}`);
-    console.log(`🔍 [PublishToWordPress] WordPress Admin Password configured: ${WORDPRESS_ADMIN_PASSWORD ? 'yes' : 'no'}`);
+    console.log(`🔍 [PublishToWordPress] Using Application Password: ${authPassword ? 'yes' : 'no'}`);
     console.log(`🔍 [PublishToWordPress] Post data:`, JSON.stringify({
         title: wpPostData.title,
         content_length: wpPostData.content?.length || 0,
