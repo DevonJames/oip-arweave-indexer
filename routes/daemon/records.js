@@ -1035,10 +1035,11 @@ async function getWordPressAppPassword() {
     
     // Check if Application Password is provided via env var
     if (process.env.WP_APP_PASSWORD) {
-        wpAppPasswordCache = process.env.WP_APP_PASSWORD;
+        wpAppPasswordCache = process.env.WP_APP_PASSWORD.replace(/\s+/g, ''); // Remove spaces
         console.log(`✅ [WordPress Auth] Using Application Password from WP_APP_PASSWORD env var`);
         return wpAppPasswordCache;
     }
+    
     
     try {
         // First, verify we can authenticate with WordPress REST API
