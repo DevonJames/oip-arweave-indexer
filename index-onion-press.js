@@ -131,8 +131,37 @@ app.use('/onion-press/api/browse', browseRoutes);
 app.use('/onion-press/api/tor', torRoutes);
 app.use('/onion-press/api/debug', debugRoutes);
 
-// Implement publishAnonymous directly (WordPress-only mode when daemon unavailable)
+// Proxy publishAnonymous to daemon (daemon handles WordPress publishing via wp-cli)
 app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
+    // Try to proxy to daemon first (daemon uses wp-cli which works reliably)
+    // The daemon endpoint is at /api/records/publishAnonymous (not /onion-press/api/records/publishAnonymous)
+    console.log(`🔍 [PublishAnonymous] Attempting to proxy to daemon at ${OIP_DAEMON_URL}/api/records/publishAnonymous...`);
+    
+    // Check if daemon is accessible first (quick check)
+    let daemonAccessible = false;
+    try {
+        const healthCheck = await axios.get(`${OIP_DAEMON_URL}/health`, {
+            timeout: 2000,
+            validateStatus: () => true
+        });
+        daemonAccessible = healthCheck.status === 200;
+    } catch (daemonError) {
+        daemonAccessible = false;
+    }
+    
+    if (daemonAccessible) {
+        console.log(`✅ [PublishAnonymous] Daemon is accessible, proxying request...`);
+        try {
+            await proxyToDaemon(req, res, '/api/records/publishAnonymous');
+            return; // Proxy handled the response
+        } catch (proxyError) {
+            console.warn(`⚠️ [PublishAnonymous] Proxy failed: ${proxyError.message}, falling back to direct WordPress`);
+        }
+    } else {
+        console.warn(`⚠️ [PublishAnonymous] Daemon not accessible, using direct WordPress REST API`);
+    }
+    
+    // Fallback: Direct WordPress REST API implementation
     try {
         const { payload, destinations } = req.body;
         
@@ -361,14 +390,18 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
                 return res.status(401).json({
                     error: 'WordPress authentication failed',
                     message: `Could not verify WordPress authentication. Status: ${verifyResponse.status}`,
-                    details: verifyResponse.data
+                    details: verifyResponse.data,
+                    solution: 'Create an Application Password: docker exec -it onionpress-wordpress-1 wp user application-password create devon "Onion Press Service" --allow-root'
                 });
             }
         } catch (verifyError) {
             console.error(`❌ [PublishAnonymous] Error verifying authentication:`, verifyError.message);
             return res.status(401).json({
                 error: 'WordPress authentication failed',
-                message: verifyError.message
+                message: `Could not authenticate with WordPress. ${verifyError.message}`,
+                solution: 'Run this command to create an Application Password for user "devon":\n' +
+                      'docker exec -it onionpress-wordpress-1 wp user application-password create devon "Onion Press Service" --allow-root\n' +
+                      'Then copy the Application Password (shown in the output) and set WP_APP_PASSWORD in your .env file.'
             });
         }
         
