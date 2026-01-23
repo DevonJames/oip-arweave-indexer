@@ -37,10 +37,8 @@ const loginError = document.getElementById('loginError');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
-    // Set type filter to 'post' by default (Types menu is commented out)
-    if (typeFilter) {
-        typeFilter.value = 'post';
-    }
+    // Type filter is commented out in HTML, so typeFilter will be null
+    // We'll default to 'post' in loadRecords() instead
     
     initNavigation();
     initSearch();
@@ -171,10 +169,13 @@ function initSearch() {
         }
     });
     
-    typeFilter.addEventListener('change', () => {
-        currentPage = 0;
-        loadRecords();
-    });
+    // Type filter is commented out in HTML, so check if it exists
+    if (typeFilter) {
+        typeFilter.addEventListener('change', () => {
+            currentPage = 0;
+            loadRecords();
+        });
+    }
     
     sortFilter.addEventListener('change', () => {
         currentPage = 0;
@@ -425,8 +426,10 @@ async function loadRecords() {
                 params.search = searchInput.value;
             }
             
-            if (typeFilter.value) {
-                params.recordType = typeFilter.value;
+            // Type filter is commented out, default to 'post'
+            const recordType = typeFilter?.value || 'post';
+            if (recordType) {
+                params.recordType = recordType;
             }
             
             const data = await getRecords(params);
