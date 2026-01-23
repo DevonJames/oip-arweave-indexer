@@ -108,6 +108,7 @@ async function updateAdminUI() {
             if (isAdmin) {
                 console.log('✅ User is admin (WordPress or email match), showing settings button');
                 settingsBtn.classList.remove('hidden');
+                settingsBtn.classList.add('visible');
                 // Ensure admin-only class is present for styling
                 if (!settingsBtn.classList.contains('admin-only')) {
                     settingsBtn.classList.add('admin-only');
@@ -115,6 +116,7 @@ async function updateAdminUI() {
             } else {
                 console.log('❌ User is not admin, hiding settings button');
                 settingsBtn.classList.add('hidden');
+                settingsBtn.classList.remove('visible');
             }
         } else {
             console.warn('⚠️ Settings button element (#settingsBtn) not found in DOM');
