@@ -263,56 +263,35 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
             }
             
             if (!appPasswordAuthenticated) {
-                console.warn(`⚠️ [PublishAnonymous] Application Password didn't authenticate with any tested username, will try to create new one for admin`);
-                authPassword = WORDPRESS_ADMIN_PASSWORD; // Reset to use regular password, then create app password
-                authUsername = WORDPRESS_ADMIN_USER;
-            }
-        }
-        
-        // If we don't have a valid Application Password yet, try to create one
-        if (authPassword === WORDPRESS_ADMIN_PASSWORD) {
-            // Try to get/create Application Password for admin user
-            try {
-                // First, get admin user ID
-                const meResponse = await axios.get(`${wordpressUrl}/wp-json/wp/v2/users/me`, {
-                    auth: {
-                        username: WORDPRESS_ADMIN_USER,
-                        password: WORDPRESS_ADMIN_PASSWORD
-                    },
-                    timeout: 10000,
-                    validateStatus: () => true
-                });
+                console.warn(`⚠️ [PublishAnonymous] Application Password didn't authenticate with any tested username. The Application Password in WP_APP_PASSWORD may be incorrect or expired.`);
+                console.warn(`⚠️ [PublishAnonymous] Will try to create a new Application Password for user "devon" (has administrator role)`);
                 
-                if (meResponse.status === 200 && meResponse.data?.id) {
-                    const adminUserId = meResponse.data.id;
-                    const userRoles = meResponse.data.roles || [];
-                    const authenticatedUser = meResponse.data.name || meResponse.data.slug || WORDPRESS_ADMIN_USER;
+                // Try to authenticate with regular password for "devon" user to create Application Password
+                try {
+                    const devonAuthResponse = await axios.get(`${wordpressUrl}/wp-json/wp/v2/users/me`, {
+                        auth: {
+                            username: 'devon',
+                            password: WORDPRESS_ADMIN_PASSWORD
+                        },
+                        timeout: 10000,
+                        validateStatus: () => true
+                    });
                     
-                    console.log(`🔍 [PublishAnonymous] Authenticated as user: ${authenticatedUser} (ID: ${adminUserId}), Roles: ${userRoles.join(', ')}`);
-                    
-                    // Check if user has editor/administrator role
-                    if (!userRoles.includes('administrator') && !userRoles.includes('editor')) {
-                        console.error(`❌ [PublishAnonymous] User "${authenticatedUser}" does not have administrator or editor role. Roles: ${userRoles.join(', ')}`);
-                        return res.status(403).json({
-                            error: 'Insufficient permissions',
-                            message: `User "${authenticatedUser}" does not have permission to create posts. User must have administrator or editor role. Current roles: ${userRoles.join(', ')}`,
-                            userRoles: userRoles,
-                            userId: adminUserId,
-                            username: authenticatedUser
-                        });
-                    }
-                    
-                    // Try to create Application Password
-                    try {
+                    if (devonAuthResponse.status === 200 && devonAuthResponse.data?.id) {
+                        const devonUserId = devonAuthResponse.data.id;
+                        const devonRoles = devonAuthResponse.data.roles || [];
+                        console.log(`✅ [PublishAnonymous] Authenticated as "devon" (ID: ${devonUserId}), Roles: ${devonRoles.join(', ')}, creating Application Password...`);
+                        
+                        // Create Application Password for devon user
                         const appPasswordResponse = await axios.post(
-                            `${wordpressUrl}/wp-json/wp/v2/users/${adminUserId}/application-passwords`,
+                            `${wordpressUrl}/wp-json/wp/v2/users/${devonUserId}/application-passwords`,
                             {
                                 name: 'Onion Press Service',
                                 app_id: 'onion-press-service'
                             },
                             {
                                 auth: {
-                                    username: WORDPRESS_ADMIN_USER,
+                                    username: 'devon',
                                     password: WORDPRESS_ADMIN_PASSWORD
                                 },
                                 timeout: 10000,
@@ -322,28 +301,30 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
                         
                         if (appPasswordResponse.status === 201 && appPasswordResponse.data?.password) {
                             authPassword = appPasswordResponse.data.password.replace(/\s+/g, '');
-                            console.log(`✅ [PublishAnonymous] Created Application Password successfully`);
+                            authUsername = 'devon';
+                            console.log(`✅ [PublishAnonymous] Created Application Password for "devon" successfully`);
+                            console.log(`⚠️ [PublishAnonymous] IMPORTANT: Update WP_APP_PASSWORD in .env with: ${appPasswordResponse.data.password.replace(/\s+/g, '')}`);
                         } else {
-                            console.warn(`⚠️ [PublishAnonymous] Could not create Application Password (status ${appPasswordResponse.status}), using regular password`);
+                            console.warn(`⚠️ [PublishAnonymous] Could not create Application Password (status ${appPasswordResponse.status}), will try regular password`);
+                            authPassword = WORDPRESS_ADMIN_PASSWORD;
+                            authUsername = 'devon';
                         }
-                    } catch (createError) {
-                        if (createError.response?.status === 400 && createError.response?.data?.code === 'application_passwords_disabled') {
-                            console.warn(`⚠️ [PublishAnonymous] Application Passwords are disabled in WordPress. Using regular password.`);
-                        } else {
-                            console.warn(`⚠️ [PublishAnonymous] Could not create Application Password: ${createError.message}. Using regular password.`);
-                        }
+                    } else {
+                        console.error(`❌ [PublishAnonymous] Could not authenticate as "devon" (status ${devonAuthResponse.status})`);
+                        authPassword = WORDPRESS_ADMIN_PASSWORD;
+                        authUsername = 'devon'; // Try anyway
                     }
-                } else {
-                    console.error(`❌ [PublishAnonymous] Could not get admin user ID (status ${meResponse.status})`, meResponse.data);
-                    return res.status(401).json({
-                        error: 'WordPress authentication failed',
-                        message: `Could not authenticate with WordPress. Status: ${meResponse.status}`,
-                        details: meResponse.data
-                    });
+                } catch (devonError) {
+                    console.error(`❌ [PublishAnonymous] Error authenticating as "devon": ${devonError.message}`);
+                    authPassword = WORDPRESS_ADMIN_PASSWORD;
+                    authUsername = 'devon'; // Try anyway
                 }
-            } catch (error) {
-                console.warn(`⚠️ [PublishAnonymous] Error getting Application Password: ${error.message}. Using regular password.`);
             }
+        }
+        
+        // If we still don't have a valid Application Password, try regular password with devon
+        if (authPassword === WORDPRESS_ADMIN_PASSWORD && !authUsername) {
+            authUsername = 'devon'; // Default to devon since that's the admin user
         }
         
         console.log(`📝 [PublishAnonymous] Publishing to WordPress: ${wpApiUrl}`);
