@@ -949,10 +949,17 @@ if (ONION_PRESS_ENABLED) {
     // POST /onion-press/api/records/publishAnonymous - Proxy to daemon's publishAnonymous endpoint
     app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
         try {
+            // Forward Authorization header so daemon can authenticate the user
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (req.headers.authorization) {
+                headers['Authorization'] = req.headers.authorization;
+                console.log(`🔍 [PublishAnonymous Proxy] Forwarding Authorization header to daemon`);
+            }
+            
             const response = await axios.post(`http://localhost:${port}/api/records/publishAnonymous`, req.body, {
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: headers,
                 timeout: 120000,
                 httpAgent,
                 httpsAgent
@@ -1083,14 +1090,23 @@ if (ONION_PRESS_ENABLED) {
         try {
             const targetUrl = `${ONION_PRESS_URL}/api${req.url}`;
             
+            // Forward all relevant headers, especially Authorization
+            const headers = {
+                'Content-Type': req.headers['content-type'] || 'application/json'
+            };
+            if (req.headers.authorization) {
+                headers['Authorization'] = req.headers.authorization;
+            }
+            // Forward other headers that might be needed
+            if (req.headers['x-requested-with']) {
+                headers['X-Requested-With'] = req.headers['x-requested-with'];
+            }
+            
             response = await axios({
                 method: req.method,
                 url: targetUrl,
                 data: req.body,
-                headers: {
-                    'Content-Type': req.headers['content-type'] || 'application/json',
-                    'Authorization': req.headers.authorization || ''
-                },
+                headers: headers,
                 timeout: 30000,
                 validateStatus: () => true
             });
