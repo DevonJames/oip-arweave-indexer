@@ -19,10 +19,10 @@ const TEMPLATE_DIDS = {
     post: 'did:arweave:op6y-d_6bqivJ2a2oWQnbylD4X_LH6eQyR6rCGqtVZ8',
     
     // New v0.9 templates (placeholder DIDs until first publish)
-    didDocument: 'did:arweave:V09_DID_DOCUMENT_TEMPLATE',
-    didVerificationMethod: 'did:arweave:V09_DID_VM_TEMPLATE',
-    socialMedia: 'did:arweave:V09_SOCIAL_MEDIA_TEMPLATE',
-    communication: 'did:arweave:V09_COMMUNICATION_TEMPLATE'
+    didDocument: 'did:arweave:oLdaefbl46MSQTljX6QSvlhWLAjhg0CLY8ejHDj-XxM',
+    didVerificationMethod: 'did:arweave:mT1c8GcBRrzQ39treEUiS7_K8KyBEH_aXo0L4mdAQHw',
+    socialMedia: 'did:arweave:BWXq7WZF6J0ZXevdZcW65Iw9VuQyEXWccFOYk1WYwBI',
+    communication: 'did:arweave:smEHXLQo1dYL9hEvVMvyyOTqZ0OZg-earraTTl-J11A'
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
