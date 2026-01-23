@@ -21,6 +21,48 @@ async function getWordPressAuth() {
     // Check if Application Password is provided via env var
     if (process.env.WP_APP_PASSWORD) {
         const appPassword = process.env.WP_APP_PASSWORD.replace(/\s+/g, '');
+        
+        // Application Passwords are user-specific - try to find which user it belongs to
+        // Try common usernames: "devon" (most common), then env var, then defaults
+        const possibleUsernames = [
+            'devon',  // Most common WordPress username
+            WORDPRESS_ADMIN_USER,  // From env var
+            'admin',  // Default admin username
+        ];
+        
+        // Remove duplicates
+        const uniqueUsernames = [...new Set(possibleUsernames)];
+        
+        // Try each username to see which one works
+        for (const testUsername of uniqueUsernames) {
+            try {
+                const verifyResponse = await axios.get(
+                    `${WORDPRESS_URL}/wp-json/wp/v2/users/me`,
+                    {
+                        auth: {
+                            username: testUsername,
+                            password: appPassword
+                        },
+                        validateStatus: () => true
+                    }
+                );
+                
+                if (verifyResponse.status === 200) {
+                    console.log(`✅ [WordPress Sync] Application Password authenticated as: ${testUsername}`);
+                    return {
+                        username: testUsername,
+                        password: appPassword,
+                        method: 'Application Password'
+                    };
+                }
+            } catch (error) {
+                // Try next username
+                continue;
+            }
+        }
+        
+        // If none worked, fall back to WORDPRESS_ADMIN_USER
+        console.warn(`⚠️ [WordPress Sync] Application Password didn't work with any username, using ${WORDPRESS_ADMIN_USER}`);
         return {
             username: WORDPRESS_ADMIN_USER,
             password: appPassword,

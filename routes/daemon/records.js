@@ -379,9 +379,30 @@ router.post('/publishAnonymous', async (req, res) => {
                     // If user explicitly chose anonymous publishing, use Anonymous user
                     // Otherwise, use logged-in user's account if available
                     const isAnonymousPublish = !isLoggedIn || payload.tags?.some(t => t.name === 'Anonymous' && t.value === 'true');
+                    
+                    // If logged in but WordPress user sync failed, try to sync now
+                    let wpUserId = null;
+                    if (isLoggedIn && !isAnonymousPublish) {
+                        wpUserId = loggedInUser?.wordpressUserId || null;
+                        
+                        // If WordPress user ID is missing, try to sync/create it now
+                        if (!wpUserId) {
+                            try {
+                                const { syncWordPressUser } = require('../../helpers/core/wordpressUserSync');
+                                const wpUser = await syncWordPressUser(loggedInUser.email, null, loggedInUser.email.split('@')[0]);
+                                if (wpUser) {
+                                    wpUserId = wpUser.id;
+                                    console.log(`✅ [PublishAnonymous] Synced WordPress user for ${loggedInUser.email}: ${wpUserId}`);
+                                }
+                            } catch (syncError) {
+                                console.warn(`⚠️ [PublishAnonymous] WordPress user sync failed for ${loggedInUser.email}:`, syncError.message);
+                            }
+                        }
+                    }
+                    
                     const wpOptions = {
                         anonymous: isAnonymousPublish, // Anonymous if not logged in OR if Anonymous tag is present
-                        wordpressUserId: isAnonymousPublish ? null : (loggedInUser?.wordpressUserId || null)
+                        wordpressUserId: isAnonymousPublish ? null : wpUserId
                     };
                     
                     const wpResult = await publishToWordPress(payload, null, wpOptions);

@@ -1001,9 +1001,10 @@
             // but mark it as account-based so it uses the logged-in user's WordPress account
             if (!needsPassword && destinations.thisHost) {
                 try {
-                    if (statusDiv) {
-                        statusDiv.textContent = 'Publishing...';
-                        statusDiv.className = 'status-message info';
+                    // Use showStatus for consistent UI
+                    const statusEl = document.getElementById('accountStatus');
+                    if (statusEl) {
+                        showStatus('processing', '⏳ Publishing...', 'Please wait while your post is submitted.');
                     }
                     
                     // Build payload (same format as anonymous)
@@ -1040,16 +1041,24 @@
                     
                     if (data.success || data.destinations?.thisHost) {
                         const wpResult = data.destinations?.thisHost;
-                        if (statusDiv) {
-                            statusDiv.innerHTML = `
-                                <div class="success">
-                                    <strong>✅ Published successfully!</strong><br>
-                                    ${wpResult?.postId ? `WordPress Post ID: ${wpResult.postId}<br>` : ''}
-                                    ${wpResult?.permalink ? `<a href="${wpResult.permalink}" target="_blank">View Post →</a><br>` : ''}
-                                    <a href="/onion-press/" class="link">View in Browse →</a>
-                                </div>
+                        
+                        // Build success message (same format as anonymous publishing)
+                        let successMessage = '<p>Your post has been published!</p>';
+                        if (wpResult?.success || wpResult?.postId) {
+                            const permalink = wpResult.permalink || wpResult.postUrl || `/wordpress/?p=${wpResult.postId}`;
+                            successMessage += `
+                                <p><strong>✅ WordPress:</strong> Published</p>
+                                <p><strong>Post ID:</strong> ${wpResult.postId || 'N/A'}</p>
+                                ${permalink ? `<p><a href="${permalink}" target="_blank">View WordPress Post →</a></p>` : ''}
                             `;
-                            statusDiv.className = 'status-message success';
+                        }
+                        successMessage += `<p><a href="/onion-press/" class="link">View in Browse →</a></p>`;
+                        
+                        // Use showStatus function for consistent UI (use accountStatus element)
+                        const statusEl = document.getElementById('accountStatus');
+                        if (statusEl) {
+                            statusEl.className = `status-message visible success`;
+                            statusEl.innerHTML = `<h3>✅ Published Successfully!</h3><div>${successMessage}</div>`;
                         }
                         
                         // Clear form
@@ -1060,9 +1069,10 @@
                     }
                 } catch (error) {
                     const errorMsg = `Publishing failed: ${error.message}`;
-                    if (statusDiv) {
-                        statusDiv.textContent = errorMsg;
-                        statusDiv.className = 'status-message error';
+                    const statusEl = document.getElementById('accountStatus');
+                    if (statusEl) {
+                        statusEl.className = `status-message visible error`;
+                        statusEl.innerHTML = `<h3>❌ Publishing Failed</h3><div>${errorMsg}</div>`;
                     } else {
                         alert(errorMsg);
                     }
@@ -1075,17 +1085,20 @@
             if (needsPassword) {
                 const password = prompt('Enter your password to sign with your wallet:');
                 if (!password) {
-                    if (statusDiv) {
-                        statusDiv.textContent = 'Password required for signing';
-                        statusDiv.className = 'status-message error';
+                    const statusEl = document.getElementById('accountStatus');
+                    if (statusEl) {
+                        statusEl.className = `status-message visible error`;
+                        statusEl.innerHTML = `<h3>❌ Publishing Failed</h3><div>Password required for signing</div>`;
                     }
                     return;
                 }
                 
                 try {
-                    if (statusDiv) {
-                        statusDiv.textContent = 'Publishing...';
-                        statusDiv.className = 'status-message info';
+                    // Use showStatus for consistent UI
+                    const statusEl = document.getElementById('accountStatus');
+                    if (statusEl) {
+                        statusEl.className = `status-message visible processing`;
+                        statusEl.innerHTML = `<h3>⏳ Publishing...</h3><div>Please wait while your post is submitted.</div>`;
                     }
                     
                     // Build payload
@@ -1126,16 +1139,26 @@
                     const data = await response.json();
                     
                     if (data.success) {
-                        if (statusDiv) {
-                            statusDiv.innerHTML = `
-                                <div class="success">
-                                    <strong>✅ Published successfully!</strong><br>
-                                    ${data.transactionId ? `Arweave TX: ${data.transactionId}<br>` : ''}
-                                    ${data.destinations?.thisHost?.postId ? `WordPress Post ID: ${data.destinations.thisHost.postId}<br>` : ''}
-                                    <a href="/onion-press/" class="link">View in Browse →</a>
-                                </div>
+                        // Build success message (same format as anonymous publishing)
+                        let successMessage = '<p>Your post has been published!</p>';
+                        if (data.transactionId) {
+                            successMessage += `<p><strong>✅ Arweave:</strong> Published</p><p><strong>Transaction ID:</strong> <span class="tx-link">${data.transactionId}</span></p>`;
+                        }
+                        if (data.destinations?.thisHost?.success || data.destinations?.thisHost?.postId) {
+                            const permalink = data.destinations?.thisHost?.permalink || data.destinations?.thisHost?.postUrl || `/wordpress/?p=${data.destinations?.thisHost?.postId}`;
+                            successMessage += `
+                                <p><strong>✅ WordPress:</strong> Published</p>
+                                <p><strong>Post ID:</strong> ${data.destinations?.thisHost?.postId || 'N/A'}</p>
+                                ${permalink ? `<p><a href="${permalink}" target="_blank">View WordPress Post →</a></p>` : ''}
                             `;
-                            statusDiv.className = 'status-message success';
+                        }
+                        successMessage += `<p><a href="/onion-press/" class="link">View in Browse →</a></p>`;
+                        
+                        // Use showStatus for consistent UI (use accountStatus element)
+                        const statusEl = document.getElementById('accountStatus');
+                        if (statusEl) {
+                            statusEl.className = `status-message visible success`;
+                            statusEl.innerHTML = `<h3>✅ Published Successfully!</h3><div>${successMessage}</div>`;
                         }
                         
                         // Clear form
@@ -1146,9 +1169,10 @@
                     }
                 } catch (error) {
                     const errorMsg = `Publishing failed: ${error.message}`;
-                    if (statusDiv) {
-                        statusDiv.textContent = errorMsg;
-                        statusDiv.className = 'status-message error';
+                    const statusEl = document.getElementById('accountStatus');
+                    if (statusEl) {
+                        statusEl.className = `status-message visible error`;
+                        statusEl.innerHTML = `<h3>❌ Publishing Failed</h3><div>${errorMsg}</div>`;
                     } else {
                         alert(errorMsg);
                     }
