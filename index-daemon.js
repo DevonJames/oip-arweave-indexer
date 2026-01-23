@@ -39,6 +39,7 @@ const socketIo = require('socket.io');
 const dotenv = require('dotenv');
 const minimist = require('minimist');
 const axios = require('axios');
+const { execSync } = require('child_process');
 
 // Load environment variables first
 dotenv.config();
@@ -677,156 +678,117 @@ if (ONION_PRESS_ENABLED) {
             const { limit = 20, offset = 0, search, type } = req.query;
             console.log(`🔍 [WordPressPosts] Query params: limit=${limit}, offset=${offset}, search=${search || 'none'}, type=${type || 'none'}`);
             
-            // Query WordPress REST API
-            // Try both endpoint formats in case WordPress permalinks are misconfigured
-            const wordpressUrl = process.env.WORDPRESS_URL || 'http://wordpress:80';
-            const wpApiUrl1 = `${wordpressUrl}/wp-json/wp/v2/posts`;
-            const wpApiUrl2 = `${wordpressUrl}/index.php?rest_route=/wp/v2/posts`;
-            console.log(`🔍 [WordPressPosts] Querying WordPress at: ${wpApiUrl1} (fallback: ${wpApiUrl2})`);
-            
-            const params = new URLSearchParams({
-                per_page: Math.min(parseInt(limit) || 20, 100),
-                offset: parseInt(offset) || 0,
-                _embed: 'true'
-            });
-            
-            if (search) {
-                params.append('search', search);
-            }
-            
             if (type && type !== 'post') {
                 // WordPress only has 'post' type by default
                 console.log(`ℹ️ [WordPressPosts] Type filter '${type}' is not 'post', returning empty results`);
                 return res.json({ records: [] });
             }
             
-            // Try primary endpoint first, fallback to index.php format if needed
-            let response;
-            let wpApiUrl = wpApiUrl1;
-            let lastError = null;
+            // Use wp-cli to get posts (more reliable than REST API)
+            const projectName = process.env.COMPOSE_PROJECT_NAME || 'onionpress';
+            const wpContainerName = `${projectName}-wordpress-1`;
             
-            for (const url of [wpApiUrl1, wpApiUrl2]) {
+            // Build wp-cli command to list posts
+            let wpCommand = `docker exec ${wpContainerName} wp post list `;
+            wpCommand += `--format=json `;
+            wpCommand += `--posts_per_page=${Math.min(parseInt(limit) || 20, 100)} `;
+            wpCommand += `--offset=${parseInt(offset) || 0} `;
+            wpCommand += `--post_status=publish `;
+            wpCommand += `--orderby=date `;
+            wpCommand += `--order=DESC `;
+            wpCommand += `--allow-root`;
+            
+            if (search) {
+                // wp-cli doesn't have a direct search param, so we'll filter in code
+                // But we can use --s parameter for basic search
+                wpCommand += ` --s='${search.replace(/'/g, "'\\''")}'`;
+            }
+            
+            console.log(`🔧 [WordPressPosts] Executing wp-cli command: ${wpCommand}`);
+            
+            let wpPosts;
+            try {
+                const wpOutput = execSync(wpCommand, { encoding: 'utf-8', timeout: 10000 });
+                wpPosts = JSON.parse(wpOutput.trim() || '[]');
+                
+                if (!Array.isArray(wpPosts)) {
+                    console.error(`❌ [WordPressPosts] wp-cli returned non-array:`, typeof wpPosts);
+                    wpPosts = [];
+                }
+            } catch (wpError) {
+                console.error(`❌ [WordPressPosts] wp-cli error:`, wpError.message);
+                // If container doesn't exist or wp-cli fails, return empty array
+                if (wpError.message.includes('No such container') || wpError.message.includes('Cannot connect')) {
+                    console.warn(`⚠️ [WordPressPosts] WordPress container not found, returning empty results`);
+                    return res.json({ records: [] });
+                }
+                throw wpError;
+            }
+            
+            console.log(`✅ [WordPressPosts] Retrieved ${wpPosts.length} posts from WordPress via wp-cli`);
+            
+            // Get full post details for each post (wp post list doesn't include content/excerpt)
+            const postsWithDetails = [];
+            for (const post of wpPosts) {
                 try {
-                    wpApiUrl = url;
-                    console.log(`🔍 [WordPressPosts] Attempting: ${url}`);
-                    response = await axios.get(`${url}?${params.toString()}`, {
-                        httpAgent,
-                        httpsAgent,
-                        timeout: 10000,
-                        validateStatus: () => true, // Don't throw on non-2xx status
-                        maxRedirects: 0, // Don't follow redirects - WordPress REST API shouldn't redirect
-                        headers: {
-                            'Accept': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest' // Helps WordPress identify API requests
-                        },
-                        // Force axios to not transform response
-                        transformResponse: [(data) => {
-                            // Keep response as-is to detect HTML
-                            return data;
-                        }]
+                    // Get full post details
+                    const detailCommand = `docker exec ${wpContainerName} wp post get ${post.ID} --format=json --allow-root`;
+                    const detailOutput = execSync(detailCommand, { encoding: 'utf-8', timeout: 5000 });
+                    const postDetail = JSON.parse(detailOutput.trim());
+                    
+                    // Get author name
+                    let authorName = '';
+                    if (postDetail.post_author) {
+                        try {
+                            const authorCommand = `docker exec ${wpContainerName} wp user get ${postDetail.post_author} --field=display_name --allow-root`;
+                            authorName = execSync(authorCommand, { encoding: 'utf-8', timeout: 3000 }).trim();
+                        } catch (e) {
+                            // Ignore author fetch errors
+                        }
+                    }
+                    
+                    postsWithDetails.push({
+                        id: postDetail.ID,
+                        title: postDetail.post_title || '',
+                        content: postDetail.post_content || '',
+                        excerpt: postDetail.post_excerpt || '',
+                        date: postDetail.post_date || postDetail.post_date_gmt,
+                        author: authorName,
+                        link: postDetail.guid || ''
                     });
-                    
-                    // Check if we got JSON (array) or HTML (string)
-                    if (Array.isArray(response.data) || (typeof response.data === 'object' && response.data !== null)) {
-                        // Got JSON - success!
-                        break;
-                    }
-                    
-                    // If we got HTML, try next URL
-                    if (typeof response.data === 'string' && (
-                        response.data.trim().startsWith('<!DOCTYPE') ||
-                        response.data.trim().startsWith('<html')
-                    )) {
-                        console.warn(`⚠️ [WordPressPosts] ${url} returned HTML, trying fallback...`);
-                        lastError = new Error(`WordPress returned HTML instead of JSON from ${url}`);
-                        continue;
-                    }
-                    
-                    // If we got a valid response, break
-                    break;
-                } catch (error) {
-                    console.warn(`⚠️ [WordPressPosts] Error with ${url}:`, error.message);
-                    lastError = error;
-                    continue;
-                }
-            }
-            
-            if (!response) {
-                return res.status(503).json({
-                    error: 'WordPress REST API unavailable',
-                    message: lastError?.message || 'Failed to connect to WordPress REST API'
-                });
-            }
-            
-            // Check if WordPress returned HTML instead of JSON (common when REST API is disabled or redirecting)
-            const contentType = response.headers['content-type'] || '';
-            const isHtmlResponse = typeof response.data === 'string' && (
-                response.data.trim().startsWith('<!DOCTYPE') ||
-                response.data.trim().startsWith('<html') ||
-                response.data.includes('<body') ||
-                contentType.includes('text/html')
-            );
-            
-            if (isHtmlResponse || (!contentType.includes('application/json') && !contentType.includes('application/vnd.api+json'))) {
-                console.error(`❌ [WordPressPosts] WordPress returned HTML instead of JSON`);
-                console.error(`❌ [WordPressPosts] Content-Type: ${contentType}`);
-                console.error(`❌ [WordPressPosts] Response status: ${response.status}`);
-                console.error(`❌ [WordPressPosts] Response size: ${typeof response.data === 'string' ? response.data.length : 'unknown'} bytes`);
-                console.error(`❌ [WordPressPosts] Response preview: ${typeof response.data === 'string' ? response.data.substring(0, 200) : 'non-string'}`);
-                return res.status(503).json({
-                    error: 'WordPress REST API not available',
-                    message: 'WordPress returned HTML instead of JSON. The REST API may be disabled or WordPress may be redirecting.',
-                    contentType: contentType,
-                    status: response.status
-                });
-            }
-            
-            if (response.status !== 200) {
-                console.error(`❌ [WordPressPosts] WordPress API returned status ${response.status}:`, response.data);
-                return res.status(503).json({
-                    error: 'WordPress API error',
-                    message: `WordPress returned status ${response.status}`,
-                    details: response.data
-                });
-            }
-            
-            // WordPress REST API returns an array directly
-            let wpPosts = response.data;
-            
-            // Check if response.data is actually a number (total count) instead of array
-            if (typeof wpPosts === 'number') {
-                console.error(`❌ [WordPressPosts] WordPress API returned a number (${wpPosts}) instead of array. This might be a count.`);
-                console.error(`❌ [WordPressPosts] Full response:`, JSON.stringify(response.data, null, 2));
-                console.error(`❌ [WordPressPosts] Response headers:`, response.headers);
-                // Return empty array if we got a count
-                wpPosts = [];
-            } else if (!Array.isArray(wpPosts)) {
-                console.error(`❌ [WordPressPosts] WordPress API returned non-array:`, typeof wpPosts);
-                console.error(`❌ [WordPressPosts] Response data preview:`, typeof wpPosts === 'string' ? wpPosts.substring(0, 200) : JSON.stringify(wpPosts, null, 2).substring(0, 500));
-                // Try to extract array from response
-                if (wpPosts && Array.isArray(wpPosts.posts)) {
-                    wpPosts = wpPosts.posts;
-                } else if (wpPosts && Array.isArray(wpPosts.data)) {
-                    wpPosts = wpPosts.data;
-                } else {
-                    console.error(`❌ [WordPressPosts] Could not extract posts array from response`);
-                    return res.status(500).json({
-                        error: 'Invalid WordPress API response',
-                        message: 'WordPress API did not return an array of posts',
-                        responseType: typeof wpPosts,
-                        responsePreview: typeof wpPosts === 'string' ? wpPosts.substring(0, 200) : 'non-string'
+                } catch (detailError) {
+                    console.warn(`⚠️ [WordPressPosts] Failed to get details for post ${post.ID}: ${detailError.message}`);
+                    // Fallback to basic info from list
+                    postsWithDetails.push({
+                        id: post.ID,
+                        title: post.post_title || '',
+                        content: '',
+                        excerpt: '',
+                        date: post.post_date || '',
+                        author: '',
+                        link: ''
                     });
                 }
             }
-            console.log(`✅ [WordPressPosts] Retrieved ${wpPosts.length} posts from WordPress`);
+            
+            // Filter by search term if provided (wp-cli --s might not work perfectly)
+            let filteredPosts = postsWithDetails;
+            if (search) {
+                const searchLower = search.toLowerCase();
+                filteredPosts = postsWithDetails.filter(post => 
+                    (post.title && post.title.toLowerCase().includes(searchLower)) ||
+                    (post.content && post.content.toLowerCase().includes(searchLower)) ||
+                    (post.excerpt && post.excerpt.toLowerCase().includes(searchLower))
+                );
+            }
             
             // Build base URL for permalinks
             const baseUrl = process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get('host')}`;
             const wordpressPath = process.env.WORDPRESS_PROXY_PATH || '/wordpress';
             
             // Transform WordPress posts to OIP-like format
-            const records = wpPosts.map(post => {
-                // Build permalink if not provided by WordPress
+            const records = filteredPosts.map(post => {
+                // Build permalink
                 let permalink = post.link;
                 if (!permalink && post.id) {
                     permalink = `${baseUrl}${wordpressPath}/?p=${post.id}`;
@@ -835,13 +797,13 @@ if (ONION_PRESS_ENABLED) {
                 return {
                     wordpress: {
                         postId: post.id,
-                        title: post.title?.rendered || '',
-                        excerpt: post.excerpt?.rendered || '',
-                        content: post.content?.rendered || '',
+                        title: post.title,
+                        excerpt: post.excerpt,
+                        content: post.content,
                         postDate: post.date,
                         permalink: permalink,
-                        tags: post._embedded?.['wp:term']?.[0]?.map(t => t.name) || [],
-                        author: post._embedded?.author?.[0]?.name || ''
+                        tags: [], // wp-cli doesn't easily provide tags in list format
+                        author: post.author
                     },
                     id: `wp-${post.id}`,
                     oip: {
