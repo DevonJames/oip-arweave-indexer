@@ -375,10 +375,13 @@ router.post('/publishAnonymous', async (req, res) => {
                     console.log(`📝 [PublishAnonymous] Local-only mode: Publishing to WordPress only`);
                     console.log(`🔍 [PublishAnonymous] Destinations object:`, JSON.stringify(destinations, null, 2));
                     
-                    // Use logged-in user's WordPress account if available, otherwise anonymous
+                    // Determine if this should be anonymous or account-based
+                    // If user explicitly chose anonymous publishing, use Anonymous user
+                    // Otherwise, use logged-in user's account if available
+                    const isAnonymousPublish = !isLoggedIn || payload.tags?.some(t => t.name === 'Anonymous' && t.value === 'true');
                     const wpOptions = {
-                        anonymous: !isLoggedIn, // Only anonymous if not logged in
-                        wordpressUserId: loggedInUser?.wordpressUserId || null
+                        anonymous: isAnonymousPublish, // Anonymous if not logged in OR if Anonymous tag is present
+                        wordpressUserId: isAnonymousPublish ? null : (loggedInUser?.wordpressUserId || null)
                     };
                     
                     const wpResult = await publishToWordPress(payload, null, wpOptions);
@@ -1413,7 +1416,8 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     let identificationMode = 'anonymous';
     if (options.creatorDid) {
         identificationMode = 'did';
-    } else if (options.wordpressUserId) {
+    } else if (options.wordpressUserId && !options.anonymous) {
+        // Only use account mode if not anonymous
         identificationMode = 'account';
     } else if (options.anonymous) {
         identificationMode = 'anonymous';
