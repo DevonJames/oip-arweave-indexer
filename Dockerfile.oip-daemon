@@ -49,8 +49,14 @@ RUN apk update && apk add --no-cache \
     linux-headers \
     git \
     pkgconfig \
-    ffmpeg \
-    docker-cli
+    ffmpeg
+
+# Install Docker CLI (static binary)
+RUN curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-24.0.7.tgz | \
+    tar -xz -C /tmp && \
+    mv /tmp/docker/docker /usr/local/bin/docker && \
+    chmod +x /usr/local/bin/docker && \
+    rm -rf /tmp/docker
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Sharp dependencies (for thumbnail generation during media upload)
