@@ -360,8 +360,16 @@ function handleAccountWordPressClick(event) {
     event.stopPropagation();
     
     if (isLoggedIn()) {
-        // User is logged in, open WordPress
-        window.open('/wordpress/wp-admin/', '_blank');
+        // User is logged in, use auto-login endpoint
+        // This will redirect to WordPress admin with proper authentication
+        const token = localStorage.getItem('onionpress_token');
+        if (token) {
+            // Use the auto-login endpoint which will handle WordPress session creation
+            window.open(`/api/user/wordpress/auto-login?redirect=/wp-admin/`, '_blank');
+        } else {
+            // Fallback to direct WordPress admin
+            window.open('/wordpress/wp-admin/', '_blank');
+        }
     } else {
         // User not logged in, show login modal
         sessionStorage.setItem('openingWordPress', 'true');

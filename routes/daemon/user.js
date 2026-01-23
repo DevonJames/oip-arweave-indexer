@@ -1719,6 +1719,40 @@ router.post('/revoke-calendar-token', authenticateToken, async (req, res) => {
     }
 });
 
+/**
+ * GET /api/user/wordpress/auto-login
+ * Auto-login to WordPress for logged-in Onion Press users
+ * Redirects to WordPress admin with proper redirect_to parameter
+ */
+router.get('/wordpress/auto-login', authenticateToken, async (req, res) => {
+    try {
+        const user = req.user;
+        const redirect = req.query.redirect || '/wp-admin/';
+        
+        if (!user.wordpressUserId) {
+            return res.status(400).json({
+                error: 'No WordPress user ID found',
+                message: 'Your account is not linked to a WordPress user. Please contact an administrator.'
+            });
+        }
+        
+        // Redirect to WordPress admin
+        // The proxy will handle fixing the redirect_to parameter if WordPress redirects to login
+        const WORDPRESS_PROXY_PATH = process.env.WORDPRESS_PROXY_PATH || '/wordpress';
+        const redirectUrl = `${WORDPRESS_PROXY_PATH}${redirect.startsWith('/') ? redirect : '/' + redirect}`;
+        
+        console.log(`🔐 [WordPress Auto-Login] User ${user.email} (WP ID: ${user.wordpressUserId}) → ${redirectUrl}`);
+        res.redirect(redirectUrl);
+        
+    } catch (error) {
+        console.error('❌ [WordPress Auto-Login] Error:', error);
+        res.status(500).json({
+            error: 'Failed to auto-login to WordPress',
+            message: error.message
+        });
+    }
+});
+
 module.exports = { 
     router, 
     getUserGunEncryptionSalt, 
