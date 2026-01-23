@@ -1286,6 +1286,36 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
         throw new Error(`WordPress server authentication failed: ${authError.message}. WordPress requires server credentials (WP_ADMIN_USER/WP_ADMIN_PASSWORD) to create posts, even for anonymous content. The post content will be anonymous, but the server needs to authenticate to create it.`);
     }
     
+    // Get admin user ID to ensure we have permission to create posts
+    let adminUserId = null;
+    try {
+        const userResponse = await axios.get(`${WORDPRESS_URL}/wp-json/wp/v2/users/me/`, {
+            auth: {
+                username: WORDPRESS_ADMIN_USER,
+                password: authPassword
+            },
+            timeout: 10000,
+            validateStatus: () => true,
+            maxRedirects: 5
+        });
+        
+        if (userResponse.status === 200 && userResponse.data?.id) {
+            adminUserId = userResponse.data.id;
+            console.log(`✅ [PublishToWordPress] Authenticated as WordPress user ID: ${adminUserId}`);
+            
+            // Verify user has publish_posts capability
+            const capabilities = userResponse.data.capabilities || {};
+            if (!capabilities.publish_posts && !capabilities.administrator) {
+                throw new Error(`WordPress user "${WORDPRESS_ADMIN_USER}" (ID: ${adminUserId}) does not have publish_posts capability. User needs administrator role.`);
+            }
+        } else {
+            console.warn(`⚠️ [PublishToWordPress] Could not get admin user ID, status: ${userResponse.status}`);
+        }
+    } catch (userError) {
+        console.warn(`⚠️ [PublishToWordPress] Error getting admin user ID: ${userError.message}`);
+        // Continue anyway - WordPress might still allow post creation
+    }
+    
     // Extract record data from payload
     const fragments = payload.fragments || [payload];
     const firstFragment = fragments[0];
@@ -1334,8 +1364,12 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     // Set WordPress author based on identification mode
     if (identificationMode === 'account' && options.wordpressUserId) {
         wpPostData.author = options.wordpressUserId;
+    } else if (adminUserId) {
+        // For anonymous and DID modes, explicitly set admin as author to ensure permissions
+        wpPostData.author = adminUserId;
+        console.log(`🔍 [PublishToWordPress] Setting post author to admin user ID: ${adminUserId}`);
     }
-    // For anonymous and DID modes, use admin account (default)
+    // If adminUserId is null, WordPress will use the authenticated user (should be admin)
     
     // Add tags if available
     if (basic.tagItems && Array.isArray(basic.tagItems) && basic.tagItems.length > 0) {
