@@ -803,7 +803,7 @@ router.post('/login', async (req, res) => {
 
 /**
  * GET /api/user/admin-status
- * Check if the logged-in user is a WordPress admin
+ * Check if the logged-in user is an admin (via ONIONPRESS_ADMIN email match or WordPress admin)
  */
 router.get('/admin-status', authenticateToken, async (req, res) => {
     try {
@@ -811,11 +811,28 @@ router.get('/admin-status', authenticateToken, async (req, res) => {
         console.log(`🔍 [AdminStatus] Checking admin status for user: ${user.email}`);
         console.log(`🔍 [AdminStatus] WordPress User ID: ${user.wordpressUserId || 'none'}`);
         
+        // Check if user email matches ONIONPRESS_ADMIN
+        const ONIONPRESS_ADMIN = process.env.ONIONPRESS_ADMIN || '';
+        const isEmailAdmin = ONIONPRESS_ADMIN && user.email && 
+                            user.email.toLowerCase() === ONIONPRESS_ADMIN.toLowerCase();
+        
+        if (isEmailAdmin) {
+            console.log(`✅ [AdminStatus] User email matches ONIONPRESS_ADMIN: ${user.email}`);
+            return res.json({
+                isWordPressAdmin: true, // Return true so settings button shows
+                isAdmin: true,
+                isOnionPressAdmin: true, // New flag to indicate email-based admin
+                wordpressUserId: user.wordpressUserId || null
+            });
+        }
+        
+        // Fallback to WordPress admin check if email doesn't match
         if (!user || !user.wordpressUserId) {
             console.log(`⚠️ [AdminStatus] No WordPress user ID found for user: ${user?.email || 'unknown'}`);
             return res.json({
                 isWordPressAdmin: false,
-                isAdmin: user?.isAdmin || false
+                isAdmin: user?.isAdmin || false,
+                isOnionPressAdmin: false
             });
         }
         
@@ -827,6 +844,7 @@ router.get('/admin-status', authenticateToken, async (req, res) => {
         res.json({
             isWordPressAdmin: wpAdmin,
             isAdmin: user.isAdmin || false,
+            isOnionPressAdmin: false,
             wordpressUserId: user.wordpressUserId
         });
     } catch (error) {

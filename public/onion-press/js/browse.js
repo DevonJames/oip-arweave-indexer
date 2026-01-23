@@ -95,21 +95,25 @@ async function updateAdminUI() {
         const status = await getAdminStatus();
         console.log('📊 Admin status response:', status);
         
+        // Check both WordPress admin and email-based admin (ONIONPRESS_ADMIN)
         const wpAdmin = status.isWordPressAdmin === true;
-        console.log(`🔐 WordPress admin check result: ${wpAdmin}`);
+        const isEmailAdmin = status.isOnionPressAdmin === true;
+        const isAdmin = wpAdmin || isEmailAdmin;
+        
+        console.log(`🔐 Admin check results: WordPress=${wpAdmin}, Email=${isEmailAdmin}, Total=${isAdmin}`);
         
         // Show/hide settings gear icon
         const settingsBtn = document.getElementById('settingsBtn');
         if (settingsBtn) {
-            if (wpAdmin) {
-                console.log('✅ User is WordPress admin, showing settings button');
+            if (isAdmin) {
+                console.log('✅ User is admin (WordPress or email match), showing settings button');
                 settingsBtn.classList.remove('hidden');
                 // Ensure admin-only class is present for styling
                 if (!settingsBtn.classList.contains('admin-only')) {
                     settingsBtn.classList.add('admin-only');
                 }
             } else {
-                console.log('❌ User is not WordPress admin, hiding settings button');
+                console.log('❌ User is not admin, hiding settings button');
                 settingsBtn.classList.add('hidden');
             }
         } else {

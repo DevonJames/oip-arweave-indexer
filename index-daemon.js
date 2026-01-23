@@ -627,7 +627,8 @@ if (ONION_PRESS_ENABLED) {
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return res.json({
                 isWordPressAdmin: false,
-                isAdmin: false
+                isAdmin: false,
+                isOnionPressAdmin: false
             });
         }
         
@@ -638,10 +639,28 @@ if (ONION_PRESS_ENABLED) {
             
             // Now call the actual handler
             const user = req.user;
+            
+            // Check if user email matches ONIONPRESS_ADMIN
+            const ONIONPRESS_ADMIN = process.env.ONIONPRESS_ADMIN || '';
+            const isEmailAdmin = ONIONPRESS_ADMIN && user.email && 
+                                user.email.toLowerCase() === ONIONPRESS_ADMIN.toLowerCase();
+            
+            if (isEmailAdmin) {
+                console.log(`✅ [AdminStatus] User email matches ONIONPRESS_ADMIN: ${user.email}`);
+                return res.json({
+                    isWordPressAdmin: true, // Return true so settings button shows
+                    isAdmin: true,
+                    isOnionPressAdmin: true,
+                    wordpressUserId: user.wordpressUserId || null
+                });
+            }
+            
+            // Fallback to WordPress admin check
             if (!user || !user.wordpressUserId) {
                 return res.json({
                     isWordPressAdmin: false,
-                    isAdmin: user?.isAdmin || false
+                    isAdmin: user?.isAdmin || false,
+                    isOnionPressAdmin: false
                 });
             }
             
@@ -650,13 +669,15 @@ if (ONION_PRESS_ENABLED) {
             res.json({
                 isWordPressAdmin: wpAdmin,
                 isAdmin: user.isAdmin || false,
+                isOnionPressAdmin: false,
                 wordpressUserId: user.wordpressUserId
             });
         } catch (error) {
             console.error('Admin status auth error:', error.message);
             res.json({
                 isWordPressAdmin: false,
-                isAdmin: false
+                isAdmin: false,
+                isOnionPressAdmin: false
             });
         }
     });
