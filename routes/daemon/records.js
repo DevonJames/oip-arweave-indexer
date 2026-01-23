@@ -326,7 +326,20 @@ router.post('/publishAnonymous', async (req, res) => {
             });
         }
         
-        console.log(`📝 [PublishAnonymous] Received anonymous payload`);
+        // Check if user is logged in (optional authentication)
+        let loggedInUser = null;
+        // Use optionalAuthenticateToken middleware to check for auth without failing
+        await new Promise((resolve) => {
+            optionalAuthenticateToken(req, res, () => {
+                if (req.user) {
+                    loggedInUser = req.user;
+                }
+                resolve();
+            });
+        });
+        
+        const isLoggedIn = loggedInUser !== null;
+        console.log(`📝 [PublishAnonymous] Received ${isLoggedIn ? 'authenticated' : 'anonymous'} payload${isLoggedIn ? ` from user: ${loggedInUser.email} (WP ID: ${loggedInUser.wordpressUserId || 'none'})` : ''}`);
         
         // Validate payload structure
         if (!payload.tags || !Array.isArray(payload.tags)) {
@@ -361,7 +374,14 @@ router.post('/publishAnonymous', async (req, res) => {
                 try {
                     console.log(`📝 [PublishAnonymous] Local-only mode: Publishing to WordPress only`);
                     console.log(`🔍 [PublishAnonymous] Destinations object:`, JSON.stringify(destinations, null, 2));
-                    const wpResult = await publishToWordPress(payload, null, { anonymous: true });
+                    
+                    // Use logged-in user's WordPress account if available, otherwise anonymous
+                    const wpOptions = {
+                        anonymous: !isLoggedIn, // Only anonymous if not logged in
+                        wordpressUserId: loggedInUser?.wordpressUserId || null
+                    };
+                    
+                    const wpResult = await publishToWordPress(payload, null, wpOptions);
                     publishResults.thisHost = wpResult;
                     console.log(`✅ [PublishAnonymous] Published to WordPress! Post ID: ${wpResult.postId}, Permalink: ${wpResult.permalink || wpResult.postUrl}`);
                 } catch (error) {
@@ -1419,9 +1439,18 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     
     // Set WordPress author based on identification mode
     if (identificationMode === 'account' && options.wordpressUserId) {
+        // Use logged-in user's WordPress account as author
         wpPostData.author = options.wordpressUserId;
+        console.log(`🔍 [PublishToWordPress] Setting post author to logged-in user ID: ${options.wordpressUserId}`);
+    } else if (options.anonymous) {
+        // For anonymous posts, use admin as author but set byline in meta
+        // The WordPress theme/plugin should display the byline instead of author name
+        if (adminUserId) {
+            wpPostData.author = adminUserId;
+            console.log(`🔍 [PublishToWordPress] Anonymous post - using admin as author (ID: ${adminUserId}), byline will be shown instead`);
+        }
     } else if (adminUserId) {
-        // For anonymous and DID modes, explicitly set admin as author to ensure permissions
+        // For DID modes, explicitly set admin as author to ensure permissions
         wpPostData.author = adminUserId;
         console.log(`🔍 [PublishToWordPress] Setting post author to admin user ID: ${adminUserId}`);
     } else {
@@ -1436,9 +1465,11 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
         wpPostData.tags = basic.tagItems;
     }
     
-    // Add author byline if available
+    // Add author byline if available (for anonymous posts, this will be displayed instead of author name)
     if (postData.bylineWriter) {
         wpPostData.meta.op_publisher_byline = postData.bylineWriter;
+        // Also set it in a standard WordPress meta field that themes can use
+        wpPostData.meta._op_byline = postData.bylineWriter;
     }
     
     // Add DID for DID-based identification
@@ -1454,9 +1485,12 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     const wpApiUrl3 = `${WORDPRESS_URL}/index.php?rest_route=/wp/v2/posts`;
     
     // Use the password that worked for authentication (Application Password or regular password)
+    // For logged-in users, we still use admin credentials to authenticate with WordPress REST API
+    // but set the author to their WordPress user ID
     // Basic Auth format: username:password (base64 encoded)
     const auth = Buffer.from(`${WORDPRESS_ADMIN_USER}:${authPassword}`).toString('base64');
-    console.log(`🔍 [PublishToWordPress] Using password that authenticated successfully (length: ${authPassword.length})`);
+    console.log(`🔍 [PublishToWordPress] Using admin credentials for API auth${options.wordpressUserId ? `, but post will be authored by user ID: ${options.wordpressUserId}` : ''}`);
+    console.log(`🔍 [PublishToWordPress] Password length: ${authPassword.length}`);
     
     console.log(`🔍 [PublishToWordPress] WordPress API URL (primary): ${wpApiUrl1}`);
     console.log(`🔍 [PublishToWordPress] WordPress API URL (fallback): ${wpApiUrl2}`);

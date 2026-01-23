@@ -355,7 +355,7 @@ function initLogin() {
 /**
  * Handle Account/WordPress button click
  */
-function handleAccountWordPressClick(event) {
+async function handleAccountWordPressClick(event) {
     event.preventDefault();
     event.stopPropagation();
     
@@ -364,8 +364,34 @@ function handleAccountWordPressClick(event) {
         // This will redirect to WordPress admin with proper authentication
         const token = localStorage.getItem('onionpress_token');
         if (token) {
-            // Use the auto-login endpoint which will handle WordPress session creation
-            window.open(`/api/user/wordpress/auto-login?redirect=/wp-admin/`, '_blank');
+            // Use fetch to call the endpoint with Authorization header, then redirect
+            try {
+                const response = await fetch(`/api/user/wordpress/auto-login?redirect=/wp-admin/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    redirect: 'manual' // Don't follow redirect automatically
+                });
+                
+                if (response.status === 302 || response.status === 301) {
+                    // Get redirect URL from Location header
+                    const redirectUrl = response.headers.get('Location');
+                    if (redirectUrl) {
+                        window.open(redirectUrl, '_blank');
+                    } else {
+                        window.open('/wordpress/wp-admin/', '_blank');
+                    }
+                } else {
+                    // If not a redirect, try to parse JSON error
+                    const data = await response.json();
+                    console.error('Auto-login error:', data);
+                    window.open('/wordpress/wp-admin/', '_blank');
+                }
+            } catch (error) {
+                console.error('Auto-login failed:', error);
+                window.open('/wordpress/wp-admin/', '_blank');
+            }
         } else {
             // Fallback to direct WordPress admin
             window.open('/wordpress/wp-admin/', '_blank');
