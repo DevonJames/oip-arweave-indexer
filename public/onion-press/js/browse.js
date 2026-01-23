@@ -28,12 +28,19 @@ const tabContents = document.querySelectorAll('.tab-content');
 
 // Modals
 const loginModal = document.getElementById('loginModal');
+const registerModal = document.getElementById('registerModal');
 const recordModal = document.getElementById('recordModal');
 const loginBtn = document.getElementById('loginBtn');
 const closeLoginModal = document.getElementById('closeLoginModal');
+const closeRegisterModal = document.getElementById('closeRegisterModal');
 const closeRecordModal = document.getElementById('closeRecordModal');
 const loginForm = document.getElementById('loginForm');
+const registerForm = document.getElementById('registerForm');
 const loginError = document.getElementById('loginError');
+const registerError = document.getElementById('registerError');
+const registerSuccess = document.getElementById('registerSuccess');
+const showRegisterModal = document.getElementById('showRegisterModal');
+const showLoginModal = document.getElementById('showLoginModal');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -239,9 +246,30 @@ function initLogin() {
         loginModal.classList.add('hidden');
     });
     
+    closeRegisterModal.addEventListener('click', () => {
+        registerModal.classList.add('hidden');
+    });
+    
     closeRecordModal.addEventListener('click', () => {
         recordModal.classList.add('hidden');
     });
+    
+    // Link between Login and Register modals
+    if (showRegisterModal) {
+        showRegisterModal.addEventListener('click', (e) => {
+            e.preventDefault();
+            loginModal.classList.add('hidden');
+            registerModal.classList.remove('hidden');
+        });
+    }
+    
+    if (showLoginModal) {
+        showLoginModal.addEventListener('click', (e) => {
+            e.preventDefault();
+            registerModal.classList.add('hidden');
+            loginModal.classList.remove('hidden');
+        });
+    }
     
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -278,6 +306,38 @@ function initLogin() {
             loginError.classList.remove('hidden');
         }
     });
+    
+    // Register form handler
+    if (registerForm) {
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            registerError.classList.add('hidden');
+            registerSuccess.classList.add('hidden');
+            
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            
+            try {
+                const result = await register(email, password);
+                registerSuccess.textContent = 'Registration successful! You can now login.';
+                registerSuccess.classList.remove('hidden');
+                
+                // Clear form
+                registerForm.reset();
+                
+                // After 2 seconds, switch to login modal
+                setTimeout(() => {
+                    registerModal.classList.add('hidden');
+                    loginModal.classList.remove('hidden');
+                    // Pre-fill email in login form
+                    document.getElementById('loginEmail').value = email;
+                }, 2000);
+            } catch (error) {
+                registerError.textContent = error.message;
+                registerError.classList.remove('hidden');
+            }
+        });
+    }
     
     // Check if already logged in
     if (isLoggedIn()) {

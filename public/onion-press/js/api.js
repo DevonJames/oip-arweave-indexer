@@ -194,6 +194,32 @@ async function login(email, password) {
     }
 }
 
+async function register(email, password) {
+    // Register via OIP daemon
+    try {
+        const response = await fetch(`${API_BASE}/api/user/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, password })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || data.message || 'Registration failed');
+        }
+        
+        return { 
+            success: true,
+            message: data.message || 'Registration successful'
+        };
+    } catch (error) {
+        throw new Error(error.message || 'Registration failed');
+    }
+}
+
 function logout() {
     authToken = null;
     localStorage.removeItem('onionpress_token');

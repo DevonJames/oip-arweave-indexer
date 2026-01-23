@@ -224,11 +224,44 @@
                 </div>
                 <div class="form-group">
                     <label for="loginPassword">Password</label>
-                    <input type="password" id="loginPassword" required>
+                    <input type="password" id="loginPassword" autocomplete="current-password" required>
                 </div>
                 <button type="submit" class="primary-btn">Login</button>
             </form>
             <div id="loginError" class="error-msg hidden"></div>
+            <div style="margin-top: 1rem; text-align: center;">
+                <p style="color: var(--text-muted); font-size: 0.9rem;">
+                    Don't have an account? 
+                    <a href="#" id="showRegisterModal" style="color: var(--accent-primary); text-decoration: underline; cursor: pointer;">Register here</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div id="registerModal" class="modal hidden">
+        <div class="modal-content">
+            <button class="modal-close" id="closeRegisterModal">×</button>
+            <h2>Register</h2>
+            <form id="registerForm">
+                <div class="form-group">
+                    <label for="registerEmail">Email</label>
+                    <input type="email" id="registerEmail" autocomplete="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password</label>
+                    <input type="password" id="registerPassword" autocomplete="new-password" required>
+                </div>
+                <button type="submit" class="primary-btn">Register</button>
+            </form>
+            <div id="registerError" class="error-msg hidden"></div>
+            <div id="registerSuccess" class="success-msg hidden"></div>
+            <div style="margin-top: 1rem; text-align: center;">
+                <p style="color: var(--text-muted); font-size: 0.9rem;">
+                    Already have an account? 
+                    <a href="#" id="showLoginModal" style="color: var(--accent-primary); text-decoration: underline; cursor: pointer;">Login here</a>
+                </p>
+            </div>
         </div>
     </div>
 
@@ -244,8 +277,8 @@
     <div id="settingsModal" class="modal hidden">
         <div class="modal-content">
             <button class="modal-close" id="closeSettingsModal">×</button>
-            <h2>Post Sources and Destinations</h2>
-            <p class="settings-description">Select which sources are browsed and published to from this Onion Press node.</p>
+            <h2>Post Sources</h2>
+            <p class="settings-description">Select sources from which posts are browsed and published to from this Onion Press node.</p>
             <div class="destinations-settings">
                 <label class="destination-setting">
                     <input type="checkbox" id="settingThisHost">
