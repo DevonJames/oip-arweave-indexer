@@ -384,9 +384,12 @@ router.post('/publishAnonymous', async (req, res) => {
                     let wpUserId = null;
                     if (isLoggedIn && !isAnonymousPublish) {
                         wpUserId = loggedInUser?.wordpressUserId || null;
+                        console.log(`🔍 [PublishAnonymous] Logged in user: ${loggedInUser.email}, existing wpUserId: ${wpUserId || 'none'}`);
                         
+                        // Always try to verify/find WordPress user ID (even if one exists, verify it's correct)
                         // If WordPress user ID is missing, try to sync/create it now
                         if (!wpUserId) {
+                            console.log(`🔍 [PublishAnonymous] No WordPress user ID found, attempting sync...`);
                             try {
                                 const { syncWordPressUser, getWordPressUserId } = require('../../helpers/core/wordpressUserSync');
                                 
@@ -475,6 +478,12 @@ router.post('/publishAnonymous', async (req, res) => {
                         anonymous: isAnonymousPublish, // Anonymous if not logged in OR if Anonymous tag is present
                         wordpressUserId: isAnonymousPublish ? null : wpUserId
                     };
+                    
+                    console.log(`🔍 [PublishAnonymous] Publishing with options:`, JSON.stringify({
+                        anonymous: wpOptions.anonymous,
+                        wordpressUserId: wpOptions.wordpressUserId,
+                        userEmail: isLoggedIn ? loggedInUser.email : 'anonymous'
+                    }, null, 2));
                     
                     const wpResult = await publishToWordPress(payload, null, wpOptions);
                     publishResults.thisHost = wpResult;
@@ -1534,6 +1543,8 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     };
     
     // Set WordPress author based on identification mode
+    console.log(`🔍 [PublishToWordPress] Setting author - identificationMode: ${identificationMode}, wordpressUserId: ${options.wordpressUserId || 'none'}, anonymous: ${options.anonymous}`);
+    
     if (identificationMode === 'account') {
         if (options.wordpressUserId) {
             // Use logged-in user's WordPress account as author
@@ -1706,14 +1717,19 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
             }
         }
         
-        // Check if response.data is actually an object (JSON) or a string (HTML)
+        // Check if response.data is actually an object (JSON) or a string (needs parsing)
+        let wpPost = response.data;
         if (typeof response.data === 'string') {
-            console.error(`❌ [PublishToWordPress] WordPress returned string instead of JSON object`);
-            console.error(`❌ [PublishToWordPress] Response preview: ${response.data.substring(0, 500)}`);
-            throw new Error('REST_API_FAILED_USE_WPCLI'); // Trigger wp-cli fallback
+            // WordPress might return JSON as a string - try to parse it
+            try {
+                wpPost = JSON.parse(response.data);
+                console.log(`✅ [PublishToWordPress] Parsed JSON string response`);
+            } catch (parseError) {
+                console.error(`❌ [PublishToWordPress] WordPress returned string instead of JSON object`);
+                console.error(`❌ [PublishToWordPress] Response preview: ${response.data.substring(0, 500)}`);
+                throw new Error('REST_API_FAILED_USE_WPCLI'); // Trigger wp-cli fallback
+            }
         }
-        
-        const wpPost = response.data;
         console.log(`✅ [PublishToWordPress] WordPress post created successfully!`);
         console.log(`🔍 [PublishToWordPress] WordPress response status: ${response.status}`);
         console.log(`🔍 [PublishToWordPress] WordPress response data type:`, typeof wpPost);
@@ -1777,8 +1793,11 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
                     wpCommand += `--post_excerpt='${escapedExcerpt}' `;
                 }
                 wpCommand += `--post_status=publish `;
-                if (adminUserId) {
-                    wpCommand += `--post_author=${adminUserId} `;
+                // Use the correct author: options.wordpressUserId if available, otherwise adminUserId
+                const postAuthor = options.wordpressUserId || adminUserId;
+                console.log(`🔍 [PublishToWordPress] wp-cli fallback: Using author ID ${postAuthor}${options.wordpressUserId ? ` (logged-in user)` : ` (admin fallback)`}`);
+                if (postAuthor) {
+                    wpCommand += `--post_author=${postAuthor} `;
                 }
                 wpCommand += `--user=${WORDPRESS_ADMIN_USER} `;
                 wpCommand += `--allow-root `;
