@@ -125,13 +125,15 @@ services:
     env_file:
       - .env
     ports:
-      - "${PORT:-3005}:${PORT:-3005}"
+      - "${OIP_DAEMON_PORT:-${PORT:-3005}}:${OIP_DAEMON_PORT:-${PORT:-3005}}"
       - "${DEBUG_PORT:-9229}:9229"
     environment:
       - NODE_ENV=production
-      - PORT=${PORT:-3005}
-      # Expose daemon port for other services to reference
-      - OIP_DAEMON_PORT=${PORT:-3005}
+      # Use OIP_DAEMON_PORT if set, otherwise use PORT (defaults to 3005)
+      # This ensures daemon port matches what other services expect
+      - PORT=${OIP_DAEMON_PORT:-${PORT:-3005}}
+      # Expose daemon port for other services to reference (same as PORT)
+      - OIP_DAEMON_PORT=${OIP_DAEMON_PORT:-${PORT:-3005}}
       - ELASTICSEARCH_HOST=elasticsearch
       - ELASTICSEARCH_PORT=9200
       - GUN_PEERS=http://gun-relay:8765/gun
