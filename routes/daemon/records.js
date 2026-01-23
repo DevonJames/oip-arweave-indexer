@@ -1443,11 +1443,18 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
         wpPostData.author = options.wordpressUserId;
         console.log(`🔍 [PublishToWordPress] Setting post author to logged-in user ID: ${options.wordpressUserId}`);
     } else if (options.anonymous) {
-        // For anonymous posts, use admin as author but set byline in meta
-        // The WordPress theme/plugin should display the byline instead of author name
-        if (adminUserId) {
+        // For anonymous posts, use "Anonymous" WordPress user as author
+        // This ensures WordPress displays "Anonymous" instead of admin name
+        const { getAnonymousWordPressUser } = require('../../helpers/core/wordpressUserSync');
+        const anonymousUserId = await getAnonymousWordPressUser();
+        
+        if (anonymousUserId) {
+            wpPostData.author = anonymousUserId;
+            console.log(`🔍 [PublishToWordPress] Anonymous post - using Anonymous user (ID: ${anonymousUserId})`);
+        } else if (adminUserId) {
+            // Fallback to admin if Anonymous user creation fails
             wpPostData.author = adminUserId;
-            console.log(`🔍 [PublishToWordPress] Anonymous post - using admin as author (ID: ${adminUserId}), byline will be shown instead`);
+            console.log(`⚠️ [PublishToWordPress] Anonymous post - fallback to admin (ID: ${adminUserId})`);
         }
     } else if (adminUserId) {
         // For DID modes, explicitly set admin as author to ensure permissions

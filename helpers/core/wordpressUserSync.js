@@ -14,6 +14,33 @@ const WORDPRESS_ADMIN_USER = process.env.WORDPRESS_ADMIN_USER || 'admin';
 const WORDPRESS_ADMIN_PASSWORD = process.env.WP_ADMIN_PASSWORD || process.env.WORDPRESS_ADMIN_PASSWORD || '';
 
 /**
+ * Get WordPress Application Password for REST API authentication
+ * Falls back to regular password if Application Password not available
+ */
+async function getWordPressAuth() {
+    // Check if Application Password is provided via env var
+    if (process.env.WP_APP_PASSWORD) {
+        const appPassword = process.env.WP_APP_PASSWORD.replace(/\s+/g, '');
+        return {
+            username: WORDPRESS_ADMIN_USER,
+            password: appPassword,
+            method: 'Application Password'
+        };
+    }
+    
+    // Fallback to regular password
+    if (WORDPRESS_ADMIN_PASSWORD) {
+        return {
+            username: WORDPRESS_ADMIN_USER,
+            password: WORDPRESS_ADMIN_PASSWORD,
+            method: 'Regular Password'
+        };
+    }
+    
+    throw new Error('WordPress admin password not configured');
+}
+
+/**
  * Create or update a WordPress user from an OIP user account
  * @param {string} email - User email
  * @param {string} username - WordPress username (defaults to email)
@@ -30,14 +57,17 @@ async function syncWordPressUser(email, username = null, displayName = null) {
         const wpUsername = username || email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
         const wpDisplayName = displayName || email.split('@')[0];
 
+        // Get authentication credentials (prefer Application Password)
+        const auth = await getWordPressAuth();
+        
         // Check if user already exists
         const searchResponse = await axios.get(
             `${WORDPRESS_URL}/wp-json/wp/v2/users`,
             {
                 params: { search: email },
                 auth: {
-                    username: WORDPRESS_ADMIN_USER,
-                    password: WORDPRESS_ADMIN_PASSWORD
+                    username: auth.username,
+                    password: auth.password
                 }
             }
         );
@@ -55,8 +85,8 @@ async function syncWordPressUser(email, username = null, displayName = null) {
                 },
                 {
                     auth: {
-                        username: WORDPRESS_ADMIN_USER,
-                        password: WORDPRESS_ADMIN_PASSWORD
+                        username: auth.username,
+                        password: auth.password
                     }
                 }
             );
@@ -78,8 +108,8 @@ async function syncWordPressUser(email, username = null, displayName = null) {
                 },
                 {
                     auth: {
-                        username: WORDPRESS_ADMIN_USER,
-                        password: WORDPRESS_ADMIN_PASSWORD
+                        username: auth.username,
+                        password: auth.password
                     }
                 }
             );
@@ -105,13 +135,14 @@ async function getWordPressUserId(email) {
     }
 
     try {
+        const auth = await getWordPressAuth();
         const response = await axios.get(
             `${WORDPRESS_URL}/wp-json/wp/v2/users`,
             {
                 params: { search: email },
                 auth: {
-                    username: WORDPRESS_ADMIN_USER,
-                    password: WORDPRESS_ADMIN_PASSWORD
+                    username: auth.username,
+                    password: auth.password
                 }
             }
         );
@@ -135,12 +166,13 @@ async function isWordPressAdmin(wordpressUserId) {
     }
 
     try {
+        const auth = await getWordPressAuth();
         const response = await axios.get(
             `${WORDPRESS_URL}/wp-json/wp/v2/users/${wordpressUserId}`,
             {
                 auth: {
-                    username: WORDPRESS_ADMIN_USER,
-                    password: WORDPRESS_ADMIN_PASSWORD
+                    username: auth.username,
+                    password: auth.password
                 }
             }
         );
@@ -154,8 +186,77 @@ async function isWordPressAdmin(wordpressUserId) {
     }
 }
 
+/**
+ * Get or create an "Anonymous" WordPress user for anonymous posts
+ * @returns {Promise<number|null>} WordPress user ID for Anonymous user or null if failed
+ */
+async function getAnonymousWordPressUser() {
+    if (!WORDPRESS_ADMIN_PASSWORD) {
+        return null;
+    }
+
+    try {
+        const auth = await getWordPressAuth();
+        
+        // Search for existing "Anonymous" user
+        const searchResponse = await axios.get(
+            `${WORDPRESS_URL}/wp-json/wp/v2/users`,
+            {
+                params: { search: 'anonymous' },
+                auth: {
+                    username: auth.username,
+                    password: auth.password
+                }
+            }
+        );
+
+        // Look for user with username "anonymous" or display name "Anonymous"
+        const anonymousUser = searchResponse.data.find(u => 
+            u.slug === 'anonymous' || 
+            u.name.toLowerCase() === 'anonymous' ||
+            u.username.toLowerCase() === 'anonymous'
+        );
+
+        if (anonymousUser) {
+            console.log(`[WordPress Sync] Found existing Anonymous user (ID: ${anonymousUser.id})`);
+            return anonymousUser.id;
+        }
+
+        // Create Anonymous user if it doesn't exist
+        console.log(`[WordPress Sync] Creating Anonymous WordPress user`);
+        const randomPassword = require('crypto').randomBytes(16).toString('hex');
+        
+        const createResponse = await axios.post(
+            `${WORDPRESS_URL}/wp-json/wp/v2/users`,
+            {
+                username: 'anonymous',
+                email: 'anonymous@localhost.invalid',
+                name: 'Anonymous',
+                password: randomPassword,
+                roles: ['author'] // Give author permissions
+            },
+            {
+                auth: {
+                    username: auth.username,
+                    password: auth.password
+                }
+            }
+        );
+        
+        console.log(`[WordPress Sync] Created Anonymous WordPress user (ID: ${createResponse.data.id})`);
+        return createResponse.data.id;
+    } catch (error) {
+        console.error('[WordPress Sync] Error getting Anonymous user:', error.message);
+        if (error.response) {
+            console.error('[WordPress Sync] Response:', error.response.data);
+        }
+        return null;
+    }
+}
+
 module.exports = {
     syncWordPressUser,
     getWordPressUserId,
-    isWordPressAdmin
+    isWordPressAdmin,
+    getAnonymousWordPressUser
 };
