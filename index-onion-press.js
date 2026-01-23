@@ -119,6 +119,44 @@ app.use('/api/browse', browseRoutes);
 app.use('/api/tor', torRoutes);
 app.use('/api/debug', debugRoutes);
 
+// Also mount at /onion-press/api for frontend compatibility
+app.use('/onion-press/api/publish', publishRoutes);
+app.use('/onion-press/api/admin', adminRoutes);
+app.use('/onion-press/api/browse', browseRoutes);
+app.use('/onion-press/api/tor', torRoutes);
+app.use('/onion-press/api/debug', debugRoutes);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WordPress API - Proxy to daemon
+// ═══════════════════════════════════════════════════════════════════════════════
+const axios = require('axios');
+const OIP_DAEMON_URL = process.env.OIP_DAEMON_URL || 'http://oip-daemon-service:3005';
+
+// Proxy WordPress posts API to daemon (which uses wp-cli)
+// Handle both /api/wordpress/posts and /onion-press/api/wordpress/posts
+app.get('/onion-press/api/wordpress/posts', async (req, res) => {
+    try {
+        const queryString = new URLSearchParams(req.query).toString();
+        const targetUrl = `${OIP_DAEMON_URL}/onion-press/api/wordpress/posts${queryString ? '?' + queryString : ''}`;
+        
+        console.log(`🔍 [WordPressPosts Proxy] Proxying to daemon: ${targetUrl}`);
+        
+        const response = await axios.get(targetUrl, {
+            timeout: 30000,
+            validateStatus: () => true
+        });
+        
+        res.status(response.status).json(response.data);
+        
+    } catch (error) {
+        console.error('❌ [WordPressPosts Proxy] Error:', error.message);
+        res.status(error.response?.status || 500).json({
+            error: 'Failed to fetch WordPress posts',
+            message: error.message
+        });
+    }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Static Files - Browsing Interface
 // ═══════════════════════════════════════════════════════════════════════════════
