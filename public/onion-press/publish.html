@@ -1007,13 +1007,14 @@
                         showStatus('processing', '⏳ Publishing...', 'Please wait while your post is submitted.');
                     }
                     
-                    // Build payload (same format as anonymous)
+                    // Build payload (same format as anonymous, but WITHOUT Anonymous tag for account-based publishing)
                     const payload = {
                         tags: [
                             { name: 'Index-Method', value: 'OIP' },
                             { name: 'Ver', value: '0.9.0' },
                             { name: 'Content-Type', value: 'application/json' },
                             { name: 'Record-Type', value: 'post' }
+                            // NOTE: Do NOT include Anonymous tag - this is account-based publishing
                         ],
                         records: [{
                             basic: {

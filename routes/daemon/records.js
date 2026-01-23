@@ -328,11 +328,19 @@ router.post('/publishAnonymous', async (req, res) => {
         
         // Check if user is logged in (optional authentication)
         let loggedInUser = null;
+        
+        // Debug: Check for Authorization header
+        const authHeader = req.headers.authorization;
+        console.log(`🔍 [PublishAnonymous] Authorization header: ${authHeader ? `${authHeader.substring(0, 20)}...` : 'none'}`);
+        
         // Use optionalAuthenticateToken middleware to check for auth without failing
         await new Promise((resolve) => {
             optionalAuthenticateToken(req, res, () => {
                 if (req.user) {
                     loggedInUser = req.user;
+                    console.log(`✅ [PublishAnonymous] User authenticated: ${req.user.email}`);
+                } else {
+                    console.log(`⚠️ [PublishAnonymous] No user in req.user after optionalAuthenticateToken`);
                 }
                 resolve();
             });
@@ -353,11 +361,13 @@ router.post('/publishAnonymous', async (req, res) => {
         const { getPublishingMode } = require('../../helpers/core/publishingMode');
         const mode = getPublishingMode(destinations);
         
-        // Ensure Anonymous tag is present
+        // Only add Anonymous tag if user is NOT logged in
+        // If user is logged in, they might be publishing with their account (not anonymous)
         const hasAnonymousTag = payload.tags.some(t => t.name === 'Anonymous' && t.value === 'true');
-        if (!hasAnonymousTag) {
+        if (!isLoggedIn && !hasAnonymousTag) {
             payload.tags.push({ name: 'Anonymous', value: 'true' });
         }
+        // If logged in and no Anonymous tag, assume account-based publishing
         
         // Initialize publish results
         const publishResults = {

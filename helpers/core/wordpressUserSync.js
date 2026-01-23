@@ -242,8 +242,49 @@ async function syncWordPressUser(email, username = null, displayName = null) {
 
             return updateResponse.data;
         } else {
+            // User not found by email - try to find by username before creating
+            console.log(`[WordPress Sync] User not found by email, checking if username "${wpUsername}" exists...`);
+            const usernameSearchResponse = await axios.get(
+                `${WORDPRESS_URL}/wp-json/wp/v2/users`,
+                {
+                    params: { search: wpUsername },
+                    auth: {
+                        username: auth.username,
+                        password: auth.password
+                    },
+                    validateStatus: () => true
+                }
+            );
+            
+            if (usernameSearchResponse.status === 200 && Array.isArray(usernameSearchResponse.data)) {
+                const existingByUsername = usernameSearchResponse.data.find(u => u.slug === wpUsername || u.name === wpUsername);
+                if (existingByUsername) {
+                    console.log(`[WordPress Sync] Found existing WordPress user by username "${wpUsername}": ID ${existingByUsername.id}`);
+                    // Update email if it's different
+                    if (existingByUsername.email !== email) {
+                        console.log(`[WordPress Sync] Updating email for user ${existingByUsername.id} from ${existingByUsername.email} to ${email}`);
+                        try {
+                            const updateResponse = await axios.post(
+                                `${WORDPRESS_URL}/wp-json/wp/v2/users/${existingByUsername.id}`,
+                                { email: email },
+                                {
+                                    auth: { username: auth.username, password: auth.password },
+                                    validateStatus: () => true
+                                }
+                            );
+                            if (updateResponse.status === 200) {
+                                console.log(`[WordPress Sync] Updated email for user ${existingByUsername.id}`);
+                            }
+                        } catch (updateError) {
+                            console.warn(`[WordPress Sync] Failed to update email:`, updateError.message);
+                        }
+                    }
+                    return existingByUsername;
+                }
+            }
+            
             // Create new user
-            console.log(`[WordPress Sync] Creating new WordPress user: ${email}`);
+            console.log(`[WordPress Sync] Creating new WordPress user: ${email} (username: ${wpUsername})`);
             // Generate a random password (user will use OIP login, not WordPress login)
             const randomPassword = require('crypto').randomBytes(16).toString('hex');
             
@@ -273,6 +314,81 @@ async function syncWordPressUser(email, username = null, displayName = null) {
                 throw new Error(`WordPress authentication failed: Invalid credentials. Username: ${auth.username}, Method: ${auth.method}. Cannot create WordPress user.`);
             }
 
+            // Handle "username already exists" error - try to find the user
+            if (createResponse.status === 500 || createResponse.status === 400) {
+                const errorData = typeof createResponse.data === 'object' ? createResponse.data : {};
+                if (errorData.code === 'existing_user_login' || errorData.message?.includes('username already exists')) {
+                    console.warn(`[WordPress Sync] Username "${wpUsername}" already exists, trying to find user...`);
+                    // Try to find by username
+                    try {
+                        const findResponse = await axios.get(
+                            `${WORDPRESS_URL}/wp-json/wp/v2/users`,
+                            {
+                                params: { search: wpUsername },
+                                auth: { username: auth.username, password: auth.password },
+                                validateStatus: () => true
+                            }
+                        );
+                        if (findResponse.status === 200 && Array.isArray(findResponse.data)) {
+                            const foundUser = findResponse.data.find(u => u.slug === wpUsername || u.name === wpUsername);
+                            if (foundUser) {
+                                console.log(`[WordPress Sync] Found existing WordPress user by username "${wpUsername}": ID ${foundUser.id}`);
+                                return foundUser;
+                            }
+                        }
+                    } catch (findError) {
+                        console.warn(`[WordPress Sync] Failed to find user by username:`, findError.message);
+                    }
+                }
+            }
+
+            // Handle "username already exists" error - try to find the existing user
+            if (createResponse.status === 500 || createResponse.status === 400) {
+                const errorData = typeof createResponse.data === 'object' ? createResponse.data : {};
+                if (errorData.code === 'existing_user_login' || errorData.message?.includes('username already exists')) {
+                    console.warn(`[WordPress Sync] Username "${wpUsername}" already exists, trying to find existing user...`);
+                    // Try to find by username
+                    try {
+                        const findResponse = await axios.get(
+                            `${WORDPRESS_URL}/wp-json/wp/v2/users`,
+                            {
+                                params: { search: wpUsername },
+                                auth: { username: auth.username, password: auth.password },
+                                validateStatus: () => true
+                            }
+                        );
+                        if (findResponse.status === 200 && Array.isArray(findResponse.data)) {
+                            const foundUser = findResponse.data.find(u => u.slug === wpUsername || u.name === wpUsername || u.login === wpUsername);
+                            if (foundUser) {
+                                console.log(`✅ [WordPress Sync] Found existing WordPress user by username "${wpUsername}": ID ${foundUser.id}`);
+                                // Update email if it's different
+                                if (foundUser.email !== email) {
+                                    console.log(`[WordPress Sync] Updating email for user ${foundUser.id} from ${foundUser.email} to ${email}`);
+                                    try {
+                                        const updateResponse = await axios.post(
+                                            `${WORDPRESS_URL}/wp-json/wp/v2/users/${foundUser.id}`,
+                                            { email: email },
+                                            {
+                                                auth: { username: auth.username, password: auth.password },
+                                                validateStatus: () => true
+                                            }
+                                        );
+                                        if (updateResponse.status === 200) {
+                                            console.log(`✅ [WordPress Sync] Updated email for user ${foundUser.id}`);
+                                        }
+                                    } catch (updateError) {
+                                        console.warn(`[WordPress Sync] Failed to update email:`, updateError.message);
+                                    }
+                                }
+                                return foundUser;
+                            }
+                        }
+                    } catch (findError) {
+                        console.warn(`[WordPress Sync] Failed to find user by username:`, findError.message);
+                    }
+                }
+            }
+            
             if (createResponse.status !== 201 && createResponse.status !== 200) {
                 console.error(`[WordPress Sync] Unexpected status ${createResponse.status} when creating user ${email}`);
                 console.error(`[WordPress Sync] Response:`, JSON.stringify(createResponse.data, null, 2));
