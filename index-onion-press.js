@@ -145,12 +145,16 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
             validateStatus: () => true
         });
         daemonAccessible = healthCheck.status === 200;
+        if (!daemonAccessible) {
+            console.warn(`⚠️ [PublishAnonymous] Daemon health check returned status ${healthCheck.status}`);
+        }
     } catch (daemonError) {
+        console.warn(`⚠️ [PublishAnonymous] Daemon health check failed: ${daemonError.code || daemonError.message} (${OIP_DAEMON_URL}/health)`);
         daemonAccessible = false;
     }
     
     if (daemonAccessible) {
-        console.log(`✅ [PublishAnonymous] Daemon is accessible, proxying request...`);
+        console.log(`✅ [PublishAnonymous] Daemon is accessible at ${OIP_DAEMON_URL}, proxying request...`);
         try {
             await proxyToDaemon(req, res, '/api/records/publishAnonymous');
             return; // Proxy handled the response
@@ -158,7 +162,7 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
             console.warn(`⚠️ [PublishAnonymous] Proxy failed: ${proxyError.message}, falling back to direct WordPress`);
         }
     } else {
-        console.warn(`⚠️ [PublishAnonymous] Daemon not accessible, using direct WordPress REST API`);
+        console.warn(`⚠️ [PublishAnonymous] Daemon not accessible at ${OIP_DAEMON_URL}, using direct WordPress REST API`);
     }
     
     // Fallback: Direct WordPress REST API implementation
@@ -468,7 +472,7 @@ app.post('/onion-press/api/records/publishAccount', async (req, res) => {
 // Proxy routes to daemon
 // ═══════════════════════════════════════════════════════════════════════════════
 const axios = require('axios');
-// Fix port - should be 3005, not 3006
+// Use OIP_DAEMON_URL from env, or default to port 3005
 const OIP_DAEMON_URL = process.env.OIP_DAEMON_URL || 'http://oip-daemon-service:3005';
 
 /**

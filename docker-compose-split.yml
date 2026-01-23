@@ -130,6 +130,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=${PORT:-3005}
+      # Expose daemon port for other services to reference
+      - OIP_DAEMON_PORT=${PORT:-3005}
       - ELASTICSEARCH_HOST=elasticsearch
       - ELASTICSEARCH_PORT=9200
       - GUN_PEERS=http://gun-relay:8765/gun
