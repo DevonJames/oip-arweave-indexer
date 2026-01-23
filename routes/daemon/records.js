@@ -1035,8 +1035,11 @@ async function getWordPressAppPassword() {
     
     // Check if Application Password is provided via env var
     if (process.env.WP_APP_PASSWORD) {
-        wpAppPasswordCache = process.env.WP_APP_PASSWORD.replace(/\s+/g, ''); // Remove spaces
+        // WordPress Application Passwords are in format "xxxx xxxx xxxx xxxx xxxx xxxx"
+        // For Basic Auth, we need to remove spaces
+        wpAppPasswordCache = process.env.WP_APP_PASSWORD.replace(/\s+/g, '');
         console.log(`✅ [WordPress Auth] Using Application Password from WP_APP_PASSWORD env var`);
+        console.log(`🔍 [WordPress Auth] Application Password length: ${wpAppPasswordCache.length} chars (spaces removed)`);
         return wpAppPasswordCache;
     }
     
@@ -1299,17 +1302,47 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
             maxRedirects: 5
         });
         
-        if (userResponse.status === 200 && userResponse.data?.id) {
-            adminUserId = userResponse.data.id;
+        // Handle string response (might be HTML or JSON string)
+        let userData = userResponse.data;
+        if (typeof userData === 'string') {
+            try {
+                userData = JSON.parse(userData);
+            } catch (parseError) {
+                console.warn(`⚠️ [PublishToWordPress] Failed to parse user response as JSON: ${parseError.message}`);
+                userData = null;
+            }
+        }
+        
+        if (userResponse.status === 200 && userData && (userData.id || userData.ID)) {
+            adminUserId = userData.id || userData.ID;
             console.log(`✅ [PublishToWordPress] Authenticated as WordPress user ID: ${adminUserId}`);
+            console.log(`🔍 [PublishToWordPress] User name: ${userData.name || userData.user_nicename || 'unknown'}`);
+            console.log(`🔍 [PublishToWordPress] User roles: ${userData.roles ? userData.roles.join(', ') : 'unknown'}`);
             
             // Verify user has publish_posts capability
-            const capabilities = userResponse.data.capabilities || {};
-            if (!capabilities.publish_posts && !capabilities.administrator) {
+            const capabilities = userData.capabilities || {};
+            const hasPublishPosts = capabilities.publish_posts || capabilities.administrator;
+            const capabilityKeys = Object.keys(capabilities).filter(cap => capabilities[cap]);
+            console.log(`🔍 [PublishToWordPress] User capabilities (${capabilityKeys.length}):`, capabilityKeys.slice(0, 10).join(', '));
+            
+            if (!hasPublishPosts) {
+                console.error(`❌ [PublishToWordPress] User does not have publish_posts or administrator capability!`);
+                console.error(`❌ [PublishToWordPress] Available capabilities:`, capabilityKeys.join(', '));
                 throw new Error(`WordPress user "${WORDPRESS_ADMIN_USER}" (ID: ${adminUserId}) does not have publish_posts capability. User needs administrator role.`);
+            } else {
+                console.log(`✅ [PublishToWordPress] User has publish_posts capability`);
             }
         } else {
-            console.warn(`⚠️ [PublishToWordPress] Could not get admin user ID, status: ${userResponse.status}`);
+            console.error(`❌ [PublishToWordPress] Could not get admin user ID, status: ${userResponse.status}`);
+            console.error(`❌ [PublishToWordPress] Response data type: ${typeof userData}`);
+            if (userData) {
+                console.error(`❌ [PublishToWordPress] Response keys: ${Object.keys(userData).join(', ')}`);
+                console.error(`❌ [PublishToWordPress] Full response:`, JSON.stringify(userData, null, 2));
+            } else {
+                console.error(`❌ [PublishToWordPress] Response data is null or undefined`);
+                console.error(`❌ [PublishToWordPress] Raw response:`, userResponse.data);
+            }
+            // Continue anyway - WordPress might still allow post creation without explicit author
         }
     } catch (userError) {
         console.warn(`⚠️ [PublishToWordPress] Error getting admin user ID: ${userError.message}`);
@@ -1368,8 +1401,12 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
         // For anonymous and DID modes, explicitly set admin as author to ensure permissions
         wpPostData.author = adminUserId;
         console.log(`🔍 [PublishToWordPress] Setting post author to admin user ID: ${adminUserId}`);
+    } else {
+        // If we couldn't get adminUserId, try to get it from WordPress user list
+        // This is a fallback in case /users/me doesn't work
+        console.warn(`⚠️ [PublishToWordPress] Could not get admin user ID, WordPress will use authenticated user`);
+        // Don't set author - let WordPress use the authenticated user
     }
-    // If adminUserId is null, WordPress will use the authenticated user (should be admin)
     
     // Add tags if available
     if (basic.tagItems && Array.isArray(basic.tagItems) && basic.tagItems.length > 0) {
@@ -1389,8 +1426,12 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     // Create post via WordPress REST API
     // Use internal Docker URL for direct access (bypasses proxy)
     // Try both endpoint formats in case WordPress permalinks are misconfigured
-    const wpApiUrl1 = `${WORDPRESS_URL}/wp-json/wp/v2/posts`;
-    const wpApiUrl2 = `${WORDPRESS_URL}/index.php?rest_route=/wp/v2/posts`;
+    const wpApiUrl1 = `${WORDPRESS_URL}/wp-json/wp/v2/posts/`;  // Try with trailing slash first
+    const wpApiUrl2 = `${WORDPRESS_URL}/wp-json/wp/v2/posts`;
+    const wpApiUrl3 = `${WORDPRESS_URL}/index.php?rest_route=/wp/v2/posts`;
+    
+    // WordPress Application Passwords should be used as-is (with spaces if present)
+    // Basic Auth format: username:password (base64 encoded)
     const auth = Buffer.from(`${WORDPRESS_ADMIN_USER}:${authPassword}`).toString('base64');
     
     console.log(`🔍 [PublishToWordPress] WordPress API URL (primary): ${wpApiUrl1}`);
@@ -1406,13 +1447,14 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
         meta_keys: Object.keys(wpPostData.meta || {})
     }, null, 2));
     
-    // Try primary endpoint first, fallback to index.php format if needed
+    // Try REST API first, fallback to wp-cli if REST API fails
     let response;
     let wpApiUrl = wpApiUrl1;
     let lastError = null;
+    let useWpCli = false;
     
     try {
-        for (const url of [wpApiUrl1, wpApiUrl2]) {
+        for (const url of [wpApiUrl1, wpApiUrl2, wpApiUrl3]) {
             try {
                 wpApiUrl = url;
                 console.log(`🔍 [PublishToWordPress] Attempting: ${url}`);
@@ -1472,38 +1514,32 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
             contentType.includes('text/html')
         );
         
+        // Check if we need to use wp-cli fallback
         if (isHtmlResponse || (!contentType.includes('application/json') && !contentType.includes('application/vnd.api+json'))) {
-            console.error(`❌ [PublishToWordPress] WordPress returned HTML instead of JSON`);
+            console.error(`❌ [PublishToWordPress] WordPress REST API returned HTML instead of JSON`);
             console.error(`❌ [PublishToWordPress] Content-Type: ${contentType}`);
             console.error(`❌ [PublishToWordPress] Response status: ${response.status}`);
             console.error(`❌ [PublishToWordPress] Response size: ${responseSize} bytes (expected < 5000 for JSON)`);
-            console.error(`❌ [PublishToWordPress] Response headers:`, JSON.stringify(response.headers, null, 2));
-            
-            // Try to extract error message from HTML
-            if (typeof response.data === 'string') {
-                const errorMatch = response.data.match(/<title>(.*?)<\/title>/i) || 
-                                 response.data.match(/<h1[^>]*>(.*?)<\/h1>/i) ||
-                                 response.data.match(/error[^>]*>(.*?)</i);
-                if (errorMatch) {
-                    console.error(`❌ [PublishToWordPress] HTML error title: ${errorMatch[1]}`);
-                }
-                console.error(`❌ [PublishToWordPress] Response preview (first 1000 chars): ${response.data.substring(0, 1000)}`);
-            }
-            
-            throw new Error(`WordPress REST API returned HTML instead of JSON (${responseSize} bytes). This usually means: 1) Authentication failed (check WP_ADMIN_USER and WP_ADMIN_PASSWORD), 2) REST API is disabled, or 3) WordPress is redirecting. Content-Type: ${contentType}`);
+            throw new Error('REST_API_FAILED_USE_WPCLI'); // Trigger wp-cli fallback
         }
         
         if (response.status !== 201 && response.status !== 200) {
-            console.error(`❌ [PublishToWordPress] WordPress API returned status ${response.status}`);
+            console.error(`❌ [PublishToWordPress] WordPress REST API returned status ${response.status}`);
             console.error(`❌ [PublishToWordPress] Response data:`, typeof response.data === 'string' ? response.data.substring(0, 500) : JSON.stringify(response.data, null, 2));
-            throw new Error(`WordPress API error: ${response.status} - ${typeof response.data === 'string' ? response.data.substring(0, 200) : JSON.stringify(response.data)}`);
+            
+            // If REST API fails with 401, try wp-cli as fallback
+            if (response.status === 401) {
+                throw new Error('REST_API_FAILED_USE_WPCLI'); // Trigger wp-cli fallback
+            } else {
+                throw new Error(`WordPress API error: ${response.status} - ${typeof response.data === 'string' ? response.data.substring(0, 200) : JSON.stringify(response.data)}`);
+            }
         }
         
         // Check if response.data is actually an object (JSON) or a string (HTML)
         if (typeof response.data === 'string') {
             console.error(`❌ [PublishToWordPress] WordPress returned string instead of JSON object`);
             console.error(`❌ [PublishToWordPress] Response preview: ${response.data.substring(0, 500)}`);
-            throw new Error('WordPress API returned a string instead of JSON. This usually indicates an error page or redirect.');
+            throw new Error('REST_API_FAILED_USE_WPCLI'); // Trigger wp-cli fallback
         }
         
         const wpPost = response.data;
@@ -1539,6 +1575,89 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
             permalink: permalink
         };
     } catch (error) {
+        // If REST API failed, try wp-cli as fallback
+        const shouldUseWpCli = error.message === 'REST_API_FAILED_USE_WPCLI' ||
+                               error.message.includes('HTML') || 
+                               error.message.includes('401') || 
+                               (error.response && error.response.status === 401);
+        
+        if (shouldUseWpCli) {
+            console.warn(`⚠️ [PublishToWordPress] REST API failed, trying wp-cli fallback...`);
+            try {
+                const { execSync } = require('child_process');
+                console.log(`🔧 [PublishToWordPress] Using wp-cli to create post (REST API authentication failed)...`);
+                
+                // Escape the content for shell - use double quotes and escape properly
+                const escapedTitle = wpPostData.title.replace(/"/g, '\\"');
+                const escapedContent = (wpPostData.content || '').replace(/"/g, '\\"');
+                const escapedExcerpt = (wpPostData.excerpt || '').replace(/"/g, '\\"');
+                
+                // Build wp-cli command - use double quotes for values
+                let wpCommand = `docker exec onionpress-wordpress-1 wp post create `;
+                wpCommand += `--post_title="${escapedTitle}" `;
+                if (escapedContent) {
+                    wpCommand += `--post_content="${escapedContent}" `;
+                }
+                if (escapedExcerpt) {
+                    wpCommand += `--post_excerpt="${escapedExcerpt}" `;
+                }
+                wpCommand += `--post_status=publish `;
+                if (adminUserId) {
+                    wpCommand += `--post_author=${adminUserId} `;
+                }
+                wpCommand += `--user=${WORDPRESS_ADMIN_USER} `;
+                wpCommand += `--allow-root `;
+                wpCommand += `--porcelain`;
+                
+                console.log(`🔧 [PublishToWordPress] Executing wp-cli command...`);
+                const wpOutput = execSync(wpCommand, { encoding: 'utf-8', timeout: 30000 });
+                const postId = parseInt(wpOutput.trim());
+                
+                if (isNaN(postId)) {
+                    throw new Error(`wp-cli returned invalid post ID: ${wpOutput}`);
+                }
+                
+                console.log(`✅ [PublishToWordPress] WordPress post created via wp-cli! Post ID: ${postId}`);
+                
+                // Add meta fields via wp-cli
+                if (wpPostData.meta) {
+                    for (const [key, value] of Object.entries(wpPostData.meta)) {
+                        if (value !== null && value !== undefined) {
+                            try {
+                                const metaValue = typeof value === 'string' ? value : JSON.stringify(value);
+                                const escapedMetaValue = metaValue.replace(/"/g, '\\"');
+                                const metaCommand = `docker exec onionpress-wordpress-1 wp post meta update ${postId} "${key}" "${escapedMetaValue}" --allow-root`;
+                                execSync(metaCommand, { encoding: 'utf-8', timeout: 10000 });
+                            } catch (metaError) {
+                                console.warn(`⚠️ [PublishToWordPress] Failed to set meta ${key}: ${metaError.message}`);
+                            }
+                        }
+                    }
+                }
+                
+                // Build permalink
+                const baseUrl = process.env.PUBLIC_API_BASE_URL || 'http://localhost:3005';
+                const wordpressPath = process.env.WORDPRESS_PROXY_PATH || '/wordpress';
+                const permalink = `${baseUrl}${wordpressPath}/?p=${postId}`;
+                
+                return {
+                    success: true,
+                    postId: postId,
+                    postUrl: permalink,
+                    permalink: permalink
+                };
+            } catch (wpCliError) {
+                console.error(`❌ [PublishToWordPress] wp-cli fallback also failed: ${wpCliError.message}`);
+                if (wpCliError.stdout) {
+                    console.error(`❌ [PublishToWordPress] wp-cli stdout: ${wpCliError.stdout}`);
+                }
+                if (wpCliError.stderr) {
+                    console.error(`❌ [PublishToWordPress] wp-cli stderr: ${wpCliError.stderr}`);
+                }
+                throw new Error(`WordPress publishing failed via both REST API and wp-cli: ${error.message}. wp-cli error: ${wpCliError.message}`);
+            }
+        }
+        
         if (error.response) {
             throw new Error(`WordPress API error: ${error.response.status} - ${error.response.data?.message || JSON.stringify(error.response.data)}`);
         }
