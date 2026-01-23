@@ -655,6 +655,11 @@
 
         function addRepeatedField(templateName, fieldName, fieldType) {
             const container = document.getElementById(`${templateName}_${fieldName}_container`);
+            if (!container) {
+                console.error(`Container not found: ${templateName}_${fieldName}_container`);
+                return;
+            }
+            
             const item = document.createElement('div');
             item.className = 'repeated-field-item';
             
@@ -671,7 +676,13 @@
             
             item.appendChild(input);
             item.appendChild(removeBtn);
-            container.insertBefore(item, container.firstChild);
+            
+            // Insert after the button (which is firstChild) or append if no children
+            if (container.firstChild && container.firstChild.nextSibling) {
+                container.insertBefore(item, container.firstChild.nextSibling);
+            } else {
+                container.appendChild(item);
+            }
         }
 
         function goToStep(step) {
@@ -695,10 +706,17 @@
         document.getElementById('generateMnemonicBtn').onclick = async () => {
             try {
                 const response = await fetch(`${API_BASE}/api/debug/generate-mnemonic`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+                }
+                
                 const data = await response.json();
                 document.getElementById('mnemonic').value = data.mnemonic;
             } catch (error) {
-                alert('Failed to generate mnemonic');
+                console.error('Failed to generate mnemonic:', error);
+                alert('Failed to generate mnemonic: ' + error.message);
             }
         };
 
@@ -716,7 +734,10 @@
                     body: JSON.stringify({ mnemonic })
                 });
 
-                if (!response.ok) throw new Error('Failed to create identity');
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+                    throw new Error(error.error || 'Failed to create identity');
+                }
 
                 state.identity = await response.json();
                 document.getElementById('identityInfo').classList.remove('hidden');
@@ -724,6 +745,7 @@
                 document.getElementById('displayXpub').textContent = state.identity.signingXpub.substring(0, 50) + '...';
                 document.getElementById('step1NextBtn').disabled = false;
             } catch (error) {
+                console.error('Failed to load identity:', error);
                 alert('Failed to load identity: ' + error.message);
             }
         };
@@ -985,9 +1007,9 @@
                                 mnemonic: mnemonic
                             })
                         });
-
+                        
                         if (!signResponse.ok) {
-                            const error = await signResponse.json();
+                            const error = await signResponse.json().catch(() => ({ error: `HTTP ${signResponse.status}` }));
                             throw new Error(error.error || 'Signing failed');
                         }
 
