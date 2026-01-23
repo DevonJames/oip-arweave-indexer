@@ -49,7 +49,8 @@ RUN apk update && apk add --no-cache \
     linux-headers \
     git \
     pkgconfig \
-    ffmpeg
+    ffmpeg \
+    docker-cli
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Sharp dependencies (for thumbnail generation during media upload)

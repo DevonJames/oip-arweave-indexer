@@ -1599,6 +1599,92 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
             permalink: permalink
         };
     } catch (error) {
+        // If REST API failed, try wp-cli as fallback
+        const shouldUseWpCli = error.message === 'REST_API_FAILED_USE_WPCLI' ||
+                               error.message.includes('HTML') || 
+                               error.message.includes('401') || 
+                               (error.response && error.response.status === 401);
+        
+        if (shouldUseWpCli) {
+            console.warn(`⚠️ [PublishToWordPress] REST API failed, trying wp-cli fallback...`);
+            try {
+                const { execSync } = require('child_process');
+                console.log(`🔧 [PublishToWordPress] Using wp-cli to create post (REST API authentication failed)...`);
+                
+                // Get WordPress container name from COMPOSE_PROJECT_NAME or use default
+                const projectName = process.env.COMPOSE_PROJECT_NAME || 'onionpress';
+                const wpContainerName = `${projectName}-wordpress-1`;
+                
+                // Escape the content for shell - use single quotes and escape properly
+                const escapedTitle = wpPostData.title.replace(/'/g, "'\\''");
+                const escapedContent = (wpPostData.content || '').replace(/'/g, "'\\''");
+                const escapedExcerpt = (wpPostData.excerpt || '').replace(/'/g, "'\\''");
+                
+                // Build wp-cli command
+                let wpCommand = `docker exec ${wpContainerName} wp post create `;
+                wpCommand += `--post_title='${escapedTitle}' `;
+                if (escapedContent) {
+                    wpCommand += `--post_content='${escapedContent}' `;
+                }
+                if (escapedExcerpt) {
+                    wpCommand += `--post_excerpt='${escapedExcerpt}' `;
+                }
+                wpCommand += `--post_status=publish `;
+                if (adminUserId) {
+                    wpCommand += `--post_author=${adminUserId} `;
+                }
+                wpCommand += `--user=${WORDPRESS_ADMIN_USER} `;
+                wpCommand += `--allow-root `;
+                wpCommand += `--porcelain`;
+                
+                console.log(`🔧 [PublishToWordPress] Executing wp-cli command: ${wpCommand.replace(/--post_content='[^']*'/, "--post_content='...'")}`);
+                const wpOutput = execSync(wpCommand, { encoding: 'utf-8', timeout: 30000 });
+                const postId = parseInt(wpOutput.trim());
+                
+                if (isNaN(postId)) {
+                    throw new Error(`wp-cli returned invalid post ID: ${wpOutput}`);
+                }
+                
+                console.log(`✅ [PublishToWordPress] WordPress post created via wp-cli! Post ID: ${postId}`);
+                
+                // Add meta fields via wp-cli
+                if (wpPostData.meta) {
+                    for (const [key, value] of Object.entries(wpPostData.meta)) {
+                        if (value !== null && value !== undefined) {
+                            try {
+                                const metaValue = typeof value === 'string' ? value : JSON.stringify(value);
+                                const escapedMetaValue = metaValue.replace(/'/g, "'\\''");
+                                const metaCommand = `docker exec ${wpContainerName} wp post meta update ${postId} '${key}' '${escapedMetaValue}' --allow-root`;
+                                execSync(metaCommand, { encoding: 'utf-8', timeout: 10000 });
+                            } catch (metaError) {
+                                console.warn(`⚠️ [PublishToWordPress] Failed to set meta ${key}: ${metaError.message}`);
+                            }
+                        }
+                    }
+                }
+                
+                // Build permalink
+                const baseUrl = process.env.PUBLIC_API_BASE_URL || 'http://localhost:3005';
+                const wordpressPath = process.env.WORDPRESS_PROXY_PATH || '/wordpress';
+                const permalink = `${baseUrl}${wordpressPath}/?p=${postId}`;
+                
+                return {
+                    success: true,
+                    postId: postId,
+                    postUrl: permalink,
+                    permalink: permalink
+                };
+            } catch (wpCliError) {
+                console.error(`❌ [PublishToWordPress] wp-cli fallback also failed: ${wpCliError.message}`);
+                if (wpCliError.stdout) {
+                    console.error(`❌ [PublishToWordPress] wp-cli stdout: ${wpCliError.stdout}`);
+                }
+                if (wpCliError.stderr) {
+                    console.error(`❌ [PublishToWordPress] wp-cli stderr: ${wpCliError.stderr}`);
+                }
+                throw new Error(`WordPress publishing failed via both REST API and wp-cli: ${error.message}. wp-cli error: ${wpCliError.message}`);
+            }
+        }
         
         if (error.response) {
             throw new Error(`WordPress API error: ${error.response.status} - ${error.response.data?.message || JSON.stringify(error.response.data)}`);

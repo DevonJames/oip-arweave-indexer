@@ -166,6 +166,7 @@ services:
       - ./data:/usr/src/app/data
       - ./wallets:/usr/src/app/wallets
       - ./public:/usr/src/app/public:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Mount docker socket for wp-cli fallback
     networks:
       - oip-network
     restart: unless-stopped
