@@ -1200,6 +1200,64 @@ const WORDPRESS_PROXY_ENABLED = process.env.WORDPRESS_PROXY_ENABLED === 'true';
 
 if (WORDPRESS_PROXY_ENABLED) {
     const { createProxyMiddleware } = require('http-proxy-middleware');
+    const { Transform } = require('stream');
+    
+    // Create a transform stream to rewrite HTML content
+    const createHtmlRewriter = (originalHost, protocol) => {
+        return new Transform({
+            decodeStrings: false,
+            transform(chunk, encoding, callback) {
+                let html = chunk.toString('utf8');
+                
+                // Fix redirect_to parameters in URLs and form hidden fields
+                // Pattern: redirect_to=https://domain.com/wp-admin/ or redirect_to=/wp-admin/
+                html = html.replace(
+                    /(redirect_to=)([^"&' ]*)(\/wp-(admin|login)[^"&' ]*)/gi,
+                    (match, prefix, url, path) => {
+                        // If URL doesn't include /wordpress/wp-, add it
+                        if (!match.includes('/wordpress/wp-')) {
+                            if (url.startsWith('http')) {
+                                // Full URL - insert /wordpress before /wp-admin or /wp-login
+                                return prefix + url.replace(/(\/wp-(admin|login))/, '/wordpress$1');
+                            } else {
+                                // Relative URL - prepend /wordpress
+                                return prefix + '/wordpress' + path;
+                            }
+                        }
+                        return match;
+                    }
+                );
+                
+                // Fix form action URLs
+                html = html.replace(
+                    /(<form[^>]*action=["'])(\/wp-(admin|login)[^"']*)/gi,
+                    (match, prefix, path) => {
+                        if (!path.includes('/wordpress/wp-')) {
+                            return prefix + '/wordpress' + path;
+                        }
+                        return match;
+                    }
+                );
+                
+                // Fix JavaScript redirect URLs
+                html = html.replace(
+                    /(window\.location|location\.href)\s*=\s*["']([^"']*\/wp-(admin|login)[^"']*)/gi,
+                    (match, js, url) => {
+                        if (!url.includes('/wordpress/wp-')) {
+                            if (url.startsWith('http')) {
+                                return js + ' = "' + url.replace(/(\/wp-(admin|login))/, '/wordpress$1') + '"';
+                            } else {
+                                return js + ' = "/wordpress' + url + '"';
+                            }
+                        }
+                        return match;
+                    }
+                );
+                
+                callback(null, html);
+            }
+        });
+    };
     
     const wordpressProxy = createProxyMiddleware({
         target: WORDPRESS_URL,
@@ -1215,19 +1273,42 @@ if (WORDPRESS_PROXY_ENABLED) {
             proxyReq.setHeader('X-Real-IP', req.ip || req.connection.remoteAddress);
         },
         onProxyRes: (proxyRes, req, res) => {
+            const originalHost = req.headers.host;
+            const protocol = req.protocol || 'https';
+            
             // Fix any Location headers in redirects
             if (proxyRes.headers.location) {
                 const location = proxyRes.headers.location;
-                // If WordPress is redirecting to internal hostname, fix it
-                if (location.includes('wordpress:') || location.includes('wordpress/')) {
-                    const originalHost = req.headers.host;
-                    proxyRes.headers.location = location
-                        .replace(/https?:\/\/wordpress[:\/]/g, `https://${originalHost}/wordpress`)
-                        .replace(/^\/wordpress/, `https://${originalHost}/wordpress`)
-                        .replace(/^\/wp-admin/, `https://${originalHost}/wordpress/wp-admin`)
-                        .replace(/^\/wp-login/, `https://${originalHost}/wordpress/wp-login`);
+                let fixedLocation = location;
+                
+                // Fix URLs that point to WordPress admin/login but are missing /wordpress prefix
+                if (fixedLocation.includes('/wp-admin') || fixedLocation.includes('/wp-login')) {
+                    // If it's a full URL with the correct host but missing /wordpress
+                    if (fixedLocation.includes(originalHost) && !fixedLocation.includes('/wordpress/wp-')) {
+                        fixedLocation = fixedLocation.replace(
+                            new RegExp(`(https?://${originalHost.replace(/\./g, '\\.')})(/wp-(admin|login))`, 'g'),
+                            `$1/wordpress$2`
+                        );
+                    }
+                    // If it's a relative URL starting with /wp-admin or /wp-login
+                    else if (fixedLocation.match(/^\/wp-(admin|login)/) && !fixedLocation.startsWith('/wordpress/wp-')) {
+                        fixedLocation = `${protocol}://${originalHost}/wordpress${fixedLocation}`;
+                    }
+                }
+                
+                // Fix internal WordPress hostname references
+                if (fixedLocation.includes('wordpress:') || fixedLocation.includes('wordpress/')) {
+                    fixedLocation = fixedLocation
+                        .replace(/https?:\/\/wordpress[:\/]/g, `${protocol}://${originalHost}/wordpress`)
+                        .replace(/^\/wordpress/, `${protocol}://${originalHost}/wordpress`);
+                }
+                
+                if (fixedLocation !== location) {
+                    console.log(`🔧 [WordPress Proxy] Fixed redirect: ${location} → ${fixedLocation}`);
+                    proxyRes.headers.location = fixedLocation;
                 }
             }
+            
         },
         onError: (err, req, res) => {
             console.error('[WordPress Proxy] Error:', err.message);
@@ -1237,6 +1318,65 @@ if (WORDPRESS_PROXY_ENABLED) {
                 hint: 'Deploy with: make -f Makefile.split onion-press-server'
             });
         }
+    });
+    
+    // Custom middleware to rewrite HTML content (fixes redirect_to in login forms)
+    app.use('/wordpress', (req, res, next) => {
+        const originalWrite = res.write.bind(res);
+        const originalEnd = res.end.bind(res);
+        const originalHost = req.headers.host;
+        const protocol = req.protocol || 'https';
+        let chunks = [];
+        let isHtml = false;
+        
+        res.write = function(chunk) {
+            const contentType = res.getHeader('content-type') || '';
+            if (contentType.includes('text/html')) {
+                isHtml = true;
+            }
+            if (isHtml) {
+                chunks.push(chunk);
+                return true;
+            }
+            return originalWrite(chunk);
+        };
+        
+        res.end = function(chunk) {
+            if (chunk) chunks.push(chunk);
+            
+            if (isHtml && chunks.length > 0) {
+                let html = Buffer.concat(chunks).toString('utf8');
+                
+                // Fix redirect_to parameters in URLs and form hidden fields
+                html = html.replace(
+                    /(redirect_to=)([^"&' ]*)(\/wp-(admin|login)[^"&' ]*)/gi,
+                    (match) => {
+                        if (!match.includes('/wordpress/wp-')) {
+                            return match.replace(/(\/wp-(admin|login))/, '/wordpress$1');
+                        }
+                        return match;
+                    }
+                );
+                
+                // Fix form action URLs
+                html = html.replace(
+                    /(<form[^>]*action=["'])(\/wp-(admin|login)[^"']*)/gi,
+                    (match, prefix, path) => {
+                        if (!path.includes('/wordpress/wp-')) {
+                            return prefix + '/wordpress' + path;
+                        }
+                        return match;
+                    }
+                );
+                
+                const newBody = Buffer.from(html, 'utf8');
+                res.setHeader('Content-Length', newBody.length);
+                originalWrite(newBody);
+            }
+            originalEnd();
+        };
+        
+        next();
     });
     
     app.use('/wordpress', wordpressProxy);
