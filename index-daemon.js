@@ -1271,6 +1271,36 @@ if (WORDPRESS_PROXY_ENABLED) {
             proxyReq.setHeader('X-Forwarded-Proto', req.protocol || 'https');
             proxyReq.setHeader('X-Forwarded-For', req.ip || req.connection.remoteAddress);
             proxyReq.setHeader('X-Real-IP', req.ip || req.connection.remoteAddress);
+            
+            // Fix redirect_to parameter in query string before it reaches WordPress
+            if (req.url && req.url.includes('redirect_to=')) {
+                req.url = req.url.replace(
+                    /redirect_to=([^&]*)/gi,
+                    (match, encodedUrl) => {
+                        try {
+                            const decoded = decodeURIComponent(encodedUrl);
+                            // Only fix if it contains /wp-admin or /wp-login and doesn't already have /wordpress
+                            if ((decoded.includes('/wp-admin') || decoded.includes('/wp-login')) && 
+                                !decoded.includes('/wordpress/wp-')) {
+                                const fixed = decoded.replace(/(\/wp-(admin|login))/, '/wordpress$1');
+                                return 'redirect_to=' + encodeURIComponent(fixed);
+                            }
+                        } catch (e) {
+                            // If decoding fails, try to fix the pattern directly
+                            if (match.includes('/wp-admin') || match.includes('/wp-login')) {
+                                if (!match.includes('/wordpress/wp-')) {
+                                    return match.replace(/(\/wp-(admin|login))/, '/wordpress$1');
+                                }
+                            }
+                        }
+                        return match;
+                    }
+                );
+                // Update the proxy request path to use the fixed URL
+                if (req.url !== proxyReq.path) {
+                    proxyReq.path = req.url.split('?')[0] + (req.url.includes('?') ? '?' + req.url.split('?')[1] : '');
+                }
+            }
         },
         onProxyRes: (proxyRes, req, res) => {
             const originalHost = req.headers.host;
@@ -1309,6 +1339,8 @@ if (WORDPRESS_PROXY_ENABLED) {
                 }
             }
             
+            // Note: HTML rewriting via transform stream doesn't work well with http-proxy-middleware
+            // The query string fix in onProxyReq should prevent WordPress from generating wrong URLs
         },
         onError: (err, req, res) => {
             console.error('[WordPress Proxy] Error:', err.message);
@@ -1318,65 +1350,6 @@ if (WORDPRESS_PROXY_ENABLED) {
                 hint: 'Deploy with: make -f Makefile.split onion-press-server'
             });
         }
-    });
-    
-    // Custom middleware to rewrite HTML content (fixes redirect_to in login forms)
-    app.use('/wordpress', (req, res, next) => {
-        const originalWrite = res.write.bind(res);
-        const originalEnd = res.end.bind(res);
-        const originalHost = req.headers.host;
-        const protocol = req.protocol || 'https';
-        let chunks = [];
-        let isHtml = false;
-        
-        res.write = function(chunk) {
-            const contentType = res.getHeader('content-type') || '';
-            if (contentType.includes('text/html')) {
-                isHtml = true;
-            }
-            if (isHtml) {
-                chunks.push(chunk);
-                return true;
-            }
-            return originalWrite(chunk);
-        };
-        
-        res.end = function(chunk) {
-            if (chunk) chunks.push(chunk);
-            
-            if (isHtml && chunks.length > 0) {
-                let html = Buffer.concat(chunks).toString('utf8');
-                
-                // Fix redirect_to parameters in URLs and form hidden fields
-                html = html.replace(
-                    /(redirect_to=)([^"&' ]*)(\/wp-(admin|login)[^"&' ]*)/gi,
-                    (match) => {
-                        if (!match.includes('/wordpress/wp-')) {
-                            return match.replace(/(\/wp-(admin|login))/, '/wordpress$1');
-                        }
-                        return match;
-                    }
-                );
-                
-                // Fix form action URLs
-                html = html.replace(
-                    /(<form[^>]*action=["'])(\/wp-(admin|login)[^"']*)/gi,
-                    (match, prefix, path) => {
-                        if (!path.includes('/wordpress/wp-')) {
-                            return prefix + '/wordpress' + path;
-                        }
-                        return match;
-                    }
-                );
-                
-                const newBody = Buffer.from(html, 'utf8');
-                res.setHeader('Content-Length', newBody.length);
-                originalWrite(newBody);
-            }
-            originalEnd();
-        };
-        
-        next();
     });
     
     app.use('/wordpress', wordpressProxy);
