@@ -130,6 +130,7 @@ app.use('/onion-press/api/debug', debugRoutes);
 // Proxy routes to daemon
 // ═══════════════════════════════════════════════════════════════════════════════
 const axios = require('axios');
+// Fix port - should be 3005, not 3006
 const OIP_DAEMON_URL = process.env.OIP_DAEMON_URL || 'http://oip-daemon-service:3005';
 
 /**
@@ -217,147 +218,125 @@ async function proxyToDaemon(req, res, endpoint) {
     }
 }
 
-// Proxy WordPress posts API to daemon (which uses wp-cli)
-// If daemon is unavailable, try direct WordPress access
+// WordPress posts API - Use WordPress REST API directly (containers can't run docker exec)
 app.get('/onion-press/api/wordpress/posts', async (req, res) => {
-    // Try direct WordPress access first (more reliable for standalone TOR service)
-    const WORDPRESS_PROXY_ENABLED = process.env.WORDPRESS_PROXY_ENABLED === 'true';
-    
-    if (WORDPRESS_PROXY_ENABLED) {
-        try {
-            const { execSync } = require('child_process');
-            const { limit = 20, offset = 0, search, type } = req.query;
-            
-            if (type && type !== 'post') {
-                return res.json({ records: [] });
-            }
-            
-            // Use wp-cli directly (same as daemon does)
-            const projectName = process.env.COMPOSE_PROJECT_NAME || 'onionpress';
-            const wpContainerName = `${projectName}-wordpress-1`;
-            
-            let wpCommand = `docker exec ${wpContainerName} wp post list `;
-            wpCommand += `--format=json `;
-            wpCommand += `--posts_per_page=${Math.min(parseInt(limit) || 20, 100)} `;
-            wpCommand += `--offset=${parseInt(offset) || 0} `;
-            wpCommand += `--post_status=publish `;
-            wpCommand += `--orderby=date `;
-            wpCommand += `--order=DESC `;
-            wpCommand += `--allow-root`;
-            
-            if (search) {
-                wpCommand += ` --s='${search.replace(/'/g, "'\\''")}'`;
-            }
-            
-            console.log(`🔧 [WordPressPosts] Executing wp-cli: ${wpCommand}`);
-            
-            const wpOutput = execSync(wpCommand, { encoding: 'utf-8', timeout: 10000 });
-            const wpPosts = JSON.parse(wpOutput.trim() || '[]');
-            
-            if (!Array.isArray(wpPosts)) {
-                return res.json({ records: [] });
-            }
-            
-            // Get full post details
-            const postsWithDetails = [];
-            for (const post of wpPosts) {
-                try {
-                    const detailCommand = `docker exec ${wpContainerName} wp post get ${post.ID} --format=json --allow-root`;
-                    const detailOutput = execSync(detailCommand, { encoding: 'utf-8', timeout: 5000 });
-                    const postDetail = JSON.parse(detailOutput.trim());
-                    
-                    let authorName = '';
-                    if (postDetail.post_author) {
-                        try {
-                            const authorCommand = `docker exec ${wpContainerName} wp user get ${postDetail.post_author} --field=display_name --allow-root`;
-                            authorName = execSync(authorCommand, { encoding: 'utf-8', timeout: 3000 }).trim();
-                        } catch (e) {}
-                    }
-                    
-                    postsWithDetails.push({
-                        id: postDetail.ID,
-                        title: postDetail.post_title || '',
-                        content: postDetail.post_content || '',
-                        excerpt: postDetail.post_excerpt || '',
-                        date: postDetail.post_date || postDetail.post_date_gmt,
-                        author: authorName,
-                        link: postDetail.guid || ''
-                    });
-                } catch (detailError) {
-                    postsWithDetails.push({
-                        id: post.ID,
-                        title: post.post_title || '',
-                        content: '',
-                        excerpt: '',
-                        date: post.post_date || '',
-                        author: '',
-                        link: ''
-                    });
-                }
-            }
-            
-            // Filter by search if provided
-            let filteredPosts = postsWithDetails;
-            if (search) {
-                const searchLower = search.toLowerCase();
-                filteredPosts = postsWithDetails.filter(post => 
-                    (post.title && post.title.toLowerCase().includes(searchLower)) ||
-                    (post.content && post.content.toLowerCase().includes(searchLower)) ||
-                    (post.excerpt && post.excerpt.toLowerCase().includes(searchLower))
-                );
-            }
-            
-            // Build base URL for permalinks
-            const baseUrl = process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get('host')}`;
-            const wordpressPath = process.env.WORDPRESS_PROXY_PATH || '/wordpress';
-            
-            // Transform to OIP format
-            const records = filteredPosts.map(post => {
-                let permalink = post.link;
-                if (!permalink && post.id) {
-                    permalink = `${baseUrl}${wordpressPath}/?p=${post.id}`;
-                }
-                
-                return {
-                    wordpress: {
-                        postId: post.id,
-                        title: post.title,
-                        excerpt: post.excerpt,
-                        content: post.content,
-                        postDate: post.date,
-                        permalink: permalink,
-                        tags: [],
-                        author: post.author
-                    },
-                    id: `wp-${post.id}`,
-                    oip: {
-                        indexedAt: post.date
-                    }
-                };
+    try {
+        const WORDPRESS_PROXY_ENABLED = process.env.WORDPRESS_PROXY_ENABLED === 'true';
+        
+        if (!WORDPRESS_PROXY_ENABLED) {
+            return res.status(503).json({
+                error: 'WordPress not available',
+                message: 'WordPress proxy is not enabled'
             });
-            
-            console.log(`✅ [WordPressPosts] Returning ${records.length} records`);
-            return res.json({ records });
-            
-        } catch (directError) {
-            console.error('❌ [WordPressPosts] Direct wp-cli error:', directError.message);
-            // Fall through to proxy attempt
         }
+        
+        const { limit = 20, offset = 0, search, type } = req.query;
+        
+        if (type && type !== 'post') {
+            return res.json({ records: [] });
+        }
+        
+        // Use WordPress REST API (accessible via HTTP from container)
+        const wordpressUrl = process.env.WORDPRESS_URL || 'http://wordpress:80';
+        const wpApiUrl = `${wordpressUrl}/wp-json/wp/v2/posts`;
+        
+        const params = new URLSearchParams({
+            per_page: Math.min(parseInt(limit) || 20, 100),
+            offset: parseInt(offset) || 0,
+            _embed: 'true',
+            status: 'publish'
+        });
+        
+        if (search) {
+            params.append('search', search);
+        }
+        
+        console.log(`🔍 [WordPressPosts] Querying WordPress REST API: ${wpApiUrl}?${params.toString()}`);
+        
+        const response = await axios.get(`${wpApiUrl}?${params.toString()}`, {
+            timeout: 10000,
+            validateStatus: () => true,
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+        
+        if (response.status !== 200) {
+            console.error(`❌ [WordPressPosts] WordPress API returned status ${response.status}`);
+            return res.status(503).json({
+                error: 'WordPress API error',
+                message: `WordPress returned status ${response.status}`,
+                details: response.data
+            });
+        }
+        
+        const wpPosts = Array.isArray(response.data) ? response.data : [];
+        console.log(`✅ [WordPressPosts] Retrieved ${wpPosts.length} posts from WordPress`);
+        
+        // Build base URL for permalinks
+        const baseUrl = process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get('host')}`;
+        const wordpressPath = process.env.WORDPRESS_PROXY_PATH || '/wordpress';
+        
+        // Transform WordPress posts to OIP-like format
+        const records = wpPosts.map(post => {
+            let permalink = post.link;
+            if (!permalink && post.id) {
+                permalink = `${baseUrl}${wordpressPath}/?p=${post.id}`;
+            }
+            
+            return {
+                wordpress: {
+                    postId: post.id,
+                    title: post.title?.rendered || '',
+                    excerpt: post.excerpt?.rendered || '',
+                    content: post.content?.rendered || '',
+                    postDate: post.date,
+                    permalink: permalink,
+                    tags: post._embedded?.['wp:term']?.[0]?.map(t => t.name) || [],
+                    author: post._embedded?.author?.[0]?.name || ''
+                },
+                id: `wp-${post.id}`,
+                oip: {
+                    indexedAt: post.date
+                }
+            };
+        });
+        
+        console.log(`✅ [WordPressPosts] Returning ${records.length} transformed records`);
+        res.json({ records });
+        
+    } catch (error) {
+        console.error('❌ [WordPressPosts] Error:', error.message);
+        res.status(500).json({
+            error: 'Failed to fetch WordPress posts',
+            message: error.message
+        });
     }
+});
+
+// Host-info API - Implement directly
+app.get('/onion-press/api/host-info', (req, res) => {
+    const hostName = process.env.COMPOSE_PROJECT_NAME || 'Onion Press';
+    const hostUrl = process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get('host')}`;
     
-    // Fallback: try to proxy to daemon
-    console.log('⚠️ [WordPressPosts] Trying proxy to daemon...');
-    await proxyToDaemon(req, res, '/onion-press/api/wordpress/posts');
+    res.json({
+        name: hostName,
+        url: hostUrl
+    });
 });
 
-// Proxy host-info API to daemon
-app.get('/onion-press/api/host-info', async (req, res) => {
-    await proxyToDaemon(req, res, '/onion-press/api/host-info');
-});
-
-// Proxy destinations defaults API to daemon
-app.get('/onion-press/api/destinations/defaults', async (req, res) => {
-    await proxyToDaemon(req, res, '/onion-press/api/destinations/defaults');
+// Destinations defaults API - Implement directly
+app.get('/onion-press/api/destinations/defaults', (req, res) => {
+    // Read from environment variables (defaults match original behavior)
+    const defaults = {
+        arweave: process.env.PUBLISH_TO_ARWEAVE !== 'false',
+        gun: process.env.PUBLISH_TO_GUN !== 'false',
+        thisHost: process.env.PUBLISH_TO_THIS_HOST === 'true'
+    };
+    
+    res.json({
+        destinations: defaults
+    });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
