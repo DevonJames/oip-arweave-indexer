@@ -163,18 +163,37 @@ async function main() {
     
     // Test Application Password if set
     if (WP_APP_PASSWORD) {
-        const appPassword = WP_APP_PASSWORD.replace(/\s+/g, '');
         console.log('\n📱 Testing Application Password...');
+        console.log(`   Original format: "${WP_APP_PASSWORD}"`);
+        console.log(`   Length: ${WP_APP_PASSWORD.length} chars`);
+        
+        // Try BOTH formats: with spaces AND without spaces
+        const appPasswordWithSpaces = WP_APP_PASSWORD; // Keep original format
+        const appPasswordWithoutSpaces = WP_APP_PASSWORD.replace(/\s+/g, ''); // Remove spaces
+        
+        console.log(`   Testing WITH spaces: "${appPasswordWithSpaces}"`);
+        console.log(`   Testing WITHOUT spaces: "${appPasswordWithoutSpaces}"`);
         
         // Try common usernames
         const usernames = ['devon', WP_ADMIN_USER, 'admin'];
         const uniqueUsernames = [...new Set(usernames)];
         
         for (const username of uniqueUsernames) {
-            const result = await testAuth(username, appPassword, `Application Password (${username})`);
-            if (result.success) {
-                console.log(`\n✅ Application Password works with username: ${username}`);
-                results.push({ method: 'Application Password', username, ...result });
+            // Try WITH spaces first (WordPress displays them this way)
+            console.log(`\n   Testing username "${username}" WITH spaces...`);
+            const resultWithSpaces = await testAuth(username, appPasswordWithSpaces, `Application Password WITH spaces (${username})`);
+            if (resultWithSpaces.success) {
+                console.log(`\n✅ Application Password works WITH SPACES for username: ${username}`);
+                results.push({ method: 'Application Password (with spaces)', username, ...resultWithSpaces });
+                break;
+            }
+            
+            // Try WITHOUT spaces
+            console.log(`\n   Testing username "${username}" WITHOUT spaces...`);
+            const resultWithoutSpaces = await testAuth(username, appPasswordWithoutSpaces, `Application Password WITHOUT spaces (${username})`);
+            if (resultWithoutSpaces.success) {
+                console.log(`\n✅ Application Password works WITHOUT SPACES for username: ${username}`);
+                results.push({ method: 'Application Password (without spaces)', username, ...resultWithoutSpaces });
                 break;
             }
         }

@@ -9,7 +9,7 @@ echo "════════════════════════�
 echo ""
 
 # Create mu-plugins directory if it doesn't exist
-docker exec -it onionpress-wordpress-1 mkdir -p /var/www/html/wp-content/mu-plugins --allow-root
+docker exec -it onionpress-wordpress-1 sh -c 'mkdir -p /var/www/html/wp-content/mu-plugins'
 
 # Create the mu-plugin file
 docker exec -it onionpress-wordpress-1 sh -c 'cat > /var/www/html/wp-content/mu-plugins/op-rest-api-auth-fix.php << "EOFPHP"
