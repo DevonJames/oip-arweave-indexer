@@ -395,7 +395,11 @@
                 <h2><span class="step-badge step-2">2</span> Verification Method</h2>
                 
                 <div class="alert info">
-                    A verification method defines how others can verify signatures from your DID. This will be published as a separate record.
+                    <strong>All fields are auto-filled with OIP v0.9 spec defaults.</strong><br>
+                    Fields like <code>vmId</code> (set to "#sign"), <code>vmType</code>, <code>controller</code>, <code>xpub</code>, 
+                    <code>derivationSubPurpose</code>, <code>derivationAccount</code>, <code>derivationPathPrefix</code>, 
+                    <code>leafIndexPolicy</code>, <code>leafHardened</code>, and <code>validFromBlock</code> are automatically set 
+                    according to the OIP v0.9 specification and are hidden from this form. No user input is required for this step.
                 </div>
 
                 <div id="verificationMethodForm">
@@ -415,7 +419,11 @@
                 <h2><span class="step-badge step-3">3</span> DID Document</h2>
                 
                 <div class="alert info">
-                    Your DID Document is your public identity profile. It references your verification method and includes profile information.
+                    <strong>Core fields are auto-filled with OIP v0.9 spec defaults.</strong><br>
+                    Fields like <code>did</code>, <code>controller</code>, <code>keyBindingPolicy</code>, <code>authentication</code> (set to "#sign"), 
+                    and <code>assertionMethod</code> (set to "#sign") are automatically set according to the OIP v0.9 specification and are hidden from this form. 
+                    The <code>verificationMethod</code> field will be automatically populated after your Verification Method is published.
+                    You can fill in optional profile fields like <code>oipHandle</code>, <code>oipName</code>, <code>oipSurname</code>, etc.
                 </div>
 
                 <div id="didDocumentForm">
@@ -513,7 +521,9 @@
                 didDocument: null,
                 socialMedia: null,
                 communication: null
-            }
+            },
+            socialMediaEntries: [],
+            communicationEntries: []
         };
 
         // Load templates on page load
@@ -582,7 +592,47 @@
             const container = document.getElementById(containerId);
             container.innerHTML = '';
 
+            // Define fields that should be hidden (have spec defaults)
+            const hiddenFields = {
+                didVerificationMethod: [
+                    'vmId', 'vmType', 'controller', 'xpub', 'derivationSubPurpose', 
+                    'derivationAccount', 'derivationPathPrefix', 'leafIndexPolicy', 
+                    'leafHardened', 'validFromBlock', 'publicKeyMultibase', 
+                    'publicKeyJwk', 'leafIndexFixed', 'revokedFromBlock', 
+                    'bindingProofJws', 'bindingProofPurpose'
+                ],
+                didDocument: [
+                    'did', 'controller', 'keyBindingPolicy', 'verificationMethod',
+                    'authentication', 'assertionMethod'
+                ],
+                socialMedia: [
+                    // All fields are handled by custom UI
+                ],
+                communication: [
+                    // All fields are handled by custom UI
+                ]
+            };
+
+            const shouldHideField = (templateName, fieldName) => {
+                return hiddenFields[templateName]?.includes(fieldName) || false;
+            };
+
+            // Handle special templates with custom UI
+            if (templateName === 'socialMedia') {
+                renderSocialMediaForm(container);
+                return;
+            }
+            if (templateName === 'communication') {
+                renderCommunicationForm(container);
+                return;
+            }
+
             Object.entries(fieldsInTemplate).forEach(([fieldName, fieldInfo]) => {
+                // Skip hidden fields
+                if (shouldHideField(templateName, fieldName)) {
+                    return;
+                }
+
                 const fieldType = fieldInfo.type || 'string';
                 const fieldIndex = fieldInfo.index;
                 
@@ -650,6 +700,343 @@
                 }
 
                 container.appendChild(formGroup);
+            });
+
+            // Auto-fill defaults after form is rendered
+            autoFillDefaults(templateName, containerId);
+        }
+
+        function autoFillDefaults(templateName, containerId) {
+            if (!state.identity) {
+                // Identity not loaded yet, will be filled when identity is created
+                return;
+            }
+
+            if (templateName === 'didVerificationMethod') {
+                // Set defaults for didVerificationMethod (vmId is hidden and auto-filled)
+                // Other fields are also hidden and auto-filled
+            } else if (templateName === 'didDocument') {
+                // Set defaults for didDocument (authentication and assertionMethod are hidden and auto-filled)
+            }
+        }
+
+        function setFieldValue(templateName, fieldName, value) {
+            const elementId = `${templateName}_${fieldName}`;
+            const element = document.getElementById(elementId);
+            if (element) {
+                if (element.type === 'checkbox') {
+                    element.checked = value;
+                } else if (element.tagName === 'SELECT') {
+                    // Find matching option
+                    for (let option of element.options) {
+                        if (option.value === value || option.textContent.includes(value)) {
+                            element.value = option.value;
+                            break;
+                        }
+                    }
+                } else {
+                    element.value = value;
+                }
+            }
+        }
+
+        function renderSocialMediaForm(container) {
+            container.innerHTML = `
+                <div class="alert info">
+                    Add your social media profiles. Click "+ Add Platform" to add a new platform, then add usernames for that platform.
+                </div>
+                <div id="socialMediaEntries"></div>
+                <button type="button" class="add-field-btn" onclick="addSocialMediaPlatform()" style="margin-top: 1rem;">
+                    + Add Platform
+                </button>
+            `;
+            
+            // Initialize empty state
+            state.socialMediaEntries = state.socialMediaEntries || [];
+        }
+
+        function addSocialMediaPlatform() {
+            if (!state.socialMediaEntries) state.socialMediaEntries = [];
+            
+            const entryId = `sm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const entry = {
+                id: entryId,
+                platform: '',
+                usernames: ['']
+            };
+            state.socialMediaEntries.push(entry);
+            renderSocialMediaEntries();
+        }
+
+        function removeSocialMediaPlatform(entryId) {
+            state.socialMediaEntries = state.socialMediaEntries.filter(e => e.id !== entryId);
+            renderSocialMediaEntries();
+        }
+
+        function addSocialMediaUsername(entryId) {
+            const entry = state.socialMediaEntries.find(e => e.id === entryId);
+            if (entry) {
+                entry.usernames.push('');
+                renderSocialMediaEntries();
+            }
+        }
+
+        function removeSocialMediaUsername(entryId, usernameIndex) {
+            const entry = state.socialMediaEntries.find(e => e.id === entryId);
+            if (entry && entry.usernames.length > 1) {
+                entry.usernames.splice(usernameIndex, 1);
+                renderSocialMediaEntries();
+            }
+        }
+
+        function renderSocialMediaEntries() {
+            const container = document.getElementById('socialMediaEntries');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            const platforms = [
+                { value: 'website', label: 'Website' },
+                { value: 'youtube', label: 'YouTube' },
+                { value: 'x', label: 'X (Twitter)' },
+                { value: 'instagram', label: 'Instagram' },
+                { value: 'tiktok', label: 'TikTok' },
+                { value: 'facebook', label: 'Facebook' },
+                { value: 'threads', label: 'Threads' },
+                { value: 'snapchat', label: 'Snapchat' },
+                { value: 'reddit', label: 'Reddit' },
+                { value: 'linkedin', label: 'LinkedIn' },
+                { value: 'pinterest', label: 'Pinterest' },
+                { value: 'discord', label: 'Discord' },
+                { value: 'twitch', label: 'Twitch' },
+                { value: 'telegram', label: 'Telegram' },
+                { value: 'wechat', label: 'WeChat' },
+                { value: 'qq', label: 'QQ' },
+                { value: 'sinaWeibo', label: 'Sina Weibo' },
+                { value: 'vk', label: 'VK' },
+                { value: 'line', label: 'Line' },
+                { value: 'kakaoTalk', label: 'KakaoTalk' },
+                { value: 'mastodon', label: 'Mastodon' },
+                { value: 'bluesky', label: 'Bluesky' },
+                { value: 'tumblr', label: 'Tumblr' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'substack', label: 'Substack' },
+                { value: 'quora', label: 'Quora' },
+                { value: 'vimeo', label: 'Vimeo' },
+                { value: 'dailymotion', label: 'Dailymotion' },
+                { value: 'rumble', label: 'Rumble' },
+                { value: 'odysee', label: 'Odysee' },
+                { value: 'signal', label: 'Signal' }
+            ];
+            
+            state.socialMediaEntries.forEach((entry, entryIndex) => {
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'social-media-entry';
+                entryDiv.style.cssText = 'border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 4px;';
+                
+                const header = document.createElement('div');
+                header.style.cssText = 'display: flex; gap: 1rem; align-items: center; margin-bottom: 0.5rem;';
+                
+                const platformSelect = document.createElement('select');
+                platformSelect.className = 'platform-select';
+                platformSelect.style.cssText = 'flex: 1; padding: 0.5rem;';
+                platformSelect.innerHTML = '<option value="">Select Platform...</option>' +
+                    platforms.map(p => `<option value="${p.value}" ${entry.platform === p.value ? 'selected' : ''}>${p.label}</option>`).join('');
+                platformSelect.onchange = (e) => {
+                    entry.platform = e.target.value;
+                };
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.textContent = '× Remove Platform';
+                removeBtn.className = 'add-field-btn';
+                removeBtn.onclick = () => removeSocialMediaPlatform(entry.id);
+                
+                header.appendChild(platformSelect);
+                header.appendChild(removeBtn);
+                
+                const usernamesDiv = document.createElement('div');
+                usernamesDiv.style.cssText = 'margin-left: 1rem;';
+                
+                entry.usernames.forEach((username, usernameIndex) => {
+                    const usernameRow = document.createElement('div');
+                    usernameRow.style.cssText = 'display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;';
+                    
+                    const usernameInput = document.createElement('input');
+                    usernameInput.type = 'text';
+                    usernameInput.placeholder = 'Username or handle...';
+                    usernameInput.value = username;
+                    usernameInput.style.cssText = 'flex: 1; padding: 0.5rem;';
+                    usernameInput.onchange = (e) => {
+                        entry.usernames[usernameIndex] = e.target.value;
+                    };
+                    
+                    const removeUsernameBtn = document.createElement('button');
+                    removeUsernameBtn.type = 'button';
+                    removeUsernameBtn.textContent = '×';
+                    removeUsernameBtn.className = 'add-field-btn';
+                    removeUsernameBtn.onclick = () => removeSocialMediaUsername(entry.id, usernameIndex);
+                    if (entry.usernames.length === 1) {
+                        removeUsernameBtn.disabled = true;
+                        removeUsernameBtn.style.opacity = '0.5';
+                    }
+                    
+                    usernameRow.appendChild(usernameInput);
+                    usernameRow.appendChild(removeUsernameBtn);
+                    usernamesDiv.appendChild(usernameRow);
+                });
+                
+                const addUsernameBtn = document.createElement('button');
+                addUsernameBtn.type = 'button';
+                addUsernameBtn.textContent = '+ Add Username';
+                addUsernameBtn.className = 'add-field-btn';
+                addUsernameBtn.onclick = () => addSocialMediaUsername(entry.id);
+                addUsernameBtn.style.cssText = 'margin-left: 1rem; margin-top: 0.5rem;';
+                
+                entryDiv.appendChild(header);
+                entryDiv.appendChild(usernamesDiv);
+                entryDiv.appendChild(addUsernameBtn);
+                container.appendChild(entryDiv);
+            });
+        }
+
+        function renderCommunicationForm(container) {
+            container.innerHTML = `
+                <div class="alert info">
+                    Add your communication methods. Click "+ Add Method" to add a new communication method, then add identifiers for that method.
+                </div>
+                <div id="communicationEntries"></div>
+                <button type="button" class="add-field-btn" onclick="addCommunicationMethod()" style="margin-top: 1rem;">
+                    + Add Method
+                </button>
+            `;
+            
+            // Initialize empty state
+            state.communicationEntries = state.communicationEntries || [];
+        }
+
+        function addCommunicationMethod() {
+            if (!state.communicationEntries) state.communicationEntries = [];
+            
+            const entryId = `comm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const entry = {
+                id: entryId,
+                method: '',
+                identifiers: ['']
+            };
+            state.communicationEntries.push(entry);
+            renderCommunicationEntries();
+        }
+
+        function removeCommunicationMethod(entryId) {
+            state.communicationEntries = state.communicationEntries.filter(e => e.id !== entryId);
+            renderCommunicationEntries();
+        }
+
+        function addCommunicationIdentifier(entryId) {
+            const entry = state.communicationEntries.find(e => e.id === entryId);
+            if (entry) {
+                entry.identifiers.push('');
+                renderCommunicationEntries();
+            }
+        }
+
+        function removeCommunicationIdentifier(entryId, identifierIndex) {
+            const entry = state.communicationEntries.find(e => e.id === entryId);
+            if (entry && entry.identifiers.length > 1) {
+                entry.identifiers.splice(identifierIndex, 1);
+                renderCommunicationEntries();
+            }
+        }
+
+        function renderCommunicationEntries() {
+            const container = document.getElementById('communicationEntries');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            const methods = [
+                { value: 'phone', label: 'Phone' },
+                { value: 'email', label: 'Email' },
+                { value: 'signal', label: 'Signal' },
+                { value: 'telegram', label: 'Telegram' },
+                { value: 'discord', label: 'Discord' },
+                { value: 'matrix', label: 'Matrix' },
+                { value: 'line', label: 'Line' },
+                { value: 'wechat', label: 'WeChat' },
+                { value: 'kakaotalk', label: 'KakaoTalk' }
+            ];
+            
+            state.communicationEntries.forEach((entry, entryIndex) => {
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'communication-entry';
+                entryDiv.style.cssText = 'border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 4px;';
+                
+                const header = document.createElement('div');
+                header.style.cssText = 'display: flex; gap: 1rem; align-items: center; margin-bottom: 0.5rem;';
+                
+                const methodSelect = document.createElement('select');
+                methodSelect.className = 'method-select';
+                methodSelect.style.cssText = 'flex: 1; padding: 0.5rem;';
+                methodSelect.innerHTML = '<option value="">Select Method...</option>' +
+                    methods.map(m => `<option value="${m.value}" ${entry.method === m.value ? 'selected' : ''}>${m.label}</option>`).join('');
+                methodSelect.onchange = (e) => {
+                    entry.method = e.target.value;
+                };
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.textContent = '× Remove Method';
+                removeBtn.className = 'add-field-btn';
+                removeBtn.onclick = () => removeCommunicationMethod(entry.id);
+                
+                header.appendChild(methodSelect);
+                header.appendChild(removeBtn);
+                
+                const identifiersDiv = document.createElement('div');
+                identifiersDiv.style.cssText = 'margin-left: 1rem;';
+                
+                entry.identifiers.forEach((identifier, identifierIndex) => {
+                    const identifierRow = document.createElement('div');
+                    identifierRow.style.cssText = 'display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;';
+                    
+                    const identifierInput = document.createElement('input');
+                    identifierInput.type = 'text';
+                    identifierInput.placeholder = entry.method === 'phone' ? 'Phone number...' : 
+                                                 entry.method === 'email' ? 'Email address...' : 
+                                                 'Identifier...';
+                    identifierInput.value = identifier;
+                    identifierInput.style.cssText = 'flex: 1; padding: 0.5rem;';
+                    identifierInput.onchange = (e) => {
+                        entry.identifiers[identifierIndex] = e.target.value;
+                    };
+                    
+                    const removeIdentifierBtn = document.createElement('button');
+                    removeIdentifierBtn.type = 'button';
+                    removeIdentifierBtn.textContent = '×';
+                    removeIdentifierBtn.className = 'add-field-btn';
+                    removeIdentifierBtn.onclick = () => removeCommunicationIdentifier(entry.id, identifierIndex);
+                    if (entry.identifiers.length === 1) {
+                        removeIdentifierBtn.disabled = true;
+                        removeIdentifierBtn.style.opacity = '0.5';
+                    }
+                    
+                    identifierRow.appendChild(identifierInput);
+                    identifierRow.appendChild(removeIdentifierBtn);
+                    identifiersDiv.appendChild(identifierRow);
+                });
+                
+                const addIdentifierBtn = document.createElement('button');
+                addIdentifierBtn.type = 'button';
+                addIdentifierBtn.textContent = '+ Add Identifier';
+                addIdentifierBtn.className = 'add-field-btn';
+                addIdentifierBtn.onclick = () => addCommunicationIdentifier(entry.id);
+                addIdentifierBtn.style.cssText = 'margin-left: 1rem; margin-top: 0.5rem;';
+                
+                entryDiv.appendChild(header);
+                entryDiv.appendChild(identifiersDiv);
+                entryDiv.appendChild(addIdentifierBtn);
+                container.appendChild(entryDiv);
             });
         }
 
@@ -744,6 +1131,10 @@
                 document.getElementById('displayDid').textContent = state.identity.did;
                 document.getElementById('displayXpub').textContent = state.identity.signingXpub.substring(0, 50) + '...';
                 document.getElementById('step1NextBtn').disabled = false;
+                
+                // Auto-fill defaults now that identity is loaded
+                autoFillDefaults('didVerificationMethod', 'verificationMethodForm');
+                autoFillDefaults('didDocument', 'didDocumentForm');
             } catch (error) {
                 console.error('Failed to load identity:', error);
                 alert('Failed to load identity: ' + error.message);
@@ -764,61 +1155,25 @@
                 return;
             }
 
+            // Ensure defaults are filled
+            autoFillDefaults('didVerificationMethod', 'verificationMethodForm');
+            
+            // Collect form data (defaults are already set)
             const record = collectFormData('didVerificationMethod');
             
-            // Auto-fill verification method fields from identity
-            if (!record.vmId) {
-                const vmIdInput = document.getElementById('didVerificationMethod_vmId');
-                if (vmIdInput) vmIdInput.value = '#sign';
-            }
-            if (!record.vmType) {
-                const vmTypeInput = document.getElementById('didVerificationMethod_vmType');
-                if (vmTypeInput) vmTypeInput.value = 'oip:XpubDerivation2025';
-            }
-            if (!record.controller) {
-                const controllerInput = document.getElementById('didVerificationMethod_controller');
-                if (controllerInput) controllerInput.value = state.identity.did;
-            }
-            if (!record.xpub) {
-                const xpubInput = document.getElementById('didVerificationMethod_xpub');
-                if (xpubInput) xpubInput.value = state.identity.signingXpub;
-            }
-            if (!record.derivationSubPurpose) {
-                const subPurposeInput = document.getElementById('didVerificationMethod_derivationSubPurpose');
-                if (subPurposeInput) subPurposeInput.value = 'identity.sign';
-            }
-            if (!record.derivationAccount) {
-                const accountInput = document.getElementById('didVerificationMethod_derivationAccount');
-                if (accountInput) accountInput.value = '0';
-            }
-            if (!record.derivationPathPrefix) {
-                const pathInput = document.getElementById('didVerificationMethod_derivationPathPrefix');
-                if (pathInput) pathInput.value = `m/176800'/0'/0'`;
-            }
-            if (!record.leafIndexPolicy) {
-                const policyInput = document.getElementById('didVerificationMethod_leafIndexPolicy');
-                if (policyInput && policyInput.options.length > 0) {
-                    // Find and select 'payload_digest' option
-                    for (let option of policyInput.options) {
-                        if (option.value === 'payload_digest' || option.text.includes('payload')) {
-                            policyInput.value = option.value;
-                            break;
-                        }
-                    }
-                }
-            }
-            if (record.leafHardened === undefined) {
-                const hardenedInput = document.getElementById('didVerificationMethod_leafHardened');
-                if (hardenedInput) hardenedInput.checked = false;
-            }
-            if (!record.validFromBlock) {
-                const validFromInput = document.getElementById('didVerificationMethod_validFromBlock');
-                if (validFromInput) validFromInput.value = '0';
-            }
+            // Ensure required fields have defaults (all are hidden and auto-filled)
+            record.vmId = '#sign';
+            record.vmType = 'oip:XpubDerivation2025';
+            record.controller = state.identity.did;
+            record.xpub = state.identity.signingXpub;
+            record.derivationSubPurpose = 'identity.sign';
+            record.derivationAccount = '0';
+            record.derivationPathPrefix = `m/176800'/0'/0'`;
+            record.leafIndexPolicy = 'payload_digest';
+            record.leafHardened = false;
+            record.validFromBlock = '0';
             
-            // Re-collect form data after auto-fill
-            const updatedRecord = collectFormData('didVerificationMethod');
-            state.records.didVerificationMethod = updatedRecord;
+            state.records.didVerificationMethod = record;
             goToStep(3);
         }
 
@@ -828,56 +1183,63 @@
                 return;
             }
 
+            // Ensure defaults are filled
+            autoFillDefaults('didDocument', 'didDocumentForm');
+            
+            // Collect form data (defaults are already set)
             const record = collectFormData('didDocument');
             
-            // Auto-fill DID document fields
-            const didInput = document.getElementById('didDocument_did');
-            if (didInput && !didInput.value) didInput.value = state.identity.did;
+            // Ensure required fields have defaults (all are hidden and auto-filled)
+            record.did = state.identity.did;
+            record.controller = state.identity.did;
+            record.keyBindingPolicy = 'xpub';
+            record.authentication = ['#sign'];
+            record.assertionMethod = ['#sign'];
             
-            const controllerInput = document.getElementById('didDocument_controller');
-            if (controllerInput && !controllerInput.value) controllerInput.value = state.identity.did;
-            
-            // Note: verificationMethod will be set after VM is published
-            // For repeated fields like authentication and assertionMethod, add initial values
-            const authContainer = document.getElementById('didDocument_authentication_container');
-            if (authContainer && authContainer.querySelectorAll('input').length === 0) {
-                addRepeatedField('didDocument', 'authentication', 'repeated string');
-                const authInput = authContainer.querySelector('input');
-                if (authInput) authInput.value = '#sign';
-            }
-            
-            const assertionContainer = document.getElementById('didDocument_assertionMethod_container');
-            if (assertionContainer && assertionContainer.querySelectorAll('input').length === 0) {
-                addRepeatedField('didDocument', 'assertionMethod', 'repeated string');
-                const assertionInput = assertionContainer.querySelector('input');
-                if (assertionInput) assertionInput.value = '#sign';
-            }
-            
-            // Note: verificationMethod will be populated after VM is published
-            
-            const keyPolicyInput = document.getElementById('didDocument_keyBindingPolicy');
-            if (keyPolicyInput && !keyPolicyInput.value) {
-                keyPolicyInput.value = 'xpub';
-            }
-            
-            // Re-collect form data after auto-fill
-            const updatedRecord = collectFormData('didDocument');
-            updatedRecord.did = updatedRecord.did || state.identity.did;
-            updatedRecord.controller = updatedRecord.controller || state.identity.did;
-            updatedRecord.keyBindingPolicy = updatedRecord.keyBindingPolicy || 'xpub';
-            
-            state.records.didDocument = updatedRecord;
+            state.records.didDocument = record;
             goToStep(4);
         }
 
         async function processStep4() {
-            const record = collectFormData('socialMedia');
+            // Collect social media data from custom UI
+            const record = {};
+            
+            if (state.socialMediaEntries) {
+                state.socialMediaEntries.forEach(entry => {
+                    if (entry.platform && entry.usernames.some(u => u.trim())) {
+                        const usernames = entry.usernames.filter(u => u.trim());
+                        if (usernames.length > 0) {
+                            if (!record[entry.platform]) {
+                                record[entry.platform] = [];
+                            }
+                            record[entry.platform].push(...usernames);
+                        }
+                    }
+                });
+            }
+            
             state.records.socialMedia = record;
             goToStep(5);
         }
 
         async function processStep5() {
-            const record = collectFormData('communication');
+            // Collect communication data from custom UI
+            const record = {};
+            
+            if (state.communicationEntries) {
+                state.communicationEntries.forEach(entry => {
+                    if (entry.method && entry.identifiers.some(i => i.trim())) {
+                        const identifiers = entry.identifiers.filter(i => i.trim());
+                        if (identifiers.length > 0) {
+                            if (!record[entry.method]) {
+                                record[entry.method] = [];
+                            }
+                            record[entry.method].push(...identifiers);
+                        }
+                    }
+                });
+            }
+            
             state.records.communication = record;
             
             // Show review
@@ -892,6 +1254,26 @@
             const fieldsInTemplate = template.data?.fieldsInTemplate || {};
             const record = {};
 
+            // Include defaults for hidden fields
+            if (templateName === 'didVerificationMethod' && state.identity) {
+                record.vmId = '#sign';
+                record.vmType = 'oip:XpubDerivation2025';
+                record.controller = state.identity.did;
+                record.xpub = state.identity.signingXpub;
+                record.derivationSubPurpose = 'identity.sign';
+                record.derivationAccount = '0';
+                record.derivationPathPrefix = `m/176800'/0'/0'`;
+                record.leafIndexPolicy = 'payload_digest';
+                record.leafHardened = false;
+                record.validFromBlock = '0';
+            } else if (templateName === 'didDocument' && state.identity) {
+                record.did = state.identity.did;
+                record.controller = state.identity.did;
+                record.keyBindingPolicy = 'xpub';
+                record.authentication = ['#sign'];
+                record.assertionMethod = ['#sign'];
+            }
+
             Object.keys(fieldsInTemplate).forEach(fieldName => {
                 const fieldInfo = fieldsInTemplate[fieldName];
                 const fieldType = fieldInfo.type || 'string';
@@ -903,7 +1285,9 @@
                     if (values.length > 0) record[fieldName] = values;
                 } else if (fieldType === 'bool') {
                     const checkbox = document.getElementById(elementId);
-                    record[fieldName] = checkbox ? checkbox.checked : false;
+                    if (checkbox) {
+                        record[fieldName] = checkbox.checked;
+                    }
                 } else {
                     const input = document.getElementById(elementId);
                     if (input && input.value.trim()) {

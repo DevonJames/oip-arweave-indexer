@@ -21,7 +21,7 @@ const TEMPLATE_DIDS = {
     // New v0.9 templates (placeholder DIDs until first publish)
     didDocument: 'did:arweave:oLdaefbl46MSQTljX6QSvlhWLAjhg0CLY8ejHDj-XxM',
     didVerificationMethod: 'did:arweave:mT1c8GcBRrzQ39treEUiS7_K8KyBEH_aXo0L4mdAQHw',
-    socialMedia: 'did:arweave:BWXq7WZF6J0ZXevdZcW65Iw9VuQyEXWccFOYk1WYwBI',
+    socialMedia: 'did:arweave:qH5crxeNs44ReuuIAxoU3Ax_nRVku2GXtedQsk3tE4Y',
     communication: 'did:arweave:smEHXLQo1dYL9hEvVMvyyOTqZ0OZg-earraTTl-J11A'
 };
 
