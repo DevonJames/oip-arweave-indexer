@@ -859,36 +859,66 @@ function op_publisher_init() {
 }
 add_action('plugins_loaded', 'op_publisher_init');
 
-// Allow Application Passwords and Basic Auth over HTTP for internal Docker access
-// WordPress by default may block Basic Auth when site URL is HTTPS but accessed via HTTP
-add_filter('application_password_is_api_request', '__return_true');
-add_filter('wp_is_application_passwords_available', '__return_true');
+// ═══════════════════════════════════════════════════════════════════════════
+// FIX WORDPRESS REST API BASIC AUTH FOR INTERNAL DOCKER ACCESS
+// ═══════════════════════════════════════════════════════════════════════════
+// WordPress REST API Basic Auth REQUIRES Application Passwords by default.
+// This is a WordPress core security feature that cannot be easily disabled.
+//
+// SOLUTION: We intercept REST API authentication EARLY and handle it ourselves,
+// bypassing WordPress's Application Password requirement for internal Docker access.
+// ═══════════════════════════════════════════════════════════════════════════
 
-// Force WordPress to accept Basic Auth headers even over HTTP
-// This is needed because WordPress may reject Basic Auth when site URL is HTTPS but accessed via HTTP internally
-add_filter('determine_current_user', function($user_id) {
-    // Check for Basic Auth headers (PHP_AUTH_USER/PHP_AUTH_PW are set by Apache when Basic Auth is used)
-    if (isset($_SERVER['PHP_AUTH_USER']) && isset($_SERVER['PHP_AUTH_PW'])) {
-        $username = $_SERVER['PHP_AUTH_USER'];
-        $password = $_SERVER['PHP_AUTH_PW'];
-        
-        // Try Application Password authentication first
-        if (function_exists('wp_authenticate_application_password')) {
-            $user = wp_authenticate_application_password(null, $username, $password);
-            if (!is_wp_error($user) && $user instanceof WP_User) {
-                return $user->ID;
-            }
-        }
-        
-        // Fallback to regular password authentication
-        $user = wp_authenticate($username, $password);
-        if (!is_wp_error($user) && $user instanceof WP_User) {
-            return $user->ID;
+// Hook into REST API authentication BEFORE WordPress checks Application Passwords
+add_filter('rest_authentication_errors', function($result) {
+    // If already authenticated or not a REST request, return as-is
+    if (!empty($result) || !defined('REST_REQUEST') || !REST_REQUEST) {
+        return $result;
+    }
+    
+    // Check for Basic Auth headers
+    if (!isset($_SERVER['PHP_AUTH_USER']) || !isset($_SERVER['PHP_AUTH_PW'])) {
+        return $result;
+    }
+    
+    $username = sanitize_user($_SERVER['PHP_AUTH_USER']);
+    $password = $_SERVER['PHP_AUTH_PW'];
+    
+    if (empty($username) || empty($password)) {
+        return $result;
+    }
+    
+    // Get user by login
+    $user = get_user_by('login', $username);
+    if (!$user) {
+        return $result;
+    }
+    
+    // Try Application Password first (WordPress's preferred method)
+    if (function_exists('wp_authenticate_application_password')) {
+        $app_password_user = wp_authenticate_application_password(null, $username, $password);
+        if (!is_wp_error($app_password_user) && $app_password_user instanceof WP_User) {
+            wp_set_current_user($app_password_user->ID);
+            return true; // Authentication successful
         }
     }
     
-    return $user_id;
-}, 1, 1); // Priority 1 to run early, 1 parameter
+    // Fallback: Try regular password authentication
+    // WordPress normally doesn't allow this for REST API, but we allow it for internal Docker access
+    $password_check = wp_check_password($password, $user->user_pass, $user->ID);
+    if ($password_check) {
+        wp_set_current_user($user->ID);
+        error_log("OP Publisher: Using regular password auth for REST API user: {$username}");
+        return true; // Authentication successful
+    }
+    
+    // If neither worked, return error
+    return new WP_Error(
+        'rest_forbidden',
+        __('Sorry, you are not allowed to do that.'),
+        array('status' => 401)
+    );
+}, 1); // Priority 1 to run before WordPress's default (priority 10)
 
 // Activation hook
 register_activation_hook(__FILE__, function() {
