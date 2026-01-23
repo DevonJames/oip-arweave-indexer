@@ -122,6 +122,14 @@ app.use('/api/debug', debugRoutes);
 // ═══════════════════════════════════════════════════════════════════════════════
 // Static Files - Browsing Interface
 // ═══════════════════════════════════════════════════════════════════════════════
+// Serve static files at /onion-press path to match HTML references
+app.use('/onion-press', express.static(path.join(__dirname, 'public', 'onion-press'), {
+    index: 'index.html',
+    etag: true,
+    lastModified: true
+}));
+
+// Also serve at root for convenience
 app.use(express.static(path.join(__dirname, 'public', 'onion-press')));
 
 // Serve index.html for all non-API routes (SPA support)
