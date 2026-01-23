@@ -309,46 +309,93 @@ async function syncWordPressUser(email, username = null, displayName = null) {
  */
 async function getWordPressUserId(email) {
     if (!WORDPRESS_ADMIN_PASSWORD && !process.env.WP_APP_PASSWORD) {
+        console.warn(`[WordPress Sync] No WordPress authentication configured, cannot search for user ${email}`);
         return null;
     }
 
     try {
         const auth = await getWordPressAuth();
-        console.log(`[WordPress Sync] Searching for user with email: ${email}, using auth username: ${auth.username}`);
-        const response = await axios.get(
+        console.log(`🔍 [WordPress Sync] Searching for user with email: ${email}, using auth username: ${auth.username}, method: ${auth.method}`);
+        
+        // Try multiple endpoint formats in case WordPress permalinks are misconfigured
+        const endpoints = [
             `${WORDPRESS_URL}/wp-json/wp/v2/users`,
-            {
-                params: { search: email },
-                auth: {
-                    username: auth.username,
-                    password: auth.password
-                },
-                validateStatus: () => true // Don't throw on 401
+            `${WORDPRESS_URL}/index.php?rest_route=/wp/v2/users`
+        ];
+        
+        let response = null;
+        let lastError = null;
+        
+        for (const endpoint of endpoints) {
+            try {
+                response = await axios.get(
+                    endpoint,
+                    {
+                        params: { search: email },
+                        auth: {
+                            username: auth.username,
+                            password: auth.password
+                        },
+                        validateStatus: () => true, // Don't throw on 401
+                        timeout: 5000
+                    }
+                );
+                
+                // Check if we got HTML instead of JSON
+                const isHtml = typeof response.data === 'string' && (
+                    response.data.trim().startsWith('<!DOCTYPE') ||
+                    response.data.trim().startsWith('<html')
+                );
+                
+                if (isHtml) {
+                    console.warn(`⚠️ [WordPress Sync] ${endpoint} returned HTML instead of JSON`);
+                    continue; // Try next endpoint
+                }
+                
+                if (response.status === 200) {
+                    break; // Success, use this response
+                }
+            } catch (error) {
+                lastError = error;
+                continue; // Try next endpoint
             }
-        );
+        }
+        
+        if (!response) {
+            console.error(`❌ [WordPress Sync] All endpoints failed for user search`);
+            if (lastError) {
+                console.error(`❌ [WordPress Sync] Last error:`, lastError.message);
+            }
+            return null;
+        }
 
         if (response.status === 401) {
-            console.warn(`[WordPress Sync] Authentication failed (401) when searching for user ${email}. Auth username: ${auth.username}`);
+            console.error(`❌ [WordPress Sync] Authentication failed (401) when searching for user ${email}`);
+            console.error(`❌ [WordPress Sync] Auth username: ${auth.username}, method: ${auth.method}`);
+            console.error(`❌ [WordPress Sync] This means WordPress authentication is not working`);
             return null;
         }
 
         if (response.status !== 200) {
-            console.warn(`[WordPress Sync] Unexpected status ${response.status} when searching for user ${email}`);
+            console.warn(`⚠️ [WordPress Sync] Unexpected status ${response.status} when searching for user ${email}`);
             return null;
         }
 
-        const user = response.data.find(u => u.email === email);
+        // Ensure response.data is an array
+        const users = Array.isArray(response.data) ? response.data : [];
+        const user = users.find(u => u.email === email);
+        
         if (user) {
-            console.log(`[WordPress Sync] Found WordPress user: ${email} -> ID: ${user.id}`);
+            console.log(`✅ [WordPress Sync] Found WordPress user: ${email} -> ID: ${user.id}`);
         } else {
-            console.log(`[WordPress Sync] WordPress user not found: ${email}`);
+            console.log(`ℹ️ [WordPress Sync] WordPress user not found: ${email} (searched ${users.length} users)`);
         }
         return user ? user.id : null;
     } catch (error) {
-        console.error('[WordPress Sync] Error getting WordPress user ID:', error.message);
+        console.error(`❌ [WordPress Sync] Error getting WordPress user ID:`, error.message);
         if (error.response) {
-            console.error('[WordPress Sync] Response status:', error.response.status);
-            console.error('[WordPress Sync] Response data:', JSON.stringify(error.response.data, null, 2));
+            console.error(`❌ [WordPress Sync] Response status: ${error.response.status}`);
+            console.error(`❌ [WordPress Sync] Response data:`, JSON.stringify(error.response.data, null, 2));
         }
         return null;
     }
