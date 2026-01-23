@@ -211,46 +211,59 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
             console.log(`✅ [PublishAnonymous] Using Application Password from WP_APP_PASSWORD env var`);
             
             // Application Passwords are user-specific - try to find which user it belongs to
-            // Try with admin user first, then check if it works
-            try {
-                const verifyAppPassword = await axios.get(`${wordpressUrl}/wp-json/wp/v2/users/me`, {
-                    auth: {
-                        username: WORDPRESS_ADMIN_USER,
-                        password: authPassword
-                    },
-                    timeout: 10000,
-                    validateStatus: () => true
-                });
-                
-                if (verifyAppPassword.status === 200) {
-                    const appPasswordUser = verifyAppPassword.data.name || verifyAppPassword.data.slug;
-                    const appPasswordRoles = verifyAppPassword.data.roles || [];
-                    console.log(`🔍 [PublishAnonymous] Application Password authenticates as: ${appPasswordUser}, Roles: ${appPasswordRoles.join(', ')}`);
+            // Try common usernames: "devon" (most common), then env var, then defaults
+            const possibleUsernames = [
+                'devon',  // Most common WordPress username (Application Password shown in logs is for "devon")
+                WORDPRESS_ADMIN_USER,  // From env var or default ("OIP Daemon")
+                'admin',  // Default admin username
+                'OIP Daemon'  // Display name (unlikely to be username, but try anyway)
+            ];
+            
+            // Remove duplicates
+            const uniqueUsernames = [...new Set(possibleUsernames)];
+            
+            let appPasswordAuthenticated = false;
+            for (const testUsername of uniqueUsernames) {
+                try {
+                    const verifyAppPassword = await axios.get(`${wordpressUrl}/wp-json/wp/v2/users/me`, {
+                        auth: {
+                            username: testUsername,
+                            password: authPassword
+                        },
+                        timeout: 10000,
+                        validateStatus: () => true
+                    });
                     
-                    // If Application Password is for a different user, use that username
-                    if (appPasswordUser !== WORDPRESS_ADMIN_USER) {
-                        authUsername = appPasswordUser;
-                        console.log(`🔍 [PublishAnonymous] Application Password is for user "${appPasswordUser}", using that username`);
+                    if (verifyAppPassword.status === 200) {
+                        const appPasswordUser = verifyAppPassword.data.name || verifyAppPassword.data.slug;
+                        const appPasswordUserLogin = verifyAppPassword.data.slug || testUsername;
+                        const appPasswordRoles = verifyAppPassword.data.roles || [];
+                        console.log(`✅ [PublishAnonymous] Application Password authenticates as: ${appPasswordUser} (login: ${appPasswordUserLogin}), Roles: ${appPasswordRoles.join(', ')}`);
+                        
+                        // Use the correct username for this Application Password
+                        authUsername = appPasswordUserLogin;
+                        appPasswordAuthenticated = true;
+                        
+                        // Check if user has editor/administrator role
+                        if (!appPasswordRoles.includes('administrator') && !appPasswordRoles.includes('editor')) {
+                            console.error(`❌ [PublishAnonymous] Application Password user "${appPasswordUser}" does not have administrator or editor role. Roles: ${appPasswordRoles.join(', ')}`);
+                            return res.status(403).json({
+                                error: 'Insufficient permissions',
+                                message: `Application Password is for user "${appPasswordUser}" who does not have permission to create posts. User must have administrator or editor role. Current roles: ${appPasswordRoles.join(', ')}`,
+                                userRoles: appPasswordRoles,
+                                username: appPasswordUser
+                            });
+                        }
+                        break; // Found the correct username
                     }
-                    
-                    // Check if user has editor/administrator role
-                    if (!appPasswordRoles.includes('administrator') && !appPasswordRoles.includes('editor')) {
-                        console.error(`❌ [PublishAnonymous] Application Password user "${appPasswordUser}" does not have administrator or editor role. Roles: ${appPasswordRoles.join(', ')}`);
-                        return res.status(403).json({
-                            error: 'Insufficient permissions',
-                            message: `Application Password is for user "${appPasswordUser}" who does not have permission to create posts. User must have administrator or editor role. Current roles: ${appPasswordRoles.join(', ')}`,
-                            userRoles: appPasswordRoles,
-                            username: appPasswordUser
-                        });
-                    }
-                } else {
-                    // Application Password didn't work with admin username, might be for different user
-                    console.warn(`⚠️ [PublishAnonymous] Application Password didn't authenticate with admin user (status ${verifyAppPassword.status}), will try to create new one for admin`);
-                    authPassword = WORDPRESS_ADMIN_PASSWORD; // Reset to use regular password, then create app password
-                    authUsername = WORDPRESS_ADMIN_USER;
+                } catch (verifyError) {
+                    // Try next username
+                    continue;
                 }
-            } catch (verifyError) {
-                console.warn(`⚠️ [PublishAnonymous] Error verifying Application Password: ${verifyError.message}. Will try to create new one.`);
+            }
+            
+            if (!appPasswordAuthenticated) {
+                console.warn(`⚠️ [PublishAnonymous] Application Password didn't authenticate with any tested username, will try to create new one for admin`);
                 authPassword = WORDPRESS_ADMIN_PASSWORD; // Reset to use regular password, then create app password
                 authUsername = WORDPRESS_ADMIN_USER;
             }
