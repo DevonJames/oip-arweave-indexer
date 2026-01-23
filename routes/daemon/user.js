@@ -763,14 +763,22 @@ router.post('/login', async (req, res) => {
         let wordpressUserId = null;
         try {
             const { syncWordPressUser } = require('../../helpers/core/wordpressUserSync');
+            console.log(`🔍 [Login] Attempting WordPress user sync for: "${email}"`);
             const wpUser = await syncWordPressUser(user.email, null, user.email.split('@')[0]);
-            if (wpUser) {
+            if (wpUser && wpUser.id) {
                 wordpressUserId = wpUser.id;
-                console.log(`✅ WordPress user synced for: "${email}" (WP ID: ${wordpressUserId})`);
+                console.log(`✅ [Login] WordPress user synced for: "${email}" (WP ID: ${wordpressUserId})`);
+            } else {
+                console.warn(`⚠️ [Login] WordPress user sync returned null/undefined for "${email}"`);
             }
         } catch (error) {
-            console.warn(`⚠️ WordPress user sync failed for "${email}":`, error.message);
-            // Don't fail login if WordPress sync fails
+            console.error(`❌ [Login] WordPress user sync failed for "${email}":`, error.message);
+            if (error.response) {
+                console.error(`❌ [Login] Response status: ${error.response.status}`);
+                console.error(`❌ [Login] Response data:`, JSON.stringify(error.response.data, null, 2));
+            }
+            // Don't fail login if WordPress sync fails - user can still use the system
+            console.warn(`⚠️ [Login] Continuing login despite WordPress sync failure`);
         }
 
         // Authentication successful - Create JWT token

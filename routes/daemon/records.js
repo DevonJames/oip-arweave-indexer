@@ -388,14 +388,57 @@ router.post('/publishAnonymous', async (req, res) => {
                         // If WordPress user ID is missing, try to sync/create it now
                         if (!wpUserId) {
                             try {
-                                const { syncWordPressUser } = require('../../helpers/core/wordpressUserSync');
-                                const wpUser = await syncWordPressUser(loggedInUser.email, null, loggedInUser.email.split('@')[0]);
-                                if (wpUser) {
-                                    wpUserId = wpUser.id;
-                                    console.log(`✅ [PublishAnonymous] Synced WordPress user for ${loggedInUser.email}: ${wpUserId}`);
+                                const { syncWordPressUser, getWordPressUserId } = require('../../helpers/core/wordpressUserSync');
+                                
+                                // First, try to find existing WordPress user by email
+                                console.log(`🔍 [PublishAnonymous] Looking for WordPress user with email: ${loggedInUser.email}`);
+                                const existingWpUserId = await getWordPressUserId(loggedInUser.email);
+                                if (existingWpUserId) {
+                                    wpUserId = existingWpUserId;
+                                    console.log(`✅ [PublishAnonymous] Found existing WordPress user for ${loggedInUser.email}: ${wpUserId}`);
+                                } else {
+                                    // If not found, try to create it
+                                    console.log(`🔍 [PublishAnonymous] WordPress user not found, attempting to create for ${loggedInUser.email}`);
+                                    console.log(`🔍 [PublishAnonymous] This requires WordPress admin authentication to work`);
+                                    const wpUser = await syncWordPressUser(loggedInUser.email, null, loggedInUser.email.split('@')[0]);
+                                    if (wpUser && wpUser.id) {
+                                        wpUserId = wpUser.id;
+                                        console.log(`✅ [PublishAnonymous] Created WordPress user for ${loggedInUser.email}: ${wpUserId}`);
+                                        
+                                        // Update the user record in Elasticsearch with the WordPress user ID
+                                        try {
+                                            await elasticClient.update({
+                                                index: 'users',
+                                                id: loggedInUser.userId,
+                                                body: {
+                                                    doc: {
+                                                        wordpressUserId: wpUserId
+                                                    }
+                                                }
+                                            });
+                                            console.log(`✅ [PublishAnonymous] Updated user record with WordPress user ID: ${wpUserId}`);
+                                        } catch (updateError) {
+                                            console.warn(`⚠️ [PublishAnonymous] Failed to update user record with WordPress ID:`, updateError.message);
+                                        }
+                                    } else {
+                                        console.warn(`⚠️ [PublishAnonymous] WordPress user sync returned null/undefined for ${loggedInUser.email}`);
+                                        console.warn(`⚠️ [PublishAnonymous] This usually means WordPress authentication failed. Check WP_APP_PASSWORD or WP_ADMIN_PASSWORD in .env`);
+                                    }
                                 }
                             } catch (syncError) {
-                                console.warn(`⚠️ [PublishAnonymous] WordPress user sync failed for ${loggedInUser.email}:`, syncError.message);
+                                console.error(`❌ [PublishAnonymous] WordPress user sync failed for ${loggedInUser.email}:`, syncError.message);
+                                if (syncError.response) {
+                                    console.error(`❌ [PublishAnonymous] Response status: ${syncError.response.status}`);
+                                    console.error(`❌ [PublishAnonymous] Response data:`, JSON.stringify(syncError.response.data, null, 2));
+                                } else {
+                                    console.error(`❌ [PublishAnonymous] Error stack:`, syncError.stack);
+                                }
+                                console.error(`❌ [PublishAnonymous] WordPress user sync is failing with 401. This means:`);
+                                console.error(`   1. WP_APP_PASSWORD might be incorrect or expired`);
+                                console.error(`   2. WP_ADMIN_PASSWORD might be incorrect`);
+                                console.error(`   3. The Application Password might be for a different username`);
+                                console.error(`   Post will be attributed to admin user instead of ${loggedInUser.email}`);
+                                // Don't throw - we'll fall back to admin if sync fails
                             }
                         }
                     }
@@ -1463,10 +1506,16 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     };
     
     // Set WordPress author based on identification mode
-    if (identificationMode === 'account' && options.wordpressUserId) {
-        // Use logged-in user's WordPress account as author
-        wpPostData.author = options.wordpressUserId;
-        console.log(`🔍 [PublishToWordPress] Setting post author to logged-in user ID: ${options.wordpressUserId}`);
+    if (identificationMode === 'account') {
+        if (options.wordpressUserId) {
+            // Use logged-in user's WordPress account as author
+            wpPostData.author = options.wordpressUserId;
+            console.log(`🔍 [PublishToWordPress] Setting post author to logged-in user ID: ${options.wordpressUserId}`);
+        } else {
+            // Account mode but no WordPress user ID - this shouldn't happen, but log it
+            console.warn(`⚠️ [PublishToWordPress] Account mode but no WordPress user ID provided. WordPress will use authenticated user.`);
+            // Don't set author - let WordPress use the authenticated user (which might be admin)
+        }
     } else if (options.anonymous) {
         // For anonymous posts, use "Anonymous" WordPress user as author
         // This ensures WordPress displays "Anonymous" instead of admin name

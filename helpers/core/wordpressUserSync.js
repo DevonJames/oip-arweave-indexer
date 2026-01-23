@@ -34,39 +34,101 @@ async function getWordPressAuth() {
         const uniqueUsernames = [...new Set(possibleUsernames)];
         
         // Try each username to see which one works
+        // Also try multiple endpoint formats in case WordPress permalinks are misconfigured
+        const testEndpoints = [
+            `${WORDPRESS_URL}/wp-json/wp/v2/users/me`,
+            `${WORDPRESS_URL}/wp-json/wp/v2/users/me/`,
+            `${WORDPRESS_URL}/index.php?rest_route=/wp/v2/users/me`
+        ];
+        
         for (const testUsername of uniqueUsernames) {
-            try {
-                const verifyResponse = await axios.get(
-                    `${WORDPRESS_URL}/wp-json/wp/v2/users/me`,
-                    {
-                        auth: {
-                            username: testUsername,
-                            password: appPassword
-                        },
-                        validateStatus: () => true
+            for (const endpoint of testEndpoints) {
+                try {
+                    const verifyResponse = await axios.get(
+                        endpoint,
+                        {
+                            auth: {
+                                username: testUsername,
+                                password: appPassword
+                            },
+                            validateStatus: () => true,
+                            timeout: 5000,
+                            maxRedirects: 5,
+                            transformResponse: [(data) => {
+                                // Keep response as-is to detect HTML
+                                return data;
+                            }]
+                        }
+                    );
+                    
+                    // Check if we got HTML instead of JSON (WordPress redirect to login)
+                    const isHtml = typeof verifyResponse.data === 'string' && (
+                        verifyResponse.data.trim().startsWith('<!DOCTYPE') ||
+                        verifyResponse.data.trim().startsWith('<html') ||
+                        verifyResponse.data.includes('<body') ||
+                        (verifyResponse.headers['content-type'] && verifyResponse.headers['content-type'].includes('text/html'))
+                    );
+                    
+                    if (isHtml) {
+                        console.warn(`⚠️ [WordPress Sync] ${testUsername} @ ${endpoint} returned HTML (likely login page or redirect)`);
+                        continue; // Try next endpoint
                     }
-                );
-                
-                if (verifyResponse.status === 200) {
-                    console.log(`✅ [WordPress Sync] Application Password authenticated as: ${testUsername}`);
-                    return {
-                        username: testUsername,
-                        password: appPassword,
-                        method: 'Application Password'
-                    };
+                    
+                    if (verifyResponse.status === 200) {
+                        // Try to parse as JSON to confirm it's valid
+                        let userData = verifyResponse.data;
+                        if (typeof userData === 'string') {
+                            try {
+                                userData = JSON.parse(userData);
+                            } catch (parseError) {
+                                console.warn(`⚠️ [WordPress Sync] ${testUsername} @ ${endpoint} response not valid JSON`);
+                                continue; // Try next endpoint
+                            }
+                        }
+                        
+                        // Verify it's actually user data
+                        if (userData && typeof userData === 'object' && userData.id) {
+                            console.log(`✅ [WordPress Sync] Application Password authenticated as: ${testUsername}`);
+                            console.log(`✅ [WordPress Sync] Authenticated user ID: ${userData.id}, email: ${userData.email}`);
+                            console.log(`✅ [WordPress Sync] Working endpoint: ${endpoint}`);
+                            return {
+                                username: testUsername,
+                                password: appPassword,
+                                method: 'Application Password'
+                            };
+                        } else {
+                            console.warn(`⚠️ [WordPress Sync] ${testUsername} @ ${endpoint} returned invalid user data`);
+                            continue; // Try next endpoint
+                        }
+                    } else if (verifyResponse.status === 401) {
+                        // 401 means wrong username/password for this endpoint, try next username
+                        console.warn(`⚠️ [WordPress Sync] ${testUsername} @ ${endpoint} returned 401 (authentication failed)`);
+                        break; // Don't try other endpoints for this username, try next username
+                    } else {
+                        console.warn(`⚠️ [WordPress Sync] ${testUsername} @ ${endpoint} returned status ${verifyResponse.status}`);
+                        // Continue to next endpoint
+                    }
+                } catch (error) {
+                    console.warn(`⚠️ [WordPress Sync] Error testing ${testUsername} @ ${endpoint}:`, error.message);
+                    // Try next endpoint
+                    continue;
                 }
-            } catch (error) {
-                // Try next username
-                continue;
             }
         }
         
-        // If none worked, fall back to WORDPRESS_ADMIN_USER
-        console.warn(`⚠️ [WordPress Sync] Application Password didn't work with any username, using ${WORDPRESS_ADMIN_USER}`);
+        // If none worked, log detailed error and fall back to WORDPRESS_ADMIN_USER
+        console.error(`❌ [WordPress Sync] Application Password authentication failed for all usernames:`);
+        console.error(`   Tried usernames: ${uniqueUsernames.join(', ')}`);
+        console.error(`   Tried endpoints: ${testEndpoints.join(', ')}`);
+        console.error(`   This usually means:`);
+        console.error(`   1. WP_APP_PASSWORD is incorrect or expired`);
+        console.error(`   2. The Application Password is for a different username`);
+        console.error(`   3. WordPress REST API is returning HTML instead of JSON (permalink issue)`);
+        console.warn(`⚠️ [WordPress Sync] Falling back to ${WORDPRESS_ADMIN_USER} - this may not work`);
         return {
             username: WORDPRESS_ADMIN_USER,
             password: appPassword,
-            method: 'Application Password'
+            method: 'Application Password (fallback - may fail)'
         };
     }
     
@@ -90,7 +152,8 @@ async function getWordPressAuth() {
  * @returns {Promise<object>} WordPress user object or null if failed
  */
 async function syncWordPressUser(email, username = null, displayName = null) {
-    if (!WORDPRESS_ADMIN_PASSWORD) {
+    // Check if we have any authentication method available
+    if (!WORDPRESS_ADMIN_PASSWORD && !process.env.WP_APP_PASSWORD) {
         console.warn('[WordPress Sync] WordPress admin password not configured, skipping user sync');
         return null;
     }
@@ -110,11 +173,36 @@ async function syncWordPressUser(email, username = null, displayName = null) {
                 auth: {
                     username: auth.username,
                     password: auth.password
-                }
+                },
+                validateStatus: () => true // Don't throw on 401
             }
         );
 
-        const existingUser = searchResponse.data.find(u => u.email === email);
+        // Check if authentication failed
+        if (searchResponse.status === 401) {
+            console.error(`[WordPress Sync] Authentication failed (401) when searching for user ${email}`);
+            console.error(`[WordPress Sync] Auth username: ${auth.username}, method: ${auth.method}`);
+            console.error(`[WordPress Sync] Response:`, JSON.stringify(searchResponse.data, null, 2));
+            throw new Error(`WordPress authentication failed: Invalid credentials. Username: ${auth.username}, Method: ${auth.method}`);
+        }
+
+        if (searchResponse.status !== 200) {
+            console.error(`[WordPress Sync] Unexpected status ${searchResponse.status} when searching for user ${email}`);
+            throw new Error(`WordPress API returned status ${searchResponse.status}`);
+        }
+
+        // Check if response is HTML (WordPress might redirect to login)
+        if (typeof searchResponse.data === 'string' && (
+            searchResponse.data.trim().startsWith('<!DOCTYPE') ||
+            searchResponse.data.trim().startsWith('<html')
+        )) {
+            console.error(`[WordPress Sync] WordPress returned HTML instead of JSON (likely login page)`);
+            throw new Error(`WordPress authentication failed: Received HTML instead of JSON. This usually means the Application Password is incorrect or expired.`);
+        }
+
+        const existingUser = Array.isArray(searchResponse.data) 
+            ? searchResponse.data.find(u => u.email === email)
+            : null;
 
         if (existingUser) {
             // Update existing user
@@ -129,9 +217,25 @@ async function syncWordPressUser(email, username = null, displayName = null) {
                     auth: {
                         username: auth.username,
                         password: auth.password
-                    }
+                    },
+                    validateStatus: () => true // Don't throw on 401
                 }
             );
+
+            // Check if authentication failed
+            if (updateResponse.status === 401) {
+                console.error(`[WordPress Sync] Authentication failed (401) when updating user ${email}`);
+                console.error(`[WordPress Sync] Auth username: ${auth.username}, method: ${auth.method}`);
+                console.error(`[WordPress Sync] Response:`, JSON.stringify(updateResponse.data, null, 2));
+                throw new Error(`WordPress authentication failed: Invalid credentials. Username: ${auth.username}, Method: ${auth.method}. Cannot update WordPress user.`);
+            }
+
+            if (updateResponse.status !== 200) {
+                console.error(`[WordPress Sync] Unexpected status ${updateResponse.status} when updating user ${email}`);
+                console.error(`[WordPress Sync] Response:`, JSON.stringify(updateResponse.data, null, 2));
+                throw new Error(`WordPress API returned status ${updateResponse.status}: ${JSON.stringify(updateResponse.data)}`);
+            }
+
             return updateResponse.data;
         } else {
             // Create new user
@@ -152,15 +256,47 @@ async function syncWordPressUser(email, username = null, displayName = null) {
                     auth: {
                         username: auth.username,
                         password: auth.password
-                    }
+                    },
+                    validateStatus: () => true // Don't throw on 401
                 }
             );
+
+            // Check if authentication failed
+            if (createResponse.status === 401) {
+                console.error(`[WordPress Sync] Authentication failed (401) when creating user ${email}`);
+                console.error(`[WordPress Sync] Auth username: ${auth.username}, method: ${auth.method}`);
+                console.error(`[WordPress Sync] Response:`, JSON.stringify(createResponse.data, null, 2));
+                throw new Error(`WordPress authentication failed: Invalid credentials. Username: ${auth.username}, Method: ${auth.method}. Cannot create WordPress user.`);
+            }
+
+            if (createResponse.status !== 201 && createResponse.status !== 200) {
+                console.error(`[WordPress Sync] Unexpected status ${createResponse.status} when creating user ${email}`);
+                console.error(`[WordPress Sync] Response:`, JSON.stringify(createResponse.data, null, 2));
+                throw new Error(`WordPress API returned status ${createResponse.status}: ${JSON.stringify(createResponse.data)}`);
+            }
+
             return createResponse.data;
         }
     } catch (error) {
         console.error('[WordPress Sync] Error syncing WordPress user:', error.message);
         if (error.response) {
-            console.error('[WordPress Sync] Response:', error.response.data);
+            console.error('[WordPress Sync] Response status:', error.response.status);
+            console.error('[WordPress Sync] Response data:', JSON.stringify(error.response.data, null, 2));
+            console.error('[WordPress Sync] Auth username used:', auth.username);
+        }
+        // If it's a 401, the authentication failed - try to find user anyway
+        if (error.response?.status === 401) {
+            console.warn('[WordPress Sync] Authentication failed (401). This might mean Application Password is incorrect or for wrong user.');
+            // Try to find user by email anyway (might work if user already exists)
+            try {
+                const foundUserId = await getWordPressUserId(email);
+                if (foundUserId) {
+                    console.log(`[WordPress Sync] Found existing WordPress user despite auth failure: ${foundUserId}`);
+                    return { id: foundUserId, email: email };
+                }
+            } catch (findError) {
+                console.warn('[WordPress Sync] Could not find user by email:', findError.message);
+            }
         }
         return null;
     }
@@ -172,12 +308,13 @@ async function syncWordPressUser(email, username = null, displayName = null) {
  * @returns {Promise<number|null>} WordPress user ID or null
  */
 async function getWordPressUserId(email) {
-    if (!WORDPRESS_ADMIN_PASSWORD) {
+    if (!WORDPRESS_ADMIN_PASSWORD && !process.env.WP_APP_PASSWORD) {
         return null;
     }
 
     try {
         const auth = await getWordPressAuth();
+        console.log(`[WordPress Sync] Searching for user with email: ${email}, using auth username: ${auth.username}`);
         const response = await axios.get(
             `${WORDPRESS_URL}/wp-json/wp/v2/users`,
             {
@@ -185,14 +322,34 @@ async function getWordPressUserId(email) {
                 auth: {
                     username: auth.username,
                     password: auth.password
-                }
+                },
+                validateStatus: () => true // Don't throw on 401
             }
         );
 
+        if (response.status === 401) {
+            console.warn(`[WordPress Sync] Authentication failed (401) when searching for user ${email}. Auth username: ${auth.username}`);
+            return null;
+        }
+
+        if (response.status !== 200) {
+            console.warn(`[WordPress Sync] Unexpected status ${response.status} when searching for user ${email}`);
+            return null;
+        }
+
         const user = response.data.find(u => u.email === email);
+        if (user) {
+            console.log(`[WordPress Sync] Found WordPress user: ${email} -> ID: ${user.id}`);
+        } else {
+            console.log(`[WordPress Sync] WordPress user not found: ${email}`);
+        }
         return user ? user.id : null;
     } catch (error) {
         console.error('[WordPress Sync] Error getting WordPress user ID:', error.message);
+        if (error.response) {
+            console.error('[WordPress Sync] Response status:', error.response.status);
+            console.error('[WordPress Sync] Response data:', JSON.stringify(error.response.data, null, 2));
+        }
         return null;
     }
 }
