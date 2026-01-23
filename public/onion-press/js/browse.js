@@ -355,7 +355,10 @@ function initLogin() {
 /**
  * Handle Account/WordPress button click
  */
-function handleAccountWordPressClick() {
+function handleAccountWordPressClick(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
     if (isLoggedIn()) {
         // User is logged in, open WordPress
         window.open('/wordpress/wp-admin/', '_blank');
@@ -364,6 +367,7 @@ function handleAccountWordPressClick() {
         sessionStorage.setItem('openingWordPress', 'true');
         loginModal.classList.remove('hidden');
     }
+    return false;
 }
 
 /**

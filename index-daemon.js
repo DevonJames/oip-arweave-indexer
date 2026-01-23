@@ -1389,7 +1389,8 @@ if (WORDPRESS_PROXY_ENABLED) {
                     // Set headers and send rewritten HTML
                     res.status(proxyRes.statusCode);
                     Object.keys(proxyRes.headers).forEach(key => {
-                        if (key.toLowerCase() !== 'content-length') {
+                        const lowerKey = key.toLowerCase();
+                        if (lowerKey !== 'content-length' && lowerKey !== 'transfer-encoding') {
                             res.setHeader(key, proxyRes.headers[key]);
                         }
                     });
@@ -1399,10 +1400,19 @@ if (WORDPRESS_PROXY_ENABLED) {
                 
                 proxyRes.on('error', (err) => {
                     console.error('[WordPress Proxy] Response error:', err);
-                    res.status(500).end('Error processing WordPress response');
+                    if (!res.headersSent) {
+                        res.status(500).end('Error processing WordPress response');
+                    }
                 });
                 
                 return; // Don't let the proxy handle the response
+            } else {
+                // For non-HTML responses, pipe directly without modification
+                res.status(proxyRes.statusCode);
+                Object.keys(proxyRes.headers).forEach(key => {
+                    res.setHeader(key, proxyRes.headers[key]);
+                });
+                proxyRes.pipe(res);
             }
         },
         onError: (err, req, res) => {
