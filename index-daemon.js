@@ -1263,6 +1263,7 @@ if (WORDPRESS_PROXY_ENABLED) {
         target: WORDPRESS_URL,
         changeOrigin: false,  // Keep original Host header to prevent WordPress redirects
         pathRewrite: { '^/wordpress': '' },
+        selfHandleResponse: true,  // Allow us to handle HTML rewriting
         onProxyReq: (proxyReq, req, res) => {
             // Preserve the original host header so WordPress knows the real domain
             const originalHost = req.headers.host;
@@ -1339,8 +1340,70 @@ if (WORDPRESS_PROXY_ENABLED) {
                 }
             }
             
-            // Note: HTML rewriting via transform stream doesn't work well with http-proxy-middleware
-            // The query string fix in onProxyReq should prevent WordPress from generating wrong URLs
+            // Rewrite HTML content to fix redirect_to parameters in login forms
+            const contentType = proxyRes.headers['content-type'] || '';
+            if (contentType.includes('text/html')) {
+                // Buffer the entire response
+                let bodyChunks = [];
+                
+                proxyRes.on('data', (chunk) => {
+                    bodyChunks.push(chunk);
+                });
+                
+                proxyRes.on('end', () => {
+                    let html = Buffer.concat(bodyChunks).toString('utf8');
+                    
+                    // Fix redirect_to parameters in URLs and form hidden fields
+                    html = html.replace(
+                        /(redirect_to=)([^"&' ]*)(\/wp-(admin|login)[^"&' ]*)/gi,
+                        (match) => {
+                            if (!match.includes('/wordpress/wp-')) {
+                                return match.replace(/(\/wp-(admin|login))/, '/wordpress$1');
+                            }
+                            return match;
+                        }
+                    );
+                    
+                    // Fix form action URLs
+                    html = html.replace(
+                        /(<form[^>]*action=["'])(\/wp-(admin|login)[^"']*)/gi,
+                        (match, prefix, path) => {
+                            if (!path.includes('/wordpress/wp-')) {
+                                return prefix + '/wordpress' + path;
+                            }
+                            return match;
+                        }
+                    );
+                    
+                    // Fix hidden input fields with redirect_to
+                    html = html.replace(
+                        /(<input[^>]*name=["']redirect_to["'][^>]*value=["'])([^"']*\/wp-(admin|login)[^"']*)/gi,
+                        (match, prefix, url) => {
+                            if (!url.includes('/wordpress/wp-')) {
+                                return prefix + url.replace(/(\/wp-(admin|login))/, '/wordpress$1');
+                            }
+                            return match;
+                        }
+                    );
+                    
+                    // Set headers and send rewritten HTML
+                    res.status(proxyRes.statusCode);
+                    Object.keys(proxyRes.headers).forEach(key => {
+                        if (key.toLowerCase() !== 'content-length') {
+                            res.setHeader(key, proxyRes.headers[key]);
+                        }
+                    });
+                    res.setHeader('Content-Length', Buffer.byteLength(html, 'utf8'));
+                    res.end(html);
+                });
+                
+                proxyRes.on('error', (err) => {
+                    console.error('[WordPress Proxy] Response error:', err);
+                    res.status(500).end('Error processing WordPress response');
+                });
+                
+                return; // Don't let the proxy handle the response
+            }
         },
         onError: (err, req, res) => {
             console.error('[WordPress Proxy] Error:', err.message);
