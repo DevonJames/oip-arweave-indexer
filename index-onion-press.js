@@ -188,7 +188,8 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
         const wpApiUrl = `${wordpressUrl}/wp-json/wp/v2/posts`;
         
         // Get WordPress admin credentials for authentication
-        const WORDPRESS_ADMIN_USER = process.env.WP_ADMIN_USER || 'admin';
+        // Note: WordPress username is "OIP Daemon" by default (matches daemon's WordPress user)
+        const WORDPRESS_ADMIN_USER = process.env.WP_ADMIN_USER || 'OIP Daemon';
         const WORDPRESS_ADMIN_PASSWORD = process.env.WP_ADMIN_PASSWORD || '';
         
         if (!WORDPRESS_ADMIN_PASSWORD) {
@@ -200,6 +201,7 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
         
         // Get Application Password (WordPress REST API requires it for creating posts)
         let authPassword = WORDPRESS_ADMIN_PASSWORD;
+        let authUsername = WORDPRESS_ADMIN_USER;
         
         // Check if Application Password is provided via env var
         if (process.env.WP_APP_PASSWORD) {
@@ -207,8 +209,56 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
             // For Basic Auth, we need to remove spaces
             authPassword = process.env.WP_APP_PASSWORD.replace(/\s+/g, '');
             console.log(`✅ [PublishAnonymous] Using Application Password from WP_APP_PASSWORD env var`);
-        } else {
-            // Try to get/create Application Password
+            
+            // Application Passwords are user-specific - try to find which user it belongs to
+            // Try with admin user first, then check if it works
+            try {
+                const verifyAppPassword = await axios.get(`${wordpressUrl}/wp-json/wp/v2/users/me`, {
+                    auth: {
+                        username: WORDPRESS_ADMIN_USER,
+                        password: authPassword
+                    },
+                    timeout: 10000,
+                    validateStatus: () => true
+                });
+                
+                if (verifyAppPassword.status === 200) {
+                    const appPasswordUser = verifyAppPassword.data.name || verifyAppPassword.data.slug;
+                    const appPasswordRoles = verifyAppPassword.data.roles || [];
+                    console.log(`🔍 [PublishAnonymous] Application Password authenticates as: ${appPasswordUser}, Roles: ${appPasswordRoles.join(', ')}`);
+                    
+                    // If Application Password is for a different user, use that username
+                    if (appPasswordUser !== WORDPRESS_ADMIN_USER) {
+                        authUsername = appPasswordUser;
+                        console.log(`🔍 [PublishAnonymous] Application Password is for user "${appPasswordUser}", using that username`);
+                    }
+                    
+                    // Check if user has editor/administrator role
+                    if (!appPasswordRoles.includes('administrator') && !appPasswordRoles.includes('editor')) {
+                        console.error(`❌ [PublishAnonymous] Application Password user "${appPasswordUser}" does not have administrator or editor role. Roles: ${appPasswordRoles.join(', ')}`);
+                        return res.status(403).json({
+                            error: 'Insufficient permissions',
+                            message: `Application Password is for user "${appPasswordUser}" who does not have permission to create posts. User must have administrator or editor role. Current roles: ${appPasswordRoles.join(', ')}`,
+                            userRoles: appPasswordRoles,
+                            username: appPasswordUser
+                        });
+                    }
+                } else {
+                    // Application Password didn't work with admin username, might be for different user
+                    console.warn(`⚠️ [PublishAnonymous] Application Password didn't authenticate with admin user (status ${verifyAppPassword.status}), will try to create new one for admin`);
+                    authPassword = WORDPRESS_ADMIN_PASSWORD; // Reset to use regular password, then create app password
+                    authUsername = WORDPRESS_ADMIN_USER;
+                }
+            } catch (verifyError) {
+                console.warn(`⚠️ [PublishAnonymous] Error verifying Application Password: ${verifyError.message}. Will try to create new one.`);
+                authPassword = WORDPRESS_ADMIN_PASSWORD; // Reset to use regular password, then create app password
+                authUsername = WORDPRESS_ADMIN_USER;
+            }
+        }
+        
+        // If we don't have a valid Application Password yet, try to create one
+        if (authPassword === WORDPRESS_ADMIN_PASSWORD) {
+            // Try to get/create Application Password for admin user
             try {
                 // First, get admin user ID
                 const meResponse = await axios.get(`${wordpressUrl}/wp-json/wp/v2/users/me`, {
@@ -223,14 +273,19 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
                 if (meResponse.status === 200 && meResponse.data?.id) {
                     const adminUserId = meResponse.data.id;
                     const userRoles = meResponse.data.roles || [];
+                    const authenticatedUser = meResponse.data.name || meResponse.data.slug || WORDPRESS_ADMIN_USER;
+                    
+                    console.log(`🔍 [PublishAnonymous] Authenticated as user: ${authenticatedUser} (ID: ${adminUserId}), Roles: ${userRoles.join(', ')}`);
                     
                     // Check if user has editor/administrator role
                     if (!userRoles.includes('administrator') && !userRoles.includes('editor')) {
-                        console.warn(`⚠️ [PublishAnonymous] User "${WORDPRESS_ADMIN_USER}" does not have administrator or editor role. Roles: ${userRoles.join(', ')}`);
+                        console.error(`❌ [PublishAnonymous] User "${authenticatedUser}" does not have administrator or editor role. Roles: ${userRoles.join(', ')}`);
                         return res.status(403).json({
                             error: 'Insufficient permissions',
-                            message: `User "${WORDPRESS_ADMIN_USER}" does not have permission to create posts. User must have administrator or editor role.`,
-                            userRoles: userRoles
+                            message: `User "${authenticatedUser}" does not have permission to create posts. User must have administrator or editor role. Current roles: ${userRoles.join(', ')}`,
+                            userRoles: userRoles,
+                            userId: adminUserId,
+                            username: authenticatedUser
                         });
                     }
                     
@@ -266,7 +321,12 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
                         }
                     }
                 } else {
-                    console.warn(`⚠️ [PublishAnonymous] Could not get admin user ID (status ${meResponse.status}), using regular password`);
+                    console.error(`❌ [PublishAnonymous] Could not get admin user ID (status ${meResponse.status})`, meResponse.data);
+                    return res.status(401).json({
+                        error: 'WordPress authentication failed',
+                        message: `Could not authenticate with WordPress. Status: ${meResponse.status}`,
+                        details: meResponse.data
+                    });
                 }
             } catch (error) {
                 console.warn(`⚠️ [PublishAnonymous] Error getting Application Password: ${error.message}. Using regular password.`);
@@ -275,11 +335,53 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
         
         console.log(`📝 [PublishAnonymous] Publishing to WordPress: ${wpApiUrl}`);
         console.log(`🔍 [PublishAnonymous] Using ${authPassword === WORDPRESS_ADMIN_PASSWORD ? 'regular' : 'Application'} password`);
+        console.log(`🔍 [PublishAnonymous] WordPress username: ${authUsername}`);
+        
+        // Verify authentication before publishing
+        let authenticatedUser = null;
+        try {
+            const verifyResponse = await axios.get(`${wordpressUrl}/wp-json/wp/v2/users/me`, {
+                auth: {
+                    username: authUsername,
+                    password: authPassword
+                },
+                timeout: 10000,
+                validateStatus: () => true
+            });
+            
+            if (verifyResponse.status === 200) {
+                authenticatedUser = verifyResponse.data.name || verifyResponse.data.slug;
+                const userRoles = verifyResponse.data.roles || [];
+                console.log(`✅ [PublishAnonymous] Verified authentication as: ${authenticatedUser}, Roles: ${userRoles.join(', ')}`);
+                
+                if (!userRoles.includes('administrator') && !userRoles.includes('editor')) {
+                    return res.status(403).json({
+                        error: 'Insufficient permissions',
+                        message: `User "${authenticatedUser}" does not have permission to create posts. User must have administrator or editor role.`,
+                        userRoles: userRoles,
+                        username: authenticatedUser
+                    });
+                }
+            } else {
+                console.error(`❌ [PublishAnonymous] Authentication verification failed: ${verifyResponse.status}`, verifyResponse.data);
+                return res.status(401).json({
+                    error: 'WordPress authentication failed',
+                    message: `Could not verify WordPress authentication. Status: ${verifyResponse.status}`,
+                    details: verifyResponse.data
+                });
+            }
+        } catch (verifyError) {
+            console.error(`❌ [PublishAnonymous] Error verifying authentication:`, verifyError.message);
+            return res.status(401).json({
+                error: 'WordPress authentication failed',
+                message: verifyError.message
+            });
+        }
         
         // Create WordPress post via REST API
         const wpResponse = await axios.post(wpApiUrl, wpPostData, {
             auth: {
-                username: WORDPRESS_ADMIN_USER,
+                username: authUsername,
                 password: authPassword
             },
             timeout: 30000,
@@ -288,10 +390,12 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
         
         if (wpResponse.status !== 201 && wpResponse.status !== 200) {
             console.error(`❌ [PublishAnonymous] WordPress API error: ${wpResponse.status}`, wpResponse.data);
+            console.error(`❌ [PublishAnonymous] Authenticated user was: ${authenticatedUser}`);
             return res.status(500).json({
                 error: 'WordPress publish failed',
                 message: wpResponse.data?.message || `WordPress returned status ${wpResponse.status}`,
-                details: wpResponse.data
+                details: wpResponse.data,
+                authenticatedUser: authenticatedUser
             });
         }
         
