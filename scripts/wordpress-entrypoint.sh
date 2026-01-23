@@ -65,6 +65,9 @@ if wp core is-installed --allow-root 2>/dev/null; then
             wp option update home "${WP_SITE_URL}" --allow-root || true
             wp option update siteurl "${WP_SITE_URL}" --allow-root || true
         fi
+        # Force update to ensure WordPress uses the correct URL for redirects
+        wp option update home "${WP_SITE_URL}" --allow-root || true
+        wp option update siteurl "${WP_SITE_URL}" --allow-root || true
     fi
 else
     # Check if auto-install is enabled
