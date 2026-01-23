@@ -441,11 +441,13 @@ async function loadRecords() {
         if (destinations.thisHost) {
             try {
                 console.log('Loading WordPress posts...');
+                // Type filter is commented out, default to 'post'
+                const recordType = typeFilter?.value || 'post';
                 const wpRecords = await getWordPressPosts({
                     limit: pageSize,
                     offset: currentPage * pageSize,
                     search: searchInput.value,
-                    type: typeFilter.value
+                    type: recordType
                 });
                 console.log('WordPress posts loaded:', wpRecords.length);
                 allRecords.push(...wpRecords);
