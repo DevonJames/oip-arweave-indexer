@@ -103,13 +103,73 @@ router.get('/records', async (req, res) => {
 
 /**
  * GET /api/browse/record/:did
- * Get a single record by DID
+ * Get a single record by DID or WordPress post ID
  */
 router.get('/record/:did', async (req, res) => {
     try {
         const { did } = req.params;
         const { resolveDepth = 1 } = req.query;
         
+        // Check if this is a WordPress post ID (starts with 'wp-' or is numeric)
+        if (did.startsWith('wp-') || /^\d+$/.test(did)) {
+            const postId = did.replace('wp-', '');
+            
+            // Fetch WordPress posts and find the matching one
+            try {
+                const WORDPRESS_URL = process.env.WORDPRESS_URL || 'http://wordpress:80';
+                const response = await axios.get(`${WORDPRESS_URL}/wp-json/wp/v2/posts/${postId}`, {
+                    params: {
+                        _embed: true
+                    },
+                    timeout: 10000,
+                    validateStatus: () => true
+                });
+                
+                if (response.status === 404 || !response.data) {
+                    return res.status(404).json({
+                        error: 'WordPress post not found',
+                        postId
+                    });
+                }
+                
+                const post = response.data;
+                const baseUrl = process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get('host')}`;
+                const wordpressPath = process.env.WORDPRESS_PROXY_PATH || '/wordpress';
+                
+                let permalink = post.link;
+                if (!permalink && post.id) {
+                    permalink = `${baseUrl}${wordpressPath}/?p=${post.id}`;
+                }
+                
+                const record = {
+                    wordpress: {
+                        postId: post.id,
+                        title: post.title?.rendered || '',
+                        excerpt: post.excerpt?.rendered || '',
+                        content: post.content?.rendered || '',
+                        postDate: post.date,
+                        permalink: permalink,
+                        tags: post._embedded?.['wp:term']?.[0]?.map(t => t.name) || [],
+                        author: post._embedded?.author?.[0]?.name || ''
+                    },
+                    id: `wp-${post.id}`,
+                    oip: {
+                        indexedAt: post.date
+                    }
+                };
+                
+                return res.status(200).json(record);
+            } catch (wpError) {
+                console.error('Get WordPress post error:', wpError.message);
+                return res.status(404).json({
+                    error: 'WordPress post not found',
+                    postId,
+                    message: wpError.message
+                });
+            }
+        }
+        
+        // Otherwise, treat as OIP DID
         const data = await proxyToOIP('/api/records', {
             did: decodeURIComponent(did),
             resolveDepth: parseInt(resolveDepth) || 1

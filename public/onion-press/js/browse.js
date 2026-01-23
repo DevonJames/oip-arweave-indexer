@@ -37,6 +37,11 @@ const loginError = document.getElementById('loginError');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
+    // Set type filter to 'post' by default (Types menu is commented out)
+    if (typeFilter) {
+        typeFilter.value = 'post';
+    }
+    
     initNavigation();
     initSearch();
     initPagination();
@@ -527,9 +532,24 @@ function renderRecords(records) {
     
     // Add click handlers
     recordsContainer.querySelectorAll('.record-card').forEach(card => {
-        card.addEventListener('click', () => {
+        card.addEventListener('click', (e) => {
+            // Don't trigger if clicking on a link
+            if (e.target.tagName === 'A') {
+                return;
+            }
+            
+            // Check if this is a WordPress post
+            const wpId = card.dataset.wpId;
+            const recordId = card.dataset.recordId;
             const did = card.dataset.did;
-            showRecordDetail(did);
+            
+            if (wpId || (recordId && recordId.startsWith('wp-'))) {
+                // WordPress post - fetch from WordPress API
+                showWordPressRecordDetail(wpId || recordId.replace('wp-', ''));
+            } else if (did) {
+                // OIP record - fetch from OIP API
+                showRecordDetail(did);
+            }
         });
     });
 }
@@ -630,30 +650,28 @@ function renderRecordCard(record) {
 function renderWordPressCard(record) {
     const wp = record.wordpress || {};
     const title = wp.title || 'Untitled';
+    // Render HTML instead of escaping it (excerpt may contain HTML)
     const excerpt = wp.excerpt || wp.content?.substring(0, 200) || '';
     const date = wp.postDate ? new Date(wp.postDate).toLocaleDateString() : '';
     const permalink = wp.permalink || '';
     const tags = wp.tags || [];
     
     return `
-        <div class="record-card" data-wp-id="${wp.postId || ''}">
+        <div class="record-card" data-wp-id="${wp.postId || ''}" data-record-id="${record.id || ''}">
             <div class="record-header">
                 <span class="record-type-icon">📝</span>
                 <h3 class="record-title">${escapeHtml(title)}</h3>
             </div>
-            <p class="record-description">${escapeHtml(excerpt)}</p>
+            <div class="record-description">${excerpt}</div>
             <div class="record-meta">
                 <span>📅 ${date}</span>
-                <span>📝 WordPress</span>
+                <span class="source-badge wordpress">WordPress</span>
             </div>
             ${tags.length > 0 ? `
                 <div class="record-tags">
                     ${tags.slice(0, 5).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
                 </div>
             ` : ''}
-            <div class="record-sources">
-                <span class="source-badge wordpress">WordPress</span>
-            </div>
             ${permalink ? `
                 <div class="record-actions">
                     <a href="${escapeHtml(permalink)}" target="_blank" class="record-link">View Post →</a>
@@ -696,6 +714,59 @@ async function showRecordDetail(did) {
     } catch (error) {
         detailContainer.innerHTML = `<div class="error-msg">Error: ${error.message}</div>`;
     }
+}
+
+/**
+ * Show WordPress post detail modal
+ */
+async function showWordPressRecordDetail(postId) {
+    const detailContainer = document.getElementById('recordDetail');
+    detailContainer.innerHTML = '<div class="loading">Loading...</div>';
+    recordModal.classList.remove('hidden');
+    
+    try {
+        // Fetch single WordPress post by ID
+        const record = await getRecord(`wp-${postId}`);
+        detailContainer.innerHTML = renderWordPressRecordDetail(record);
+    } catch (error) {
+        detailContainer.innerHTML = `<div class="error-msg">Error: ${error.message}</div>`;
+    }
+}
+
+/**
+ * Render WordPress post detail
+ */
+function renderWordPressRecordDetail(record) {
+    const wp = record.wordpress || {};
+    const title = wp.title || 'Untitled';
+    const content = wp.content || '';
+    const excerpt = wp.excerpt || '';
+    const date = wp.postDate ? new Date(wp.postDate).toLocaleString() : '';
+    const permalink = wp.permalink || '';
+    const tags = wp.tags || [];
+    const author = wp.author || '';
+    
+    return `
+        <h2>${escapeHtml(title)}</h2>
+        <div class="record-meta" style="margin-bottom: 1rem;">
+            <span>Type: Post</span>
+            <span>Date: ${date}</span>
+            <span class="source-badge wordpress">WordPress</span>
+        </div>
+        ${author ? `<p style="margin-bottom: 0.5rem; color: var(--text-muted);">By: ${escapeHtml(author)}</p>` : ''}
+        ${permalink ? `<p style="margin-bottom: 1rem;"><a href="${escapeHtml(permalink)}" target="_blank" rel="noopener" style="color: var(--accent-purple);">🔗 View on WordPress</a></p>` : ''}
+        ${excerpt ? `<div style="margin-bottom: 1rem; color: var(--text-muted); font-style: italic;">${excerpt}</div>` : ''}
+        ${content ? `<div style="margin-bottom: 1rem;">${content}</div>` : ''}
+        ${tags.length > 0 ? `
+            <div class="record-tags" style="margin-bottom: 1rem;">
+                ${tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+            </div>
+        ` : ''}
+        <details style="margin-top: 1rem;">
+            <summary style="cursor: pointer; color: var(--text-muted);">Raw Data</summary>
+            <pre style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; overflow: auto; font-size: 0.8rem; margin-top: 0.5rem;">${escapeHtml(JSON.stringify(record, null, 2))}</pre>
+        </details>
+    `;
 }
 
 /**
