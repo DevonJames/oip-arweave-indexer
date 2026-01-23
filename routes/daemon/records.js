@@ -1150,11 +1150,11 @@ async function getWordPressAppPassword() {
     
     // Check if Application Password is provided via env var
     if (process.env.WP_APP_PASSWORD) {
-        // WordPress Application Passwords are in format "xxxx xxxx xxxx xxxx xxxx xxxx"
-        // For Basic Auth, we need to remove spaces
-        wpAppPasswordCache = process.env.WP_APP_PASSWORD.replace(/\s+/g, '');
+        // WordPress Application Passwords MUST be used WITH SPACES for Basic Auth
+        // WordPress displays them as "xxxx xxxx xxxx xxxx xxxx xxxx" and expects that exact format
+        wpAppPasswordCache = process.env.WP_APP_PASSWORD; // Keep spaces!
         console.log(`✅ [WordPress Auth] Using Application Password from WP_APP_PASSWORD env var`);
-        console.log(`🔍 [WordPress Auth] Application Password length: ${wpAppPasswordCache.length} chars (spaces removed)`);
+        console.log(`🔍 [WordPress Auth] Application Password length: ${wpAppPasswordCache.length} chars (WITH spaces)`);
         return wpAppPasswordCache;
     }
     
@@ -1340,9 +1340,9 @@ async function getWordPressAppPassword() {
             }
             
             if (appPasswordCreated && appPasswordResponse) {
-                wpAppPasswordCache = appPasswordResponse.data.password.replace(/\s+/g, ''); // Remove spaces
+                wpAppPasswordCache = appPasswordResponse.data.password; // Keep spaces - WordPress requires them!
                 console.log(`✅ [WordPress Auth] Created Application Password successfully`);
-                console.log(`💡 [WordPress Auth] Tip: Set WP_APP_PASSWORD=${wpAppPasswordCache} in your .env to reuse this password`);
+                console.log(`💡 [WordPress Auth] Tip: Set WP_APP_PASSWORD="${wpAppPasswordCache}" in your .env to reuse this password (WITH SPACES!)`);
                 return wpAppPasswordCache;
             } else if (appPasswordResponse && appPasswordResponse.status === 400 && appPasswordResponse.data?.code === 'application_passwords_disabled') {
                 console.warn(`⚠️ [WordPress Auth] Application Passwords are disabled in WordPress. Using regular password.`);

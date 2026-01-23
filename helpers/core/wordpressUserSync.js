@@ -20,10 +20,9 @@ const WORDPRESS_ADMIN_PASSWORD = process.env.WP_ADMIN_PASSWORD || process.env.WO
 async function getWordPressAuth() {
     // Check if Application Password is provided via env var
     if (process.env.WP_APP_PASSWORD) {
-        // WordPress Application Passwords are displayed with spaces, but may work with or without
-        // Try WITH spaces first (as WordPress displays them), then without if that fails
-        const appPasswordWithSpaces = process.env.WP_APP_PASSWORD;
-        const appPassword = process.env.WP_APP_PASSWORD.replace(/\s+/g, '');
+        // WordPress Application Passwords MUST be used WITH SPACES for Basic Auth
+        // WordPress displays them as "xxxx xxxx xxxx xxxx xxxx xxxx" and expects that exact format
+        const appPassword = process.env.WP_APP_PASSWORD; // Keep spaces!
         
         // Application Passwords are user-specific - try to find which user it belongs to
         // Try common usernames: "devon" (most common), then env var, then defaults
@@ -44,25 +43,18 @@ async function getWordPressAuth() {
             `${WORDPRESS_URL}/index.php?rest_route=/wp/v2/users/me`
         ];
         
-        // Try Application Password WITH spaces first (as WordPress displays them)
-        // Then try WITHOUT spaces if that fails
-        const passwordFormats = [
-            { password: appPasswordWithSpaces, label: 'with spaces' },
-            { password: appPassword, label: 'without spaces' }
-        ];
-        
+        // Try Application Password WITH spaces (WordPress requires this format)
         for (const testUsername of uniqueUsernames) {
-            for (const passwordFormat of passwordFormats) {
-                for (const endpoint of testEndpoints) {
-                    try {
-                        console.log(`🔍 [WordPress Sync] Testing ${testUsername} @ ${endpoint} (password ${passwordFormat.label})`);
-                        const verifyResponse = await axios.get(
-                            endpoint,
-                            {
-                                auth: {
-                                    username: testUsername,
-                                    password: passwordFormat.password
-                                },
+            for (const endpoint of testEndpoints) {
+                try {
+                    console.log(`🔍 [WordPress Sync] Testing ${testUsername} @ ${endpoint} (Application Password with spaces)`);
+                    const verifyResponse = await axios.get(
+                        endpoint,
+                        {
+                            auth: {
+                                username: testUsername,
+                                password: appPassword // Use WITH spaces
+                            },
                             validateStatus: () => true,
                             timeout: 5000,
                             maxRedirects: 5,
@@ -100,22 +92,22 @@ async function getWordPressAuth() {
                         
                         // Verify it's actually user data
                         if (userData && typeof userData === 'object' && userData.id) {
-                            console.log(`✅ [WordPress Sync] Application Password authenticated as: ${testUsername} (${passwordFormat.label})`);
+                            console.log(`✅ [WordPress Sync] Application Password authenticated as: ${testUsername}`);
                             console.log(`✅ [WordPress Sync] Authenticated user ID: ${userData.id}, email: ${userData.email}`);
                             console.log(`✅ [WordPress Sync] Working endpoint: ${endpoint}`);
                             return {
                                 username: testUsername,
-                                password: passwordFormat.password, // Use the format that worked
-                                method: `Application Password (${passwordFormat.label})`
+                                password: appPassword, // Use WITH spaces (as WordPress requires)
+                                method: 'Application Password'
                             };
                         } else {
                             console.warn(`⚠️ [WordPress Sync] ${testUsername} @ ${endpoint} returned invalid user data`);
                             continue; // Try next endpoint
                         }
                     } else if (verifyResponse.status === 401) {
-                        // 401 means wrong username/password for this format, try next password format or username
-                        console.warn(`⚠️ [WordPress Sync] ${testUsername} @ ${endpoint} returned 401 (password ${passwordFormat.label} failed)`);
-                        continue; // Try next password format or endpoint
+                        // 401 means wrong username/password, try next username
+                        console.warn(`⚠️ [WordPress Sync] ${testUsername} @ ${endpoint} returned 401 (authentication failed)`);
+                        break; // Don't try other endpoints for this username, try next username
                     } else {
                         console.warn(`⚠️ [WordPress Sync] ${testUsername} @ ${endpoint} returned status ${verifyResponse.status}`);
                         // Continue to next endpoint

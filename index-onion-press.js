@@ -238,9 +238,9 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
         
         // Check if Application Password is provided via env var
         if (process.env.WP_APP_PASSWORD) {
-            // WordPress Application Passwords are in format "xxxx xxxx xxxx xxxx xxxx xxxx"
-            // For Basic Auth, we need to remove spaces
-            authPassword = process.env.WP_APP_PASSWORD.replace(/\s+/g, '');
+            // WordPress Application Passwords MUST be used WITH SPACES for Basic Auth
+            // WordPress displays them as "xxxx xxxx xxxx xxxx xxxx xxxx" and expects that exact format
+            authPassword = process.env.WP_APP_PASSWORD; // Keep spaces!
             console.log(`✅ [PublishAnonymous] Using Application Password from WP_APP_PASSWORD env var`);
             
             // Application Passwords are user-specific - try to find which user it belongs to
@@ -333,10 +333,10 @@ app.post('/onion-press/api/records/publishAnonymous', async (req, res) => {
                         );
                         
                         if (appPasswordResponse.status === 201 && appPasswordResponse.data?.password) {
-                            authPassword = appPasswordResponse.data.password.replace(/\s+/g, '');
+                            authPassword = appPasswordResponse.data.password; // Keep spaces - WordPress requires them!
                             authUsername = 'devon';
                             console.log(`✅ [PublishAnonymous] Created Application Password for "devon" successfully`);
-                            console.log(`⚠️ [PublishAnonymous] IMPORTANT: Update WP_APP_PASSWORD in .env with: ${appPasswordResponse.data.password.replace(/\s+/g, '')}`);
+                            console.log(`⚠️ [PublishAnonymous] IMPORTANT: Update WP_APP_PASSWORD in .env with: "${appPasswordResponse.data.password}" (WITH SPACES!)`);
                         } else {
                             console.warn(`⚠️ [PublishAnonymous] Could not create Application Password (status ${appPasswordResponse.status}), will try regular password`);
                             authPassword = WORDPRESS_ADMIN_PASSWORD;
