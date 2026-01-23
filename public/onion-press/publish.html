@@ -666,7 +666,7 @@
                         </div>
                     </div>
                     
-                    <button class="submit-btn" onclick="publishAccount()">Publish</button>
+                    <button class="submit-btn" id="accountPublishBtn">Publish</button>
                     <div id="accountStatus" class="status-message"></div>
                 </div>
             </div>
@@ -962,45 +962,58 @@
         }
         
         async function publishAccount() {
-            const title = document.getElementById('accountTitle').value;
-            const content = document.getElementById('accountContent').value;
-            const password = document.getElementById('accountPassword').value;
+            const title = document.getElementById('accountTitle')?.value;
+            const content = document.getElementById('accountContent')?.value;
             const statusDiv = document.getElementById('accountStatus');
             
             if (!title || !content) {
-                statusDiv.textContent = 'Please fill in title and content';
-                statusDiv.className = 'status-message error';
+                if (statusDiv) {
+                    statusDiv.textContent = 'Please fill in title and content';
+                    statusDiv.className = 'status-message error';
+                } else {
+                    alert('Please fill in title and content');
+                }
                 return;
             }
             
             if (!accountToken) {
-                statusDiv.textContent = 'Please login first';
-                statusDiv.className = 'status-message error';
+                if (statusDiv) {
+                    statusDiv.textContent = 'Please login first';
+                    statusDiv.className = 'status-message error';
+                } else {
+                    alert('Please login first');
+                }
                 return;
             }
             
-            if (!password) {
-                statusDiv.textContent = 'Password required for signing';
-                statusDiv.className = 'status-message error';
-                return;
-            }
+            // Get destinations
+            const destinations = {
+                arweave: document.getElementById('accountDestArweave')?.checked || false,
+                gun: document.getElementById('accountDestGun')?.checked || false,
+                thisHost: document.getElementById('accountDestThisHost')?.checked || false
+            };
             
-            try {
-                statusDiv.textContent = 'Publishing...';
-                statusDiv.className = 'status-message info';
-                
-                // Build payload
-                const payload = {
-                    '@context': 'temp',
-                    tags: [
-                        { name: 'Index-Method', value: 'OIP' },
-                        { name: 'Ver', value: '0.9.0' },
-                        { name: 'Content-Type', value: 'application/json' }
-                    ],
-                    fragments: [{
-                        id: crypto.randomUUID(),
-                        dataType: 'Record',
-                        recordType: 'post',
+            // Only require password if Arweave is enabled (needed for wallet decryption)
+            // For local-only publishing, we can use publishAnonymous endpoint instead
+            const needsPassword = destinations.arweave || destinations.gun;
+            
+            // If only publishing to WordPress (local-only), use publishAnonymous endpoint
+            // but mark it as account-based so it uses the logged-in user's WordPress account
+            if (!needsPassword && destinations.thisHost) {
+                try {
+                    if (statusDiv) {
+                        statusDiv.textContent = 'Publishing...';
+                        statusDiv.className = 'status-message info';
+                    }
+                    
+                    // Build payload (same format as anonymous)
+                    const payload = {
+                        tags: [
+                            { name: 'Index-Method', value: 'OIP' },
+                            { name: 'Ver', value: '0.9.0' },
+                            { name: 'Content-Type', value: 'application/json' },
+                            { name: 'Record-Type', value: 'post' }
+                        ],
                         records: [{
                             basic: {
                                 name: title,
@@ -1008,51 +1021,138 @@
                             },
                             post: {
                                 articleText: content,
-                                byline: accountUser?.email || 'Account User'
+                                bylineWriter: accountUser?.email || 'Account User'
                             }
                         }]
-                    }]
-                };
-                
-                // Get destinations
-                const destinations = {
-                    arweave: document.getElementById('accountDestArweave').checked,
-                    gun: document.getElementById('accountDestGun').checked,
-                    thisHost: document.getElementById('accountDestThisHost').checked
-                };
-                
-                // Publish
-                const response = await fetch('/onion-press/api/records/publishAccount', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${accountToken}`
-                    },
-                    body: JSON.stringify({ payload, destinations, password })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    statusDiv.innerHTML = `
-                        <div class="success">
-                            <strong>✅ Published successfully!</strong><br>
-                            ${data.transactionId ? `Arweave TX: ${data.transactionId}<br>` : ''}
-                            ${data.destinations?.thisHost?.postId ? `WordPress Post ID: ${data.destinations.thisHost.postId}<br>` : ''}
-                            <a href="/onion-press/" class="link">View in Browse →</a>
-                        </div>
-                    `;
-                    statusDiv.className = 'status-message success';
+                    };
                     
-                    // Clear form
-                    document.getElementById('accountTitle').value = '';
-                    document.getElementById('accountContent').value = '';
-                } else {
-                    throw new Error(data.error || 'Publishing failed');
+                    // Use publishAnonymous endpoint but with auth token so it knows we're logged in
+                    const response = await fetch('/onion-press/api/records/publishAnonymous', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${accountToken}`
+                        },
+                        body: JSON.stringify({ payload, destinations })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success || data.destinations?.thisHost) {
+                        const wpResult = data.destinations?.thisHost;
+                        if (statusDiv) {
+                            statusDiv.innerHTML = `
+                                <div class="success">
+                                    <strong>✅ Published successfully!</strong><br>
+                                    ${wpResult?.postId ? `WordPress Post ID: ${wpResult.postId}<br>` : ''}
+                                    ${wpResult?.permalink ? `<a href="${wpResult.permalink}" target="_blank">View Post →</a><br>` : ''}
+                                    <a href="/onion-press/" class="link">View in Browse →</a>
+                                </div>
+                            `;
+                            statusDiv.className = 'status-message success';
+                        }
+                        
+                        // Clear form
+                        document.getElementById('accountTitle').value = '';
+                        document.getElementById('accountContent').value = '';
+                    } else {
+                        throw new Error(data.error || data.message || 'Publishing failed');
+                    }
+                } catch (error) {
+                    const errorMsg = `Publishing failed: ${error.message}`;
+                    if (statusDiv) {
+                        statusDiv.textContent = errorMsg;
+                        statusDiv.className = 'status-message error';
+                    } else {
+                        alert(errorMsg);
+                    }
                 }
-            } catch (error) {
-                statusDiv.textContent = `Publishing failed: ${error.message}`;
-                statusDiv.className = 'status-message error';
+                return;
+            }
+            
+            // For Arweave/GUN publishing, password is required
+            // TODO: Add password field to publish form or prompt for it
+            if (needsPassword) {
+                const password = prompt('Enter your password to sign with your wallet:');
+                if (!password) {
+                    if (statusDiv) {
+                        statusDiv.textContent = 'Password required for signing';
+                        statusDiv.className = 'status-message error';
+                    }
+                    return;
+                }
+                
+                try {
+                    if (statusDiv) {
+                        statusDiv.textContent = 'Publishing...';
+                        statusDiv.className = 'status-message info';
+                    }
+                    
+                    // Build payload
+                    const payload = {
+                        '@context': 'temp',
+                        tags: [
+                            { name: 'Index-Method', value: 'OIP' },
+                            { name: 'Ver', value: '0.9.0' },
+                            { name: 'Content-Type', value: 'application/json' }
+                        ],
+                        fragments: [{
+                            id: crypto.randomUUID(),
+                            dataType: 'Record',
+                            recordType: 'post',
+                            records: [{
+                                basic: {
+                                    name: title,
+                                    description: content.substring(0, 200)
+                                },
+                                post: {
+                                    articleText: content,
+                                    byline: accountUser?.email || 'Account User'
+                                }
+                            }]
+                        }]
+                    };
+                    
+                    // Publish with password
+                    const response = await fetch('/onion-press/api/records/publishAccount', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${accountToken}`
+                        },
+                        body: JSON.stringify({ payload, destinations, password })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        if (statusDiv) {
+                            statusDiv.innerHTML = `
+                                <div class="success">
+                                    <strong>✅ Published successfully!</strong><br>
+                                    ${data.transactionId ? `Arweave TX: ${data.transactionId}<br>` : ''}
+                                    ${data.destinations?.thisHost?.postId ? `WordPress Post ID: ${data.destinations.thisHost.postId}<br>` : ''}
+                                    <a href="/onion-press/" class="link">View in Browse →</a>
+                                </div>
+                            `;
+                            statusDiv.className = 'status-message success';
+                        }
+                        
+                        // Clear form
+                        document.getElementById('accountTitle').value = '';
+                        document.getElementById('accountContent').value = '';
+                    } else {
+                        throw new Error(data.error || data.message || 'Publishing failed');
+                    }
+                } catch (error) {
+                    const errorMsg = `Publishing failed: ${error.message}`;
+                    if (statusDiv) {
+                        statusDiv.textContent = errorMsg;
+                        statusDiv.className = 'status-message error';
+                    } else {
+                        alert(errorMsg);
+                    }
+                }
             }
         }
 
@@ -1550,6 +1650,12 @@
             if (accountLoginBtn) {
                 accountLoginBtn.addEventListener('click', accountLogin);
             }
+            
+            // Account publish button
+            const accountPublishBtn = document.getElementById('accountPublishBtn');
+            if (accountPublishBtn) {
+                accountPublishBtn.addEventListener('click', publishAccount);
+            }
 
             // Update publish button state on form changes (Anonymous)
             document.getElementById('anonTitle').addEventListener('input', updateAnonymousPublishButton);
@@ -1612,6 +1718,7 @@
         window.selectMethod = selectMethod;
         window.showMethodSelection = showMethodSelection;
         window.accountLogin = accountLogin;
+        window.publishAccount = publishAccount;
     </script>
 </body>
 </html>
