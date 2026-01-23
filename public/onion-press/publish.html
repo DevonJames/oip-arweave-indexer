@@ -630,7 +630,8 @@
                         <label for="accountPassword">Password:</label>
                         <input type="password" id="accountPassword" placeholder="Your password" required>
                     </div>
-                    <button class="submit-btn" onclick="accountLogin()">Login</button>
+                    <button class="submit-btn" id="accountLoginBtn">Login</button>
+                    <div id="accountLoginStatus" class="status-message"></div>
                     <p class="form-note">Don't have an account? <a href="/onion-press/" onclick="alert('Please register through the main interface first')">Register here</a></p>
                 </div>
                 
@@ -876,19 +877,25 @@
         
         // Account login functions
         async function accountLogin() {
-            const email = document.getElementById('accountEmail').value;
-            const password = document.getElementById('accountPassword').value;
-            const statusDiv = document.getElementById('accountStatus');
+            const email = document.getElementById('accountEmail')?.value;
+            const password = document.getElementById('accountPassword')?.value;
+            const statusDiv = document.getElementById('accountLoginStatus');
             
             if (!email || !password) {
-                statusDiv.textContent = 'Please enter email and password';
-                statusDiv.className = 'status-message error';
+                if (statusDiv) {
+                    statusDiv.textContent = 'Please enter email and password';
+                    statusDiv.className = 'status-message error';
+                } else {
+                    alert('Please enter email and password');
+                }
                 return;
             }
             
             try {
-                statusDiv.textContent = 'Logging in...';
-                statusDiv.className = 'status-message info';
+                if (statusDiv) {
+                    statusDiv.textContent = 'Logging in...';
+                    statusDiv.className = 'status-message info';
+                }
                 
                 const response = await fetch('/api/user/login', {
                     method: 'POST',
@@ -900,21 +907,32 @@
                 
                 if (data.success && data.token) {
                     accountToken = data.token;
-                    accountUser = { email, publicKey: data.publicKey };
+                    accountUser = { 
+                        email, 
+                        publicKey: data.publicKey,
+                        wordpressUserId: data.wordpressUserId 
+                    };
                     localStorage.setItem('onionpress_token', accountToken);
                     
                     // Show publish form
                     document.getElementById('accountLoginSection').classList.add('hidden');
                     document.getElementById('accountPublishSection').classList.remove('hidden');
                     
-                    statusDiv.textContent = 'Login successful!';
-                    statusDiv.className = 'status-message success';
+                    if (statusDiv) {
+                        statusDiv.textContent = 'Login successful!';
+                        statusDiv.className = 'status-message success';
+                    }
                 } else {
-                    throw new Error(data.error || 'Login failed');
+                    throw new Error(data.error || data.message || 'Login failed');
                 }
             } catch (error) {
-                statusDiv.textContent = `Login failed: ${error.message}`;
-                statusDiv.className = 'status-message error';
+                const errorMsg = `Login failed: ${error.message}`;
+                if (statusDiv) {
+                    statusDiv.textContent = errorMsg;
+                    statusDiv.className = 'status-message error';
+                } else {
+                    alert(errorMsg);
+                }
             }
         }
         
@@ -1526,6 +1544,12 @@
             // Anonymous Form handlers
             const anonPublishBtn = document.getElementById('anonPublishBtn');
             anonPublishBtn.addEventListener('click', publishAnonymous);
+            
+            // Account login button
+            const accountLoginBtn = document.getElementById('accountLoginBtn');
+            if (accountLoginBtn) {
+                accountLoginBtn.addEventListener('click', accountLogin);
+            }
 
             // Update publish button state on form changes (Anonymous)
             document.getElementById('anonTitle').addEventListener('input', updateAnonymousPublishButton);
@@ -1587,6 +1611,7 @@
         // Make functions available globally
         window.selectMethod = selectMethod;
         window.showMethodSelection = showMethodSelection;
+        window.accountLogin = accountLogin;
     </script>
 </body>
 </html>
