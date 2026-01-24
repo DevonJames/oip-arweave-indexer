@@ -501,8 +501,13 @@ const optionalAuthenticateToken = (req, res, next) => {
     try {
         const verified = jwt.verify(token, process.env.JWT_SECRET);
         
-        // Add server's Arweave wallet info for backward compatibility (if user doesn't have HD wallet)
-        if (!verified.publisherPubKey) {
+        // Add server's Arweave wallet info for backward compatibility (only if user doesn't have HD wallet)
+        // Modern users have publicKey from their HD wallet in the JWT, so we don't need publisherPubKey
+        // Only add publisherPubKey for legacy compatibility if:
+        // 1. User doesn't have publicKey (legacy account)
+        // 2. publisherPubKey is not already set
+        // 3. Server wallet file exists (optional - don't fail if missing)
+        if (!verified.publicKey && !verified.publisherPubKey) {
             try {
                 const walletPath = getWalletFilePath();
                 const jwk = JSON.parse(fs.readFileSync(walletPath));
@@ -513,8 +518,14 @@ const optionalAuthenticateToken = (req, res, next) => {
                 verified.publisherAddress = myAddress;
                 verified.didAddress = `did:arweave:${myAddress}`;
             } catch (error) {
-                console.error('Error extracting publisher public key:', error);
-                return res.status(500).json({ error: 'Failed to extract publisher credentials' });
+                // Wallet file not found is OK - this is optional for backward compatibility
+                // Modern users have publicKey in JWT, so publisherPubKey is not needed
+                // Only log if it's not a "file not found" error
+                if (!error.message.includes('not found')) {
+                    console.warn('⚠️ [Auth] Could not extract publisher public key (wallet file not found or invalid):', error.message);
+                }
+                // Don't fail authentication - continue without publisherPubKey
+                // User's publicKey from HD wallet is sufficient
             }
         }
         
