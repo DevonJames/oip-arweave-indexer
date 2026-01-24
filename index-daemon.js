@@ -1054,21 +1054,52 @@ if (ONION_PRESS_ENABLED) {
             const wpPosts = response.data || [];
             
             // Transform WordPress posts to OIP-like format
-            const records = wpPosts.map(post => ({
-                wordpress: {
-                    postId: post.id,
-                    title: post.title?.rendered || '',
-                    excerpt: post.excerpt?.rendered || '',
-                    content: post.content?.rendered || '',
-                    postDate: post.date,
-                    permalink: post.link,
-                    tags: post._embedded?.['wp:term']?.[0]?.map(t => t.name) || [],
-                    author: post._embedded?.author?.[0]?.name || ''
-                },
-                id: `wp-${post.id}`,
-                oip: {
-                    indexedAt: post.date
+            // Fetch meta fields for each post to get byline information (for anonymous posts)
+            const records = await Promise.all(wpPosts.map(async (post) => {
+                // Get byline from meta fields (for anonymous posts with custom byline)
+                let author = post._embedded?.author?.[0]?.name || '';
+                let byline = null;
+                
+                // Try to get meta fields - WordPress REST API may include them if registered
+                if (post.meta) {
+                    byline = post.meta._op_byline || post.meta.op_publisher_byline;
+                } else {
+                    // If meta not included, fetch it separately
+                    try {
+                        const wordpressUrl = process.env.WORDPRESS_URL || 'http://wordpress:80';
+                        const metaResponse = await axios.get(`${wordpressUrl}/wp-json/wp/v2/posts/${post.id}`, {
+                            timeout: 5000,
+                            validateStatus: () => true,
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        if (metaResponse.status === 200 && metaResponse.data.meta) {
+                            byline = metaResponse.data.meta._op_byline || metaResponse.data.meta.op_publisher_byline;
+                        }
+                    } catch (metaError) {
+                        // Ignore meta fetch errors - fallback to author name
+                        console.warn(`⚠️ [WordPressPosts] Could not fetch meta for post ${post.id}:`, metaError.message);
+                    }
                 }
+                
+                // Use byline if available, otherwise use author name
+                const displayAuthor = byline || author;
+                
+                return {
+                    wordpress: {
+                        postId: post.id,
+                        title: post.title?.rendered || '',
+                        excerpt: post.excerpt?.rendered || '',
+                        content: post.content?.rendered || '',
+                        postDate: post.date,
+                        permalink: post.link,
+                        tags: post._embedded?.['wp:term']?.[0]?.map(t => t.name) || [],
+                        author: displayAuthor
+                    },
+                    id: `wp-${post.id}`,
+                    oip: {
+                        indexedAt: post.date
+                    }
+                };
             }));
             
             res.json({ records });

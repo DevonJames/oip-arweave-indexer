@@ -754,9 +754,21 @@ class OP_Publisher {
         
         // Add post-specific fields
         if ($post->post_type === 'post') {
+            // Check for custom byline meta field first (for anonymous posts with custom byline)
+            // This allows anonymous posts to display a custom author name instead of "Anonymous"
+            $byline = get_post_meta($post->ID, '_op_byline', true);
+            if (empty($byline)) {
+                // Fallback to op_publisher_byline (alternative meta key)
+                $byline = get_post_meta($post->ID, 'op_publisher_byline', true);
+            }
+            if (empty($byline)) {
+                // Final fallback to WordPress author display name
+                $byline = get_the_author_meta('display_name', $post->post_author);
+            }
+            
             $record['post'] = array(
                 'articleText' => $this->get_clean_content($post->post_content),
-                'bylineWriter' => get_the_author_meta('display_name', $post->post_author)
+                'bylineWriter' => $byline
             );
         }
         

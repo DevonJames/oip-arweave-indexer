@@ -1600,10 +1600,13 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     }
     
     // Add author byline if available (for anonymous posts, this will be displayed instead of author name)
-    if (postData.bylineWriter) {
-        wpPostData.meta.op_publisher_byline = postData.bylineWriter;
+    // Check both bylineWriter (standard) and byline (frontend sends this)
+    const bylineValue = postData.bylineWriter || postData.byline;
+    if (bylineValue) {
+        wpPostData.meta.op_publisher_byline = bylineValue;
         // Also set it in a standard WordPress meta field that themes can use
-        wpPostData.meta._op_byline = postData.bylineWriter;
+        wpPostData.meta._op_byline = bylineValue;
+        console.log(`🔍 [PublishToWordPress] Setting byline: "${bylineValue}"`);
     }
     
     // Add DID for DID-based identification
