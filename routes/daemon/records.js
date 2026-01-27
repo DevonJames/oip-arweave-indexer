@@ -1583,8 +1583,22 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
             wpPostData.author = adminUserId;
             console.log(`⚠️ [PublishToWordPress] Anonymous post - fallback to admin (ID: ${adminUserId})`);
         }
+    } else if (identificationMode === 'did') {
+        // For DID modes, use Anonymous user (or admin as fallback) but display DID as byline
+        // The DID will be displayed via the byline meta field, not the WordPress author
+        const { getAnonymousWordPressUser } = require('../../helpers/core/wordpressUserSync');
+        const anonymousUserId = await getAnonymousWordPressUser();
+        
+        if (anonymousUserId) {
+            wpPostData.author = anonymousUserId;
+            console.log(`🔍 [PublishToWordPress] DID mode - using Anonymous user (ID: ${anonymousUserId}) for permissions, DID will be displayed as byline`);
+        } else if (adminUserId) {
+            // Fallback to admin if Anonymous user creation fails
+            wpPostData.author = adminUserId;
+            console.log(`⚠️ [PublishToWordPress] DID mode - fallback to admin (ID: ${adminUserId}) for permissions, DID will be displayed as byline`);
+        }
     } else if (adminUserId) {
-        // For DID modes, explicitly set admin as author to ensure permissions
+        // For other modes (shouldn't reach here, but fallback)
         wpPostData.author = adminUserId;
         console.log(`🔍 [PublishToWordPress] Setting post author to admin user ID: ${adminUserId}`);
     } else {
@@ -1600,18 +1614,30 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     }
     
     // Add author byline if available (for anonymous posts, this will be displayed instead of author name)
-    // Check both bylineWriter (standard) and byline (frontend sends this)
-    const bylineValue = postData.bylineWriter || postData.byline;
+    // For DID-based posts, use the DID as the byline
+    let bylineValue = postData.bylineWriter || postData.byline;
+    
+    // For DID mode, always use the DID as the author name (unless a custom byline is provided)
+    if (identificationMode === 'did' && options.creatorDid) {
+        // Use DID as byline if no custom byline is provided, or append DID to custom byline
+        if (!bylineValue) {
+            bylineValue = options.creatorDid;
+        } else {
+            // If custom byline exists, still store DID separately but prioritize DID for display
+            // Store custom byline in a separate meta field
+            wpPostData.meta.op_publisher_custom_byline = bylineValue;
+            // Use DID as the primary byline for DID-based posts
+            bylineValue = options.creatorDid;
+        }
+        wpPostData.meta.op_publisher_creator_did = options.creatorDid;
+        console.log(`🔍 [PublishToWordPress] DID mode - using DID as byline: "${bylineValue}"`);
+    }
+    
     if (bylineValue) {
         wpPostData.meta.op_publisher_byline = bylineValue;
         // Also set it in a standard WordPress meta field that themes can use
         wpPostData.meta._op_byline = bylineValue;
         console.log(`🔍 [PublishToWordPress] Setting byline: "${bylineValue}"`);
-    }
-    
-    // Add DID for DID-based identification
-    if (identificationMode === 'did' && options.creatorDid) {
-        wpPostData.meta.op_publisher_creator_did = options.creatorDid;
     }
     
     // Create post via WordPress REST API

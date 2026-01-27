@@ -754,13 +754,32 @@ class OP_Publisher {
         
         // Add post-specific fields
         if ($post->post_type === 'post') {
-            // Check for custom byline meta field first (for anonymous posts with custom byline)
-            // This allows anonymous posts to display a custom author name instead of "Anonymous"
-            $byline = get_post_meta($post->ID, '_op_byline', true);
-            if (empty($byline)) {
-                // Fallback to op_publisher_byline (alternative meta key)
-                $byline = get_post_meta($post->ID, 'op_publisher_byline', true);
+            // Check publishing mode to determine author display
+            $publisherMode = get_post_meta($post->ID, 'op_publisher_mode', true);
+            $isDidMode = ($publisherMode === 'did');
+            
+            // For DID mode, prioritize the DID from op_publisher_creator_did
+            if ($isDidMode) {
+                $creatorDid = get_post_meta($post->ID, 'op_publisher_creator_did', true);
+                if (!empty($creatorDid)) {
+                    $byline = $creatorDid;
+                } else {
+                    // Fallback to byline meta field if DID not found
+                    $byline = get_post_meta($post->ID, '_op_byline', true);
+                    if (empty($byline)) {
+                        $byline = get_post_meta($post->ID, 'op_publisher_byline', true);
+                    }
+                }
+            } else {
+                // For non-DID modes, check for custom byline meta field first (for anonymous posts with custom byline)
+                // This allows anonymous posts to display a custom author name instead of "Anonymous"
+                $byline = get_post_meta($post->ID, '_op_byline', true);
+                if (empty($byline)) {
+                    // Fallback to op_publisher_byline (alternative meta key)
+                    $byline = get_post_meta($post->ID, 'op_publisher_byline', true);
+                }
             }
+            
             if (empty($byline)) {
                 // Final fallback to WordPress author display name
                 $byline = get_the_author_meta('display_name', $post->post_author);
