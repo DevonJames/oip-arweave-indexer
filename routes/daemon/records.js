@@ -785,6 +785,7 @@ router.post('/publishSigned', async (req, res) => {
                     
                     // Extract creator DID from payload
                     const creatorDid = getTag('Creator');
+                    console.log(`🔍 [PublishSigned] Extracted Creator DID: ${creatorDid || 'NOT FOUND'}`);
                     
                     // In local-only mode, publish with DID identification
                     // In Arweave mode, also publish to WordPress with DID identification
@@ -1535,6 +1536,8 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
     }
     
     console.log(`🔍 [PublishToWordPress] Identification mode: ${identificationMode}`);
+    console.log(`🔍 [PublishToWordPress] Options.creatorDid: ${options.creatorDid || 'NOT PROVIDED'}`);
+    console.log(`🔍 [PublishToWordPress] Options.anonymous: ${options.anonymous}`);
     
     // Build WordPress post data
     const wpPostData = {
@@ -1637,7 +1640,12 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
         wpPostData.meta.op_publisher_byline = bylineValue;
         // Also set it in a standard WordPress meta field that themes can use
         wpPostData.meta._op_byline = bylineValue;
-        console.log(`🔍 [PublishToWordPress] Setting byline: "${bylineValue}"`);
+        console.log(`✅ [PublishToWordPress] Setting byline meta fields:`);
+        console.log(`   - op_publisher_byline: "${bylineValue}"`);
+        console.log(`   - _op_byline: "${bylineValue}"`);
+        console.log(`   - op_publisher_creator_did: "${options.creatorDid || 'none'}"`);
+    } else {
+        console.warn(`⚠️ [PublishToWordPress] No byline value to set!`);
     }
     
     // Create post via WordPress REST API
@@ -1793,6 +1801,35 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
             console.log(`⚠️ [PublishToWordPress] WordPress didn't provide link, constructed: ${permalink}`);
         }
         
+        // WordPress REST API may not save custom meta fields unless they're registered
+        // Always set meta fields via wp-cli to ensure they're saved
+        if (wpPostData.meta && Object.keys(wpPostData.meta).length > 0) {
+            try {
+                const { execSync } = require('child_process');
+                const projectName = process.env.COMPOSE_PROJECT_NAME || 'onionpress';
+                const wpContainerName = `${projectName}-wordpress-1`;
+                
+                console.log(`🔧 [PublishToWordPress] Setting meta fields via wp-cli for post ${postId}...`);
+                for (const [key, value] of Object.entries(wpPostData.meta)) {
+                    if (value !== null && value !== undefined) {
+                        try {
+                            const metaValue = typeof value === 'string' ? value : JSON.stringify(value);
+                            const escapedMetaValue = metaValue.replace(/'/g, "'\\''");
+                            const metaCommand = `docker exec ${wpContainerName} wp post meta set ${postId} '${key}' '${escapedMetaValue}' --allow-root`;
+                            execSync(metaCommand, { encoding: 'utf-8', timeout: 10000 });
+                            console.log(`✅ [PublishToWordPress] Set meta field: ${key} = ${typeof value === 'string' ? value.substring(0, 50) + (value.length > 50 ? '...' : '') : JSON.stringify(value)}`);
+                        } catch (metaError) {
+                            console.warn(`⚠️ [PublishToWordPress] Failed to set meta field ${key}:`, metaError.message);
+                        }
+                    }
+                }
+                console.log(`✅ [PublishToWordPress] All meta fields set successfully`);
+            } catch (metaError) {
+                console.warn(`⚠️ [PublishToWordPress] Error setting meta fields via wp-cli:`, metaError.message);
+                // Don't fail the whole operation if meta fields fail
+            }
+        }
+        
         console.log(`✅ [PublishToWordPress] Returning success with postId: ${postId}, permalink: ${permalink}`);
         return {
             success: true,
@@ -1832,9 +1869,21 @@ async function publishToWordPress(payload, arweaveResult = null, options = {}) {
                     wpCommand += `--post_excerpt='${escapedExcerpt}' `;
                 }
                 wpCommand += `--post_status=publish `;
-                // Use the correct author: options.wordpressUserId if available, otherwise adminUserId
-                const postAuthor = options.wordpressUserId || adminUserId;
-                console.log(`🔍 [PublishToWordPress] wp-cli fallback: Using author ID ${postAuthor}${options.wordpressUserId ? ` (logged-in user)` : ` (admin fallback)`}`);
+                // Use the correct author based on identification mode
+                let postAuthor;
+                if (identificationMode === 'account' && options.wordpressUserId) {
+                    postAuthor = options.wordpressUserId;
+                    console.log(`🔍 [PublishToWordPress] wp-cli fallback: Using logged-in user ID ${postAuthor}`);
+                } else if (identificationMode === 'did' || identificationMode === 'anonymous') {
+                    // For DID and anonymous modes, use Anonymous user (or admin as fallback)
+                    const { getAnonymousWordPressUser } = require('../../helpers/core/wordpressUserSync');
+                    const anonymousUserId = await getAnonymousWordPressUser();
+                    postAuthor = anonymousUserId || adminUserId;
+                    console.log(`🔍 [PublishToWordPress] wp-cli fallback: Using ${anonymousUserId ? 'Anonymous' : 'admin'} user ID ${postAuthor} for ${identificationMode} mode`);
+                } else {
+                    postAuthor = adminUserId;
+                    console.log(`🔍 [PublishToWordPress] wp-cli fallback: Using admin user ID ${postAuthor}`);
+                }
                 if (postAuthor) {
                     wpCommand += `--post_author=${postAuthor} `;
                 }
