@@ -1239,6 +1239,32 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
+   Author Links
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.author-link {
+    color: var(--accent-primary) !important;
+    text-decoration: underline !important;
+    cursor: pointer !important;
+    font-weight: 500;
+    transition: var(--transition-fast);
+}
+
+.author-link:hover {
+    color: var(--accent-secondary) !important;
+    text-decoration: underline !important;
+}
+
+.author-link.did-link {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+}
+
+.author-link.account-link {
+    font-weight: 500;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
    Responsive
    ═══════════════════════════════════════════════════════════════════════════════ */
 

@@ -887,8 +887,11 @@ function renderAuthorLink(author) {
     const isDid = author.startsWith('did:arweave:');
     const linkClass = isDid ? 'author-link did-link' : 'author-link account-link';
     const escapedAuthor = escapeHtml(author);
+    // HTML encode the author for the data attribute
+    const dataAuthor = escapedAuthor.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     // Use data attribute instead of inline onclick for better security
-    return `<a href="#" data-filter-author="${escapedAuthor.replace(/"/g, '&quot;')}" class="${linkClass}" style="color: var(--accent-primary); text-decoration: none; border-bottom: 1px solid transparent; transition: var(--transition-fast); cursor: pointer;" onmouseover="this.style.borderBottomColor='var(--accent-primary)'" onmouseout="this.style.borderBottomColor='transparent'">${escapedAuthor}</a>`;
+    // Make it clearly visible as a link with purple color and underline
+    return `<a href="#" data-filter-author="${dataAuthor}" class="${linkClass}" style="color: var(--accent-primary); text-decoration: underline; cursor: pointer; font-weight: 500;">${escapedAuthor}</a>`;
 }
 
 /**
@@ -914,7 +917,7 @@ function renderWordPressRecordDetail(record) {
             <span>Date: ${date}</span>
             <span class="source-badge wordpress">WordPress</span>
         </div>
-        ${author ? `<p style="margin-bottom: 0.5rem; color: var(--text-muted);">By: ${escapeHtml(author)}</p>` : ''}
+        ${author ? `<p style="margin-bottom: 0.5rem; color: var(--text-muted);">By: ${renderAuthorLink(author)}</p>` : ''}
         ${excerpt ? `<div style="margin-bottom: 1rem; color: var(--text-muted); font-style: italic;">${renderMarkdown(excerpt)}</div>` : ''}
         ${content ? `<div class="markdown-content" style="margin-bottom: 1rem;">${renderMarkdown(content)}</div>` : ''}
         ${tags.length > 0 ? `
