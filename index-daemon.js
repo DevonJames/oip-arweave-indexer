@@ -1721,6 +1721,12 @@ if (WORDPRESS_PROXY_ENABLED) {
                     }
                 }
                 
+                // Fix any redirect to the root domain that should include /wordpress
+                // Pattern: https://alexandria.io/ -> https://alexandria.io/wordpress/
+                if (fixedLocation === `${protocol}://${originalHost}/` || fixedLocation === `${protocol}://${originalHost}`) {
+                    fixedLocation = `${protocol}://${originalHost}/wordpress/`;
+                }
+                
                 // Fix internal WordPress hostname references
                 if (fixedLocation.includes('wordpress:') || fixedLocation.includes('wordpress/')) {
                     fixedLocation = fixedLocation
