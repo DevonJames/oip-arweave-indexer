@@ -759,7 +759,7 @@ if (ONION_PRESS_ENABLED) {
                     const detailOutput = execSync(detailCommand, { encoding: 'utf-8', timeout: 5000 });
                     const postDetail = JSON.parse(detailOutput.trim());
                     
-                    // Get author name
+                    // Get author name (fallback)
                     let authorName = '';
                     if (postDetail.post_author) {
                         try {
@@ -770,13 +770,45 @@ if (ONION_PRESS_ENABLED) {
                         }
                     }
                     
+                    // Fetch meta fields to get DID/byline
+                    let displayAuthor = authorName;
+                    try {
+                        // Get publishing mode
+                        const publisherModeCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_mode --allow-root 2>/dev/null || echo ""`;
+                        const publisherMode = execSync(publisherModeCmd, { encoding: 'utf-8', timeout: 5000 }).trim();
+                        const isDidMode = (publisherMode === 'did');
+                        
+                        if (isDidMode) {
+                            // For DID mode, prioritize the DID from op_publisher_creator_did
+                            const creatorDidCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_creator_did --allow-root 2>/dev/null || echo ""`;
+                            const creatorDid = execSync(creatorDidCmd, { encoding: 'utf-8', timeout: 5000 }).trim();
+                            if (creatorDid) {
+                                displayAuthor = creatorDid;
+                            } else {
+                                // Fallback to byline meta fields
+                                const bylineCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} _op_byline --allow-root 2>/dev/null || docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_byline --allow-root 2>/dev/null || echo ""`;
+                                const byline = execSync(bylineCmd, { encoding: 'utf-8', timeout: 5000 }).trim();
+                                displayAuthor = byline || authorName;
+                            }
+                        } else {
+                            // For non-DID modes, use byline if available
+                            const bylineCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} _op_byline --allow-root 2>/dev/null || docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_byline --allow-root 2>/dev/null || echo ""`;
+                            const byline = execSync(bylineCmd, { encoding: 'utf-8', timeout: 5000 }).trim();
+                            displayAuthor = byline || authorName;
+                        }
+                    } catch (metaError) {
+                        // Ignore meta fetch errors - fallback to author name
+                        console.warn(`⚠️ [WordPressPosts] Could not fetch meta for post ${postDetail.ID}:`, metaError.message);
+                        displayAuthor = authorName;
+                    }
+                    
                     postsWithDetails.push({
                         id: postDetail.ID,
                         title: postDetail.post_title || '',
                         content: postDetail.post_content || '',
                         excerpt: postDetail.post_excerpt || '',
                         date: postDetail.post_date || postDetail.post_date_gmt,
-                        author: authorName,
+                        author: displayAuthor,
                         link: postDetail.guid || ''
                     });
                 } catch (detailError) {
