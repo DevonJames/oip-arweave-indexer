@@ -630,32 +630,44 @@ app.get('/onion-press/api/wordpress/posts', async (req, res) => {
                 permalink = `${baseUrl}${wordpressPath}/?p=${post.id}`;
             }
             
-            // Get byline from meta fields (for anonymous posts with custom byline)
+            // Get author from WordPress post
             let author = post._embedded?.author?.[0]?.name || '';
-            let byline = null;
+            let displayAuthor = author;
             
-            // Try to get meta fields - WordPress REST API may include them if registered
-            if (post.meta) {
-                byline = post.meta._op_byline || post.meta.op_publisher_byline;
-            } else {
-                // If meta not included, fetch it separately
-                try {
-                    const metaResponse = await axios.get(`${wordpressUrl}/wp-json/wp/v2/posts/${post.id}`, {
-                        timeout: 5000,
-                        validateStatus: () => true,
-                        headers: { 'Accept': 'application/json' }
-                    });
-                    if (metaResponse.status === 200 && metaResponse.data.meta) {
-                        byline = metaResponse.data.meta._op_byline || metaResponse.data.meta.op_publisher_byline;
+            // Fetch meta fields via wp-cli (WordPress REST API doesn't reliably return custom meta)
+            try {
+                const { execSync } = require('child_process');
+                const projectName = process.env.COMPOSE_PROJECT_NAME || 'onionpress';
+                const wpContainerName = `${projectName}-wordpress-1`;
+                
+                // Get publishing mode
+                const publisherModeCmd = `docker exec ${wpContainerName} wp post meta get ${post.id} op_publisher_mode --allow-root 2>/dev/null || echo ""`;
+                const publisherMode = execSync(publisherModeCmd, { encoding: 'utf-8', timeout: 5000 }).trim();
+                const isDidMode = (publisherMode === 'did');
+                
+                if (isDidMode) {
+                    // For DID mode, prioritize the DID from op_publisher_creator_did
+                    const creatorDidCmd = `docker exec ${wpContainerName} wp post meta get ${post.id} op_publisher_creator_did --allow-root 2>/dev/null || echo ""`;
+                    const creatorDid = execSync(creatorDidCmd, { encoding: 'utf-8', timeout: 5000 }).trim();
+                    if (creatorDid) {
+                        displayAuthor = creatorDid;
+                    } else {
+                        // Fallback to byline meta fields
+                        const bylineCmd = `docker exec ${wpContainerName} wp post meta get ${post.id} _op_byline --allow-root 2>/dev/null || docker exec ${wpContainerName} wp post meta get ${post.id} op_publisher_byline --allow-root 2>/dev/null || echo ""`;
+                        const byline = execSync(bylineCmd, { encoding: 'utf-8', timeout: 5000 }).trim();
+                        displayAuthor = byline || author;
                     }
-                } catch (metaError) {
-                    // Ignore meta fetch errors - fallback to author name
-                    console.warn(`⚠️ [WordPressPosts] Could not fetch meta for post ${post.id}:`, metaError.message);
+                } else {
+                    // For non-DID modes, use byline if available
+                    const bylineCmd = `docker exec ${wpContainerName} wp post meta get ${post.id} _op_byline --allow-root 2>/dev/null || docker exec ${wpContainerName} wp post meta get ${post.id} op_publisher_byline --allow-root 2>/dev/null || echo ""`;
+                    const byline = execSync(bylineCmd, { encoding: 'utf-8', timeout: 5000 }).trim();
+                    displayAuthor = byline || author;
                 }
+            } catch (metaError) {
+                // Ignore meta fetch errors - fallback to author name
+                console.warn(`⚠️ [WordPressPosts] Could not fetch meta for post ${post.id}:`, metaError.message);
+                displayAuthor = author;
             }
-            
-            // Use byline if available, otherwise use author name
-            const displayAuthor = byline || author;
             
             return {
                 wordpress: {
