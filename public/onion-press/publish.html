@@ -540,6 +540,16 @@
                     </div>
 
                     <div class="form-group">
+                        <label for="imageUrl">Image URL (optional)</label>
+                        <input type="url" id="imageUrl" placeholder="https://imgur.com/..." style="width: 100%; padding: 0.5rem; border-radius: 4px; background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary);">
+                        <small style="color: var(--text-muted); font-size: 0.85em; display: block; margin-top: 0.25rem;">Image will be embedded in your post content</small>
+                        <div id="imagePreview" style="margin-top: 0.5rem; display: none;">
+                            <img id="imagePreviewImg" src="" alt="Preview" style="max-width: 100%; max-height: 200px; border-radius: 4px; border: 1px solid var(--border-color);">
+                            <div id="imageDimensions" style="color: var(--text-muted); font-size: 0.85em; margin-top: 0.25rem;"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
                         <label for="content">Content *</label>
                         <textarea id="content" rows="8" placeholder="The main content of your record..." required></textarea>
                     </div>
@@ -1246,6 +1256,57 @@
         // RECORD BUILDING
         // ═══════════════════════════════════════════════════════════════════════════════
 
+        // Image dimension cache
+        let imageDimensionsCache = {};
+
+        /**
+         * Load image and extract dimensions
+         */
+        async function loadImageDimensions(imageUrl) {
+            if (!imageUrl) return null;
+            
+            // Check cache first
+            if (imageDimensionsCache[imageUrl]) {
+                return imageDimensionsCache[imageUrl];
+            }
+
+            return new Promise((resolve) => {
+                const img = new Image();
+                // Try CORS, but don't fail if it doesn't work
+                img.crossOrigin = 'anonymous';
+                
+                img.onload = () => {
+                    const dimensions = {
+                        width: img.naturalWidth,
+                        height: img.naturalHeight,
+                        contentType: 'image/jpeg' // Default, can be improved with URL parsing
+                    };
+                    // Try to detect content type from URL
+                    const urlLower = imageUrl.toLowerCase();
+                    if (urlLower.includes('.png')) dimensions.contentType = 'image/png';
+                    else if (urlLower.includes('.gif')) dimensions.contentType = 'image/gif';
+                    else if (urlLower.includes('.webp')) dimensions.contentType = 'image/webp';
+                    
+                    imageDimensionsCache[imageUrl] = dimensions;
+                    resolve(dimensions);
+                };
+                
+                img.onerror = () => {
+                    console.warn('Failed to load image for dimension extraction:', imageUrl);
+                    // Return default dimensions if image can't be loaded
+                    const dimensions = {
+                        width: 0,
+                        height: 0,
+                        contentType: 'image/jpeg'
+                    };
+                    imageDimensionsCache[imageUrl] = dimensions;
+                    resolve(dimensions);
+                };
+                
+                img.src = imageUrl;
+            });
+        }
+
         function buildRecord(method = 'did') {
             const isDid = method === 'did';
             // Default to "post" for DID and Anonymous modes
@@ -1253,6 +1314,7 @@
             const title = isDid ? document.getElementById('title').value.trim() : document.getElementById('anonTitle').value.trim();
             const description = isDid ? document.getElementById('description').value.trim() : document.getElementById('anonDescription').value.trim();
             const content = isDid ? document.getElementById('content').value.trim() : document.getElementById('anonContent').value.trim();
+            const imageUrl = isDid ? document.getElementById('imageUrl')?.value.trim() : undefined;
             // DID mode doesn't use byline (DID is the author), Anonymous mode does
             const byline = isDid ? undefined : (document.getElementById('anonByline').value.trim() || 'Anonymous');
             // DID and Anonymous modes don't use webUrl or tags
@@ -1272,8 +1334,15 @@
 
             // Add type-specific fields
             if (recordType === 'post') {
+                // If image URL is provided, embed it in the content as markdown
+                let articleText = content;
+                if (imageUrl) {
+                    // Embed image at the beginning of the content
+                    articleText = `![${title}](${imageUrl})\n\n${content}`;
+                }
+                
                 recordData.post = {
-                    articleText: content
+                    articleText: articleText
                 };
                 // Only add byline for anonymous mode (DID mode uses DID as author)
                 if (!isDid && byline) {
@@ -1361,6 +1430,13 @@
                 publishBtn.disabled = true;
                 showStatus('processing', '⏳ Signing and publishing...', 'Please wait while your record is signed and submitted to the blockchain.');
 
+                // Check if image URL is provided and load dimensions
+                const imageUrl = document.getElementById('imageUrl')?.value.trim();
+                if (imageUrl) {
+                    showStatus('processing', '⏳ Loading image...', 'Extracting image dimensions...');
+                    await loadImageDimensions(imageUrl);
+                }
+
                 // Build the record
                 const { payload, method } = buildRecord('did');
                 console.log('Built payload:', payload);
@@ -1422,7 +1498,11 @@
                 // Clear form
                 document.getElementById('title').value = '';
                 document.getElementById('description').value = '';
+                document.getElementById('imageUrl').value = '';
                 document.getElementById('content').value = '';
+                // Hide image preview
+                const imagePreviewEl = document.getElementById('imagePreview');
+                if (imagePreviewEl) imagePreviewEl.style.display = 'none';
                 // webUrl and tags are hidden for DID mode
 
             } catch (error) {
@@ -1572,6 +1652,41 @@
         document.addEventListener('DOMContentLoaded', async () => {
             // Load default destinations first
             await loadDefaultDestinations();
+            
+            // Set up image preview handler
+            const imageUrlInput = document.getElementById('imageUrl');
+            const imagePreview = document.getElementById('imagePreview');
+            const imagePreviewImg = document.getElementById('imagePreviewImg');
+            const imageDimensions = document.getElementById('imageDimensions');
+            
+            if (imageUrlInput && imagePreview && imagePreviewImg && imageDimensions) {
+                imageUrlInput.addEventListener('input', async () => {
+                    const url = imageUrlInput.value.trim();
+                    if (url) {
+                        try {
+                            // Show preview
+                            imagePreviewImg.src = url;
+                            imagePreview.style.display = 'block';
+                            imageDimensions.textContent = 'Loading dimensions...';
+                            
+                            // Load dimensions
+                            const dims = await loadImageDimensions(url);
+                            if (dims && dims.width > 0 && dims.height > 0) {
+                                imageDimensions.textContent = `${dims.width} × ${dims.height}px`;
+                            } else {
+                                imageDimensions.textContent = 'Dimensions unavailable';
+                            }
+                        } catch (error) {
+                            console.warn('Failed to load image preview:', error);
+                            imagePreview.style.display = 'block';
+                            imageDimensions.textContent = 'Preview unavailable';
+                        }
+                    } else {
+                        imagePreview.style.display = 'none';
+                    }
+                });
+            }
+            
             // Check admin status and update UI
             await checkAdminStatus();
             // Load host info for both forms
