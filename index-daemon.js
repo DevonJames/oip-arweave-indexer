@@ -594,6 +594,156 @@ if (ONION_PRESS_ENABLED) {
         }
     });
     
+    // GET /onion-press/api/browse/record/:did - Get single record (WordPress post or OIP record)
+    app.get('/onion-press/api/browse/record/:did', async (req, res) => {
+        try {
+            const { did } = req.params;
+            
+            // Check if this is a WordPress post ID (starts with 'wp-' or is numeric)
+            if (did.startsWith('wp-') || /^\d+$/.test(did)) {
+                const postId = did.replace('wp-', '');
+                
+                // Fetch WordPress post
+                try {
+                    const WORDPRESS_URL = process.env.WORDPRESS_URL || 'http://wordpress:80';
+                    const response = await axios.get(`${WORDPRESS_URL}/wp-json/wp/v2/posts/${postId}`, {
+                        params: {
+                            _embed: true
+                        },
+                        timeout: 10000,
+                        validateStatus: () => true
+                    });
+                    
+                    if (response.status === 404 || !response.data) {
+                        return res.status(404).json({
+                            error: 'WordPress post not found',
+                            postId
+                        });
+                    }
+                    
+                    const post = response.data;
+                    const baseUrl = process.env.PUBLIC_API_BASE_URL || `${req.protocol}://${req.get('host')}`;
+                    const wordpressPath = process.env.WORDPRESS_PROXY_PATH || '/wordpress';
+                    
+                    let permalink = post.link;
+                    if (!permalink && post.id) {
+                        permalink = `${baseUrl}${wordpressPath}/?p=${post.id}`;
+                    }
+                    
+                    // Get author from WordPress post (fallback)
+                    let author = post._embedded?.author?.[0]?.name || '';
+                    let displayAuthor = author;
+                    
+                    // Fetch meta fields via wp-cli to get DID/byline
+                    try {
+                        const { execSync } = require('child_process');
+                        const projectName = process.env.COMPOSE_PROJECT_NAME || 'onionpress';
+                        const wpContainerName = `${projectName}-wordpress-1`;
+                        
+                        // Get publishing mode
+                        let publisherMode = '';
+                        try {
+                            const publisherModeCmd = `docker exec ${wpContainerName} wp post meta get ${post.id} op_publisher_mode --allow-root 2>/dev/null || true`;
+                            publisherMode = execSync(publisherModeCmd, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' }).trim();
+                        } catch (e) {
+                            publisherMode = '';
+                        }
+                        const isDidMode = (publisherMode === 'did');
+                        
+                        if (isDidMode) {
+                            // For DID mode, prioritize the DID from op_publisher_creator_did
+                            let creatorDid = '';
+                            try {
+                                const creatorDidCmd = `docker exec ${wpContainerName} wp post meta get ${post.id} op_publisher_creator_did --allow-root 2>/dev/null || true`;
+                                creatorDid = execSync(creatorDidCmd, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' }).trim();
+                            } catch (e) {
+                                creatorDid = '';
+                            }
+                            if (creatorDid) {
+                                displayAuthor = creatorDid;
+                            } else {
+                                // Fallback to byline meta fields
+                                let byline = '';
+                                try {
+                                    const bylineCmd1 = `docker exec ${wpContainerName} wp post meta get ${post.id} _op_byline --allow-root 2>/dev/null || true`;
+                                    byline = execSync(bylineCmd1, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' }).trim();
+                                    if (!byline) {
+                                        const bylineCmd2 = `docker exec ${wpContainerName} wp post meta get ${post.id} op_publisher_byline --allow-root 2>/dev/null || true`;
+                                        byline = execSync(bylineCmd2, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' }).trim();
+                                    }
+                                } catch (e) {
+                                    byline = '';
+                                }
+                                displayAuthor = byline || author;
+                            }
+                        } else {
+                            // For non-DID modes, use byline if available
+                            let byline = '';
+                            try {
+                                const bylineCmd1 = `docker exec ${wpContainerName} wp post meta get ${post.id} _op_byline --allow-root 2>/dev/null || true`;
+                                byline = execSync(bylineCmd1, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' }).trim();
+                                if (!byline) {
+                                    const bylineCmd2 = `docker exec ${wpContainerName} wp post meta get ${post.id} op_publisher_byline --allow-root 2>/dev/null || true`;
+                                    byline = execSync(bylineCmd2, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' }).trim();
+                                }
+                            } catch (e) {
+                                byline = '';
+                            }
+                            if (byline) {
+                                displayAuthor = byline;
+                            }
+                        }
+                    } catch (metaError) {
+                        console.warn(`⚠️ [BrowseRecord] Could not fetch meta for post ${post.id}:`, metaError.message);
+                        displayAuthor = author;
+                    }
+                    
+                    const record = {
+                        wordpress: {
+                            postId: post.id,
+                            title: post.title?.rendered || '',
+                            excerpt: post.excerpt?.rendered || '',
+                            content: post.content?.rendered || '',
+                            postDate: post.date,
+                            permalink: permalink,
+                            tags: post._embedded?.['wp:term']?.[0]?.map(t => t.name) || [],
+                            author: displayAuthor
+                        },
+                        id: `wp-${post.id}`,
+                        oip: {
+                            indexedAt: post.date
+                        }
+                    };
+                    
+                    console.log(`✅ [BrowseRecord] Returning WordPress post ${post.id} with author="${displayAuthor}"`);
+                    return res.status(200).json(record);
+                } catch (wpError) {
+                    console.error('Get WordPress post error:', wpError.message);
+                    return res.status(404).json({
+                        error: 'WordPress post not found',
+                        postId,
+                        message: wpError.message
+                    });
+                }
+            }
+            
+            // Otherwise, treat as OIP DID - proxy to onion-press-service
+            const targetUrl = `${ONION_PRESS_URL}/onion-press/api/browse/record/${encodeURIComponent(did)}`;
+            const response = await axios.get(targetUrl, {
+                timeout: 30000,
+                validateStatus: () => true
+            });
+            res.status(response.status).json(response.data);
+            
+        } catch (error) {
+            console.error('Get record error:', error.message);
+            res.status(error.response?.status || 500).json({
+                error: 'Failed to get record',
+                message: error.message
+            });
+        }
+    });
+    
     // GET /onion-press/api/host-info - Get host information
     app.get('/onion-press/api/host-info', (req, res) => {
         const hostName = process.env.COMPOSE_PROJECT_NAME || 'Onion Press';
@@ -1267,7 +1417,8 @@ if (ONION_PRESS_ENABLED) {
     app.use('/onion-press/api', async (req, res) => {
         let response = null;
         try {
-            const targetUrl = `${ONION_PRESS_URL}/api${req.url}`;
+            // req.url is the path after /onion-press/api, so we need to reconstruct the full path
+            const targetUrl = `${ONION_PRESS_URL}/onion-press/api${req.url}`;
             
             // Forward all relevant headers, especially Authorization
             const headers = {
