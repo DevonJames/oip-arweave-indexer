@@ -851,11 +851,25 @@ async function showWordPressRecordDetail(postId) {
 }
 
 /**
+ * Decode HTML entities
+ */
+function decodeHtmlEntities(text) {
+    if (!text) return '';
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
+}
+
+/**
  * Render markdown content safely
  */
 function renderMarkdown(markdown) {
     if (!markdown) return '';
     try {
+        // Decode HTML entities that WordPress might have encoded
+        // WordPress may HTML-encode markdown syntax, so we need to decode it first
+        const decodedMarkdown = decodeHtmlEntities(markdown);
+        
         // Check if marked is available
         if (typeof marked !== 'undefined') {
             // Configure marked for safe rendering
@@ -865,10 +879,10 @@ function renderMarkdown(markdown) {
                 sanitize: false,
                 headerIds: false
             });
-            return marked.parse(markdown);
+            return marked.parse(decodedMarkdown);
         } else {
             // Fallback to plain text if marked not loaded
-            return escapeHtml(markdown);
+            return escapeHtml(decodedMarkdown);
         }
     } catch (error) {
         console.warn('Markdown rendering error:', error);
