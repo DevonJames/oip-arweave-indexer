@@ -774,10 +774,11 @@ if (ONION_PRESS_ENABLED) {
                     let displayAuthor = authorName;
                     try {
                         // Get publishing mode
-                        const publisherModeCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_mode --allow-root`;
                         let publisherMode = '';
                         try {
-                            publisherMode = execSync(publisherModeCmd, { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+                            const publisherModeCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_mode --allow-root 2>/dev/null || true`;
+                            const output = execSync(publisherModeCmd, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' });
+                            publisherMode = output.trim();
                         } catch (e) {
                             // Meta field might not exist, that's OK - wp-cli returns error code 1
                             publisherMode = '';
@@ -787,10 +788,11 @@ if (ONION_PRESS_ENABLED) {
                         
                         if (isDidMode) {
                             // For DID mode, prioritize the DID from op_publisher_creator_did
-                            const creatorDidCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_creator_did --allow-root`;
                             let creatorDid = '';
                             try {
-                                creatorDid = execSync(creatorDidCmd, { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+                                const creatorDidCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_creator_did --allow-root 2>/dev/null || true`;
+                                const output = execSync(creatorDidCmd, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' });
+                                creatorDid = output.trim();
                             } catch (e) {
                                 // Meta field might not exist
                                 creatorDid = '';
@@ -801,17 +803,18 @@ if (ONION_PRESS_ENABLED) {
                                 console.log(`✅ [WordPressPosts] Post ${postDetail.ID}: Using DID "${creatorDid}"`);
                             } else {
                                 // Fallback to byline meta fields
-                                const bylineCmd1 = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} _op_byline --allow-root`;
-                                const bylineCmd2 = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_byline --allow-root`;
                                 let byline = '';
                                 try {
-                                    byline = execSync(bylineCmd1, { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-                                } catch (e) {
-                                    try {
-                                        byline = execSync(bylineCmd2, { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-                                    } catch (e2) {
-                                        byline = '';
+                                    const bylineCmd1 = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} _op_byline --allow-root 2>/dev/null || true`;
+                                    const output1 = execSync(bylineCmd1, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' });
+                                    byline = output1.trim();
+                                    if (!byline) {
+                                        const bylineCmd2 = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_byline --allow-root 2>/dev/null || true`;
+                                        const output2 = execSync(bylineCmd2, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' });
+                                        byline = output2.trim();
                                     }
+                                } catch (e) {
+                                    byline = '';
                                 }
                                 console.log(`🔍 [WordPressPosts] Post ${postDetail.ID}: byline="${byline}"`);
                                 displayAuthor = byline || authorName;
@@ -819,17 +822,18 @@ if (ONION_PRESS_ENABLED) {
                             }
                         } else {
                             // For non-DID modes, use byline if available
-                            const bylineCmd1 = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} _op_byline --allow-root`;
-                            const bylineCmd2 = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_byline --allow-root`;
                             let byline = '';
                             try {
-                                byline = execSync(bylineCmd1, { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-                            } catch (e) {
-                                try {
-                                    byline = execSync(bylineCmd2, { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-                                } catch (e2) {
-                                    byline = '';
+                                const bylineCmd1 = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} _op_byline --allow-root 2>/dev/null || true`;
+                                const output1 = execSync(bylineCmd1, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' });
+                                byline = output1.trim();
+                                if (!byline) {
+                                    const bylineCmd2 = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_byline --allow-root 2>/dev/null || true`;
+                                    const output2 = execSync(bylineCmd2, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' });
+                                    byline = output2.trim();
                                 }
+                            } catch (e) {
+                                byline = '';
                             }
                             if (byline) {
                                 displayAuthor = byline;
