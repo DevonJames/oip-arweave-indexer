@@ -141,6 +141,75 @@ router.get('/record/:did', async (req, res) => {
                     permalink = `${baseUrl}${wordpressPath}/?p=${post.id}`;
                 }
                 
+                // Get author from WordPress post (fallback)
+                let author = post._embedded?.author?.[0]?.name || '';
+                let displayAuthor = author;
+                
+                // Fetch meta fields via wp-cli to get DID/byline (WordPress REST API doesn't reliably return custom meta)
+                try {
+                    const { execSync } = require('child_process');
+                    const projectName = process.env.COMPOSE_PROJECT_NAME || 'onionpress';
+                    const wpContainerName = `${projectName}-wordpress-1`;
+                    
+                    // Get publishing mode
+                    let publisherMode = '';
+                    try {
+                        const publisherModeCmd = `docker exec ${wpContainerName} wp post meta get ${post.id} op_publisher_mode --allow-root 2>/dev/null || true`;
+                        publisherMode = execSync(publisherModeCmd, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' }).trim();
+                    } catch (e) {
+                        publisherMode = '';
+                    }
+                    const isDidMode = (publisherMode === 'did');
+                    
+                    if (isDidMode) {
+                        // For DID mode, prioritize the DID from op_publisher_creator_did
+                        let creatorDid = '';
+                        try {
+                            const creatorDidCmd = `docker exec ${wpContainerName} wp post meta get ${post.id} op_publisher_creator_did --allow-root 2>/dev/null || true`;
+                            creatorDid = execSync(creatorDidCmd, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' }).trim();
+                        } catch (e) {
+                            creatorDid = '';
+                        }
+                        if (creatorDid) {
+                            displayAuthor = creatorDid;
+                        } else {
+                            // Fallback to byline meta fields
+                            let byline = '';
+                            try {
+                                const bylineCmd1 = `docker exec ${wpContainerName} wp post meta get ${post.id} _op_byline --allow-root 2>/dev/null || true`;
+                                byline = execSync(bylineCmd1, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' }).trim();
+                                if (!byline) {
+                                    const bylineCmd2 = `docker exec ${wpContainerName} wp post meta get ${post.id} op_publisher_byline --allow-root 2>/dev/null || true`;
+                                    byline = execSync(bylineCmd2, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' }).trim();
+                                }
+                            } catch (e) {
+                                byline = '';
+                            }
+                            displayAuthor = byline || author;
+                        }
+                    } else {
+                        // For non-DID modes, use byline if available
+                        let byline = '';
+                        try {
+                            const bylineCmd1 = `docker exec ${wpContainerName} wp post meta get ${post.id} _op_byline --allow-root 2>/dev/null || true`;
+                            byline = execSync(bylineCmd1, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' }).trim();
+                            if (!byline) {
+                                const bylineCmd2 = `docker exec ${wpContainerName} wp post meta get ${post.id} op_publisher_byline --allow-root 2>/dev/null || true`;
+                                byline = execSync(bylineCmd2, { encoding: 'utf-8', timeout: 5000, shell: '/bin/bash' }).trim();
+                            }
+                        } catch (e) {
+                            byline = '';
+                        }
+                        if (byline) {
+                            displayAuthor = byline;
+                        }
+                    }
+                } catch (metaError) {
+                    // Ignore meta fetch errors - fallback to author name
+                    console.warn(`⚠️ [BrowseRecord] Could not fetch meta for post ${post.id}:`, metaError.message);
+                    displayAuthor = author;
+                }
+                
                 const record = {
                     wordpress: {
                         postId: post.id,
@@ -150,7 +219,7 @@ router.get('/record/:did', async (req, res) => {
                         postDate: post.date,
                         permalink: permalink,
                         tags: post._embedded?.['wp:term']?.[0]?.map(t => t.name) || [],
-                        author: post._embedded?.author?.[0]?.name || ''
+                        author: displayAuthor
                     },
                     id: `wp-${post.id}`,
                     oip: {
