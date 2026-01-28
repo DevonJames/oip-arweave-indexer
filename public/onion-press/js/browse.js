@@ -23,6 +23,9 @@ const nextBtn = document.getElementById('nextBtn');
 const pageInfo = document.getElementById('pageInfo');
 const torStatus = document.getElementById('torStatus');
 const torIndicator = torStatus.querySelector('.tor-indicator');
+const authorFilterIndicator = document.getElementById('authorFilterIndicator');
+const authorFilterValue = document.getElementById('authorFilterValue');
+const clearAuthorFilter = document.getElementById('clearAuthorFilter');
 
 // Tab navigation
 const navBtns = document.querySelectorAll('.nav-btn');
@@ -207,6 +210,14 @@ function initSearch() {
         currentPage = 0;
         loadRecords();
     });
+    
+    // Author filter clear button
+    if (clearAuthorFilter) {
+        clearAuthorFilter.addEventListener('click', clearAuthorFilterHandler);
+    }
+    
+    // Initialize filter indicator
+    updateAuthorFilterIndicator();
 }
 
 /**
@@ -731,6 +742,7 @@ function renderRecordCard(record) {
                 <span>📅 ${date}</span>
                 <span>📝 ${type}</span>
             </div>
+            ${author ? `<div class="record-author" style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.9em;">By: ${renderAuthorLink(author)}</div>` : ''}
             ${tags.length > 0 ? `
                 <div class="record-tags">
                     ${tags.slice(0, 5).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
@@ -756,6 +768,7 @@ function renderWordPressCard(record) {
     const date = wp.postDate ? new Date(wp.postDate).toLocaleDateString() : '';
     const permalink = wp.permalink || '';
     const tags = wp.tags || [];
+    const author = wp.author || '';
     
     return `
         <div class="record-card" data-wp-id="${wp.postId || ''}" data-record-id="${record.id || ''}">
@@ -768,16 +781,19 @@ function renderWordPressCard(record) {
                 <span>📅 ${date}</span>
                 <span class="source-badge wordpress">WordPress</span>
             </div>
+            ${author ? `<div class="record-author" style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.9em;">By: ${renderAuthorLink(author)}</div>` : ''}
             ${tags.length > 0 ? `
                 <div class="record-tags">
                     ${tags.slice(0, 5).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
                 </div>
             ` : ''}
+            ${/* View Post link - commented out per user request
             ${permalink ? `
                 <div class="record-actions">
                     <a href="${escapeHtml(permalink)}" target="_blank" class="record-link">View Post →</a>
                 </div>
             ` : ''}
+            */ ''}
         </div>
     `;
 }
@@ -902,7 +918,34 @@ function filterByAuthor(author) {
         searchInput.value = '';
     }
     
+    // Update filter indicator
+    updateAuthorFilterIndicator();
+    
     // Trigger reload with author filter
+    currentPage = 0;
+    loadRecords();
+}
+
+/**
+ * Update author filter indicator visibility and content
+ */
+function updateAuthorFilterIndicator() {
+    if (!authorFilterIndicator || !authorFilterValue) return;
+    
+    if (currentFilters.author) {
+        authorFilterValue.textContent = currentFilters.author;
+        authorFilterIndicator.classList.remove('hidden');
+    } else {
+        authorFilterIndicator.classList.add('hidden');
+    }
+}
+
+/**
+ * Clear author filter
+ */
+function clearAuthorFilterHandler() {
+    currentFilters.author = null;
+    updateAuthorFilterIndicator();
     currentPage = 0;
     loadRecords();
 }
