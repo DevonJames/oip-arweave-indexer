@@ -740,13 +740,14 @@ app.get('/onion-press/api/host-info', (req, res) => {
     });
 });
 
-// Destinations defaults API - Implement directly
+// Destinations defaults API - Use settingsManager (reflects admin changes)
 app.get('/onion-press/api/destinations/defaults', (req, res) => {
-    // Read from environment variables (defaults match original behavior)
+    // Use settingsManager which loads from file (can be updated by admin) or defaults to env vars
+    const settingsManager = require('./helpers/onion-press/settingsManager');
     const defaults = {
-        arweave: process.env.PUBLISH_TO_ARWEAVE !== 'false',
-        gun: process.env.PUBLISH_TO_GUN !== 'false',
-        thisHost: process.env.PUBLISH_TO_THIS_HOST === 'true'
+        arweave: settingsManager.getSetting('publishToArweave'),
+        gun: settingsManager.getSetting('publishToGun'),
+        thisHost: settingsManager.getSetting('publishToThisHost')
     };
     
     res.json({

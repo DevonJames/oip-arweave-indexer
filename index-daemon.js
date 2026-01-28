@@ -755,18 +755,41 @@ if (ONION_PRESS_ENABLED) {
         });
     });
     
-    // GET /onion-press/api/destinations/defaults - Get default destination settings from .env
+    // GET /onion-press/api/destinations/defaults - Get default destination settings (from settingsManager or .env)
     app.get('/onion-press/api/destinations/defaults', (req, res) => {
-        // Read from environment variables (defaults match original behavior)
-        const defaults = {
-            arweave: process.env.PUBLISH_TO_ARWEAVE !== 'false',
-            gun: process.env.PUBLISH_TO_GUN !== 'false',
-            thisHost: process.env.PUBLISH_TO_THIS_HOST === 'true'
-        };
-        
-        res.json({
-            destinations: defaults
-        });
+        try {
+            // Use settingsManager if available (reflects admin changes), otherwise fall back to env vars
+            let defaults;
+            try {
+                const settingsManager = require('./helpers/onion-press/settingsManager');
+                defaults = {
+                    arweave: settingsManager.getSetting('publishToArweave'),
+                    gun: settingsManager.getSetting('publishToGun'),
+                    thisHost: settingsManager.getSetting('publishToThisHost')
+                };
+            } catch (e) {
+                // Fallback to environment variables if settingsManager not available
+                defaults = {
+                    arweave: process.env.PUBLISH_TO_ARWEAVE !== 'false',
+                    gun: process.env.PUBLISH_TO_GUN !== 'false',
+                    thisHost: process.env.PUBLISH_TO_THIS_HOST === 'true'
+                };
+            }
+            
+            res.json({
+                destinations: defaults
+            });
+        } catch (error) {
+            console.error('Error getting default destinations:', error);
+            // Fallback to environment variables on error
+            res.json({
+                destinations: {
+                    arweave: process.env.PUBLISH_TO_ARWEAVE !== 'false',
+                    gun: process.env.PUBLISH_TO_GUN !== 'false',
+                    thisHost: process.env.PUBLISH_TO_THIS_HOST === 'true'
+                }
+            });
+        }
     });
     
     // Proxy /onion-press/api/user/admin-status to /api/user/admin-status

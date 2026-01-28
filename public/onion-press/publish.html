@@ -524,21 +524,10 @@
                 <section class="record-section">
                     <h2><span class="identity-badge" style="background: var(--accent-orange);">2</span> Create Record</h2>
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="recordType">Record Type</label>
-                            <select id="recordType">
-                                <option value="post">📰 Post / Article</option>
-                                <option value="image">🖼️ Image</option>
-                                <option value="video">🎬 Video</option>
-                                <option value="audio">🎵 Audio</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="byline">Byline / Author Name</label>
-                            <input type="text" id="byline" placeholder="Anonymous">
-                        </div>
-                    </div>
+                    <!-- Hidden: Record Type (defaults to "post") -->
+                    <select id="recordType" style="display: none;">
+                        <option value="post" selected>📰 Post / Article</option>
+                    </select>
 
                     <div class="form-group">
                         <label for="title">Title *</label>
@@ -554,21 +543,10 @@
                         <label for="content">Content *</label>
                         <textarea id="content" rows="8" placeholder="The main content of your record..." required></textarea>
                     </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="webUrl">Web URL (canonical link)</label>
-                            <input type="url" id="webUrl" placeholder="https://example.com/original-post">
-                        </div>
-                        <div class="form-group">
-                            <label for="tags">Tags (comma-separated)</label>
-                            <input type="text" id="tags" placeholder="news, politics, whistleblower">
-                        </div>
-                    </div>
                 </section>
 
-                <!-- Step 3: Destinations -->
-                <section class="destinations-section">
+                <!-- Step 3: Destinations (Hidden - uses node defaults) -->
+                <section class="destinations-section" style="display: none;">
                     <h2><span class="identity-badge" style="background: #06b6d4;">3</span> Publishing Destinations</h2>
 
                     <div class="destination-grid">
@@ -630,7 +608,7 @@
                         <label for="accountPassword">Password:</label>
                         <input type="password" id="accountPassword" placeholder="Your password" required>
                     </div>
-                    <button class="submit-btn" id="accountLoginBtn">Login</button>
+                    <button class="primary-btn" id="accountLoginBtn" style="width: 100%; margin-top: var(--spacing-md);">Login</button>
                     <div id="accountLoginStatus" class="status-message"></div>
                     <p class="form-note">Don't have an account? <a href="/onion-press/" onclick="alert('Please register through the main interface first')">Register here</a></p>
                 </div>
@@ -643,12 +621,16 @@
                         <input type="text" id="accountTitle" placeholder="Post title" required>
                     </div>
                     <div class="form-group">
+                        <label for="accountDescription">Description</label>
+                        <textarea id="accountDescription" rows="2" placeholder="Brief description of your content..."></textarea>
+                    </div>
+                    <div class="form-group">
                         <label for="accountContent">Content:</label>
                         <textarea id="accountContent" rows="10" placeholder="Your post content..." required></textarea>
                     </div>
                     
-                    <!-- Destination Selection -->
-                    <div class="form-group">
+                    <!-- Destination Selection (Hidden - uses node defaults) -->
+                    <div class="form-group" style="display: none;">
                         <label>Publish To:</label>
                         <div class="destination-grid">
                             <label class="destination-checkbox">
@@ -666,7 +648,7 @@
                         </div>
                     </div>
                     
-                    <button class="submit-btn" id="accountPublishBtn">Publish</button>
+                    <button class="primary-btn" id="accountPublishBtn" style="width: 100%; margin-top: var(--spacing-md);">Publish</button>
                     <div id="accountStatus" class="status-message"></div>
                 </div>
             </div>
@@ -684,20 +666,14 @@
                 <section class="record-section">
                     <h2><span class="identity-badge" style="background: var(--accent-orange);">1</span> Create Record</h2>
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="anonRecordType">Record Type</label>
-                            <select id="anonRecordType">
-                                <option value="post">📰 Post / Article</option>
-                                <option value="image">🖼️ Image</option>
-                                <option value="video">🎬 Video</option>
-                                <option value="audio">🎵 Audio</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="anonByline">Byline / Author Name</label>
-                            <input type="text" id="anonByline" placeholder="Anonymous">
-                        </div>
+                    <!-- Hidden: Record Type (defaults to "post") -->
+                    <select id="anonRecordType" style="display: none;">
+                        <option value="post" selected>📰 Post / Article</option>
+                    </select>
+
+                    <div class="form-group">
+                        <label for="anonByline">Byline / Author Name</label>
+                        <input type="text" id="anonByline" placeholder="Anonymous">
                     </div>
 
                     <div class="form-group">
@@ -713,17 +689,6 @@
                     <div class="form-group">
                         <label for="anonContent">Content *</label>
                         <textarea id="anonContent" rows="8" placeholder="The main content of your record..." required></textarea>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="anonWebUrl">Web URL (canonical link)</label>
-                            <input type="url" id="anonWebUrl" placeholder="https://example.com/original-post">
-                        </div>
-                        <div class="form-group">
-                            <label for="anonTags">Tags (comma-separated)</label>
-                            <input type="text" id="anonTags" placeholder="news, politics, whistleblower">
-                        </div>
                     </div>
                 </section>
 
@@ -805,6 +770,11 @@
         // State
         let identity = null;
         let currentMethod = null;
+        let defaultDestinations = {
+            arweave: false,
+            gun: false,
+            thisHost: true
+        };
 
         // ═══════════════════════════════════════════════════════════════════════════════
         // METHOD SELECTION
@@ -986,12 +956,8 @@
                 return;
             }
             
-            // Get destinations
-            const destinations = {
-                arweave: document.getElementById('accountDestArweave')?.checked || false,
-                gun: document.getElementById('accountDestGun')?.checked || false,
-                thisHost: document.getElementById('accountDestThisHost')?.checked || false
-            };
+            // Use default destinations from node settings (destination selection is hidden)
+            const destinations = { ...defaultDestinations };
             
             // Only require password if Arweave is enabled (needed for wallet decryption)
             // For local-only publishing, we can use publishAnonymous endpoint instead
@@ -1008,6 +974,7 @@
                     }
                     
                     // Build payload (same format as anonymous, but WITHOUT Anonymous tag for account-based publishing)
+                    const description = document.getElementById('accountDescription')?.value.trim() || '';
                     const payload = {
                         tags: [
                             { name: 'Index-Method', value: 'OIP' },
@@ -1019,7 +986,7 @@
                         records: [{
                             basic: {
                                 name: title,
-                                description: content.substring(0, 200)
+                                description: description || undefined
                             },
                             post: {
                                 articleText: content,
@@ -1064,6 +1031,7 @@
                         
                         // Clear form
                         document.getElementById('accountTitle').value = '';
+                        document.getElementById('accountDescription').value = '';
                         document.getElementById('accountContent').value = '';
                     } else {
                         throw new Error(data.error || data.message || 'Publishing failed');
@@ -1103,6 +1071,7 @@
                     }
                     
                     // Build payload
+                    const accountDescription = document.getElementById('accountDescription')?.value.trim() || '';
                     const payload = {
                         '@context': 'temp',
                         tags: [
@@ -1117,7 +1086,7 @@
                             records: [{
                                 basic: {
                                     name: title,
-                                    description: content.substring(0, 200)
+                                    description: accountDescription || undefined
                                 },
                                 post: {
                                     articleText: content,
@@ -1164,6 +1133,7 @@
                         
                         // Clear form
                         document.getElementById('accountTitle').value = '';
+                        document.getElementById('accountDescription').value = '';
                         document.getElementById('accountContent').value = '';
                     } else {
                         throw new Error(data.error || data.message || 'Publishing failed');
@@ -1278,13 +1248,16 @@
 
         function buildRecord(method = 'did') {
             const isDid = method === 'did';
-            const recordType = isDid ? document.getElementById('recordType').value : document.getElementById('anonRecordType').value;
+            // Default to "post" for DID and Anonymous modes
+            const recordType = isDid ? (document.getElementById('recordType')?.value || 'post') : (document.getElementById('anonRecordType')?.value || 'post');
             const title = isDid ? document.getElementById('title').value.trim() : document.getElementById('anonTitle').value.trim();
             const description = isDid ? document.getElementById('description').value.trim() : document.getElementById('anonDescription').value.trim();
             const content = isDid ? document.getElementById('content').value.trim() : document.getElementById('anonContent').value.trim();
-            const byline = isDid ? (document.getElementById('byline').value.trim() || 'Anonymous') : (document.getElementById('anonByline').value.trim() || 'Anonymous');
-            const webUrl = isDid ? document.getElementById('webUrl').value.trim() : document.getElementById('anonWebUrl').value.trim();
-            const tags = isDid ? document.getElementById('tags').value.trim() : document.getElementById('anonTags').value.trim();
+            // DID mode doesn't use byline (DID is the author), Anonymous mode does
+            const byline = isDid ? undefined : (document.getElementById('anonByline').value.trim() || 'Anonymous');
+            // DID and Anonymous modes don't use webUrl or tags
+            const webUrl = undefined;
+            const tags = undefined;
 
             if (!title) throw new Error('Title is required');
             if (!content) throw new Error('Content is required');
@@ -1300,10 +1273,13 @@
             // Add type-specific fields
             if (recordType === 'post') {
                 recordData.post = {
-                    byline: byline,
-                    articleText: content,
-                    webUrl: webUrl || undefined
+                    articleText: content
                 };
+                // Only add byline for anonymous mode (DID mode uses DID as author)
+                if (!isDid && byline) {
+                    recordData.post.byline = byline;
+                }
+                // Don't add webUrl or tags for DID/Anonymous modes
             } else if (recordType === 'image') {
                 recordData.image = {
                     description: content
@@ -1318,8 +1294,8 @@
                 };
             }
 
-            // Build tags array for Arweave
-            const tagsList = tags ? tags.split(',').map(t => t.trim()).filter(t => t) : [];
+            // Build tags array for Arweave (empty for DID/Anonymous modes)
+            const tagsList = [];
 
             if (isDid && identity) {
                 // DID mode: Build signed payload
@@ -1330,7 +1306,7 @@
                         { name: 'Ver', value: OIP_VERSION },
                         { name: 'Content-Type', value: 'application/json' },
                         { name: 'Creator', value: identity.did },
-                        { name: 'Record-Type', value: recordType }
+                        { name: 'Record-Type', value: 'post' } // Always "post" for DID mode
                     ],
                     fragments: [{
                         id: crypto.randomUUID(),
@@ -1353,7 +1329,7 @@
                         { name: 'Index-Method', value: 'OIP' },
                         { name: 'Ver', value: OIP_VERSION },
                         { name: 'Content-Type', value: 'application/json' },
-                        { name: 'Record-Type', value: recordType },
+                        { name: 'Record-Type', value: 'post' }, // Always "post" for Anonymous mode
                         { name: 'Anonymous', value: 'true' }
                     ],
                     fragments: [{
@@ -1394,12 +1370,8 @@
                 console.log('Signed payload:', signedPayload);
                 console.log('Debug info:', debug);
 
-                // Get selected destinations
-                const destinations = {
-                    arweave: document.getElementById('destArweave').checked,
-                    gun: document.getElementById('destGun').checked,
-                    thisHost: document.getElementById('destThisHost').checked
-                };
+                // Use default destinations from node settings (destinations section is hidden)
+                const destinations = { ...defaultDestinations };
 
                 // Send to server (server pays Arweave fee)
                 const response = await fetch('/onion-press/api/records/publishSigned', {
@@ -1451,8 +1423,7 @@
                 document.getElementById('title').value = '';
                 document.getElementById('description').value = '';
                 document.getElementById('content').value = '';
-                document.getElementById('webUrl').value = '';
-                document.getElementById('tags').value = '';
+                // webUrl and tags are hidden for DID mode
 
             } catch (error) {
                 console.error('Publish error:', error);
@@ -1583,7 +1554,25 @@
         // EVENT HANDLERS
         // ═══════════════════════════════════════════════════════════════════════════════
 
+        // Load default destinations from server
+        async function loadDefaultDestinations() {
+            try {
+                const response = await fetch('/onion-press/api/destinations/defaults');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.destinations) {
+                        defaultDestinations = { ...data.destinations };
+                        console.log('Loaded default destinations:', defaultDestinations);
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to load default destinations:', error);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
+            // Load default destinations first
+            await loadDefaultDestinations();
             // Check admin status and update UI
             await checkAdminStatus();
             // Load host info for both forms
