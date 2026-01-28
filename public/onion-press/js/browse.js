@@ -642,6 +642,9 @@ function renderRecords(records) {
     
     recordsContainer.innerHTML = records.map(record => renderRecordCard(record)).join('');
     
+    // Attach error handlers to images in browse view
+    attachImageErrorHandlers(recordsContainer);
+    
     // Add click handlers
     recordsContainer.querySelectorAll('.record-card').forEach(card => {
         card.addEventListener('click', (e) => {
@@ -763,12 +766,18 @@ function renderRecordCard(record) {
 function renderWordPressCard(record) {
     const wp = record.wordpress || {};
     const title = wp.title || 'Untitled';
-    // Render HTML instead of escaping it (excerpt may contain HTML)
-    const excerpt = wp.excerpt || wp.content?.substring(0, 200) || '';
+    const content = wp.content || '';
+    const excerpt = wp.excerpt || content?.substring(0, 200) || '';
     const date = wp.postDate ? new Date(wp.postDate).toLocaleDateString() : '';
     const permalink = wp.permalink || '';
     const tags = wp.tags || [];
     const author = wp.author || '';
+    
+    // Extract first image URL from content for thumbnail
+    const firstImageUrl = extractFirstImageUrl(content);
+    
+    // Render excerpt without images (strip images for preview)
+    const excerptRendered = renderMarkdown(excerpt, { stripImages: true });
     
     return `
         <div class="record-card" data-wp-id="${wp.postId || ''}" data-record-id="${record.id || ''}">
@@ -776,7 +785,12 @@ function renderWordPressCard(record) {
                 <span class="record-type-icon">📝</span>
                 <h3 class="record-title">${escapeHtml(title)}</h3>
             </div>
-            <div class="record-description">${excerpt}</div>
+            ${firstImageUrl ? `
+                <div class="record-image" style="margin-bottom: 0.75rem; border-radius: 8px; overflow: hidden;">
+                    <img src="${escapeHtml(firstImageUrl)}" alt="${escapeHtml(title)}" style="width: 100%; height: auto; display: block; max-height: 300px; object-fit: cover;" loading="lazy" crossorigin="anonymous" onerror="this.style.display='none';">
+                </div>
+            ` : ''}
+            <div class="record-description">${excerptRendered}</div>
             <div class="record-meta">
                 <span>📅 ${date}</span>
                 <span class="source-badge wordpress">WordPress</span>
@@ -976,14 +990,61 @@ function attachImageErrorHandlers(container) {
 }
 
 /**
+ * Strip images from markdown (for excerpts/previews)
+ */
+function stripImagesFromMarkdown(markdown) {
+    if (!markdown) return '';
+    // Remove markdown image syntax: ![alt](url)
+    return markdown.replace(/!\[([^\]]*)\]\([^\)]+\)/g, '').trim();
+}
+
+/**
+ * Extract first image URL from markdown (handles HTML-wrapped markdown)
+ */
+function extractFirstImageUrl(markdown) {
+    if (!markdown) return null;
+    
+    // Decode HTML entities first
+    const decoded = decodeHtmlEntities(markdown);
+    
+    // Strip HTML tags to get raw markdown
+    let rawMarkdown = decoded;
+    if (decoded.includes('<') && decoded.includes('>')) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = decoded;
+        rawMarkdown = tempDiv.textContent || tempDiv.innerText || decoded;
+    }
+    
+    // Extract first image URL from markdown
+    const match = rawMarkdown.match(/!\[([^\]]*)\]\(([^\)]+)\)/);
+    if (match && match[2]) {
+        // Convert Imgur URLs if needed
+        let imageUrl = match[2];
+        if (imageUrl.includes('imgur.com') && !imageUrl.includes('i.imgur.com')) {
+            imageUrl = convertImgurUrl(imageUrl);
+        }
+        return imageUrl;
+    }
+    
+    return null;
+}
+
+/**
  * Render markdown content safely
  */
-function renderMarkdown(markdown) {
+function renderMarkdown(markdown, options = {}) {
     if (!markdown) return '';
+    const { stripImages = false } = options;
+    
     try {
         // WordPress may store content as HTML or HTML-escaped markdown
         // Step 1: Decode HTML entities (e.g., &lt; becomes <, &amp; becomes &)
         let decodedMarkdown = decodeHtmlEntities(markdown);
+        
+        // Strip images if requested (for excerpts)
+        if (stripImages) {
+            decodedMarkdown = stripImagesFromMarkdown(decodedMarkdown);
+        }
         
         // Debug: Log if we detect markdown image syntax
         if (decodedMarkdown.includes('![') && decodedMarkdown.includes('](')) {
@@ -1169,7 +1230,7 @@ function renderWordPressRecordDetail(record) {
             <span class="source-badge wordpress">WordPress</span>
         </div>
         ${author ? `<p style="margin-bottom: 0.5rem; color: var(--text-muted);">By: ${renderAuthorLink(author)}</p>` : ''}
-        ${excerpt ? `<div style="margin-bottom: 1rem; color: var(--text-muted); font-style: italic;">${renderMarkdown(excerpt)}</div>` : ''}
+        ${excerpt ? `<div style="margin-bottom: 1rem; color: var(--text-muted); font-style: italic;">${renderMarkdown(excerpt, { stripImages: true })}</div>` : ''}
         ${content ? `<div class="markdown-content" style="margin-bottom: 1rem;">${renderMarkdown(content)}</div>` : ''}
         ${tags.length > 0 ? `
             <div class="record-tags" style="margin-bottom: 1rem;">
