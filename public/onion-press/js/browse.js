@@ -861,16 +861,49 @@ function decodeHtmlEntities(text) {
 }
 
 /**
+ * Strip HTML tags but preserve content
+ */
+function stripHtmlTags(html) {
+    if (!html) return '';
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    return tempDiv.textContent || tempDiv.innerText || '';
+}
+
+/**
  * Render markdown content safely
  */
 function renderMarkdown(markdown) {
     if (!markdown) return '';
     try {
-        // Decode HTML entities that WordPress might have encoded
-        // WordPress may HTML-encode markdown syntax, so we need to decode it first
-        const decodedMarkdown = decodeHtmlEntities(markdown);
+        // WordPress may store content as HTML or HTML-escaped markdown
+        // Step 1: Decode HTML entities (e.g., &lt; becomes <, &amp; becomes &)
+        let decodedMarkdown = decodeHtmlEntities(markdown);
         
-        // Check if marked is available
+        // Debug: Log if we detect markdown image syntax
+        if (decodedMarkdown.includes('![') && decodedMarkdown.includes('](')) {
+            console.log('[Markdown] Detected image syntax in content:', decodedMarkdown.substring(0, 200));
+        }
+        
+        // Step 2: Strip HTML tags if content appears to be HTML-wrapped
+        // WordPress REST API may wrap markdown in <p> tags or similar
+        // We need to extract the text content while preserving markdown syntax
+        if (decodedMarkdown.trim().startsWith('<') && decodedMarkdown.includes('>')) {
+            // Create a temporary div to parse HTML and extract text content
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = decodedMarkdown;
+            // Get text content - this preserves markdown syntax but removes HTML tags
+            const textContent = tempDiv.textContent || tempDiv.innerText || '';
+            
+            // If we got meaningful text content (not empty), use it
+            // This handles cases like <p>![title](url)</p> -> ![title](url)
+            if (textContent.trim().length > 0) {
+                decodedMarkdown = textContent;
+                console.log('[Markdown] Stripped HTML tags, extracted:', decodedMarkdown.substring(0, 200));
+            }
+        }
+        
+        // Step 3: Parse markdown
         if (typeof marked !== 'undefined') {
             // Configure marked for safe rendering
             marked.setOptions({
@@ -879,13 +912,26 @@ function renderMarkdown(markdown) {
                 sanitize: false,
                 headerIds: false
             });
-            return marked.parse(decodedMarkdown);
+            const rendered = marked.parse(decodedMarkdown);
+            
+            // Debug: Log if rendered output contains img tag
+            if (rendered.includes('<img')) {
+                console.log('[Markdown] Successfully rendered image');
+            } else if (decodedMarkdown.includes('![')) {
+                console.warn('[Markdown] Image syntax detected but not rendered.');
+                console.warn('[Markdown] Decoded markdown:', decodedMarkdown.substring(0, 200));
+                console.warn('[Markdown] Rendered output:', rendered.substring(0, 200));
+            }
+            
+            return rendered;
         } else {
             // Fallback to plain text if marked not loaded
+            console.warn('[Markdown] marked.js not available');
             return escapeHtml(decodedMarkdown);
         }
     } catch (error) {
         console.warn('Markdown rendering error:', error);
+        console.warn('Original markdown:', markdown);
         return escapeHtml(markdown);
     }
 }
