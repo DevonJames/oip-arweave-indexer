@@ -68,6 +68,10 @@ if wp core is-installed --allow-root 2>/dev/null; then
         # Force update to ensure WordPress uses the correct URL for redirects
         wp option update home "${WP_SITE_URL}" --allow-root || true
         wp option update siteurl "${WP_SITE_URL}" --allow-root || true
+        
+        # Flush permalinks after URL update to ensure REST API endpoints work correctly
+        echo "🔄 Flushing WordPress permalinks after URL update..."
+        wp rewrite flush --allow-root || true
     fi
 else
     # Check if auto-install is enabled
@@ -115,6 +119,10 @@ else
         wp option update blog_public 0 --allow-root || true  # Discourage search engines
         wp option update default_pingback_flag 0 --allow-root || true
         wp option update default_ping_status closed --allow-root || true
+        
+        # Flush permalinks to ensure REST API endpoints work correctly
+        echo "🔄 Flushing WordPress permalinks..."
+        wp rewrite flush --allow-root || true
         
         echo "✅ WordPress auto-installation complete!"
     else
