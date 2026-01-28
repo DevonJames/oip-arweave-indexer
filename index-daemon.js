@@ -893,7 +893,7 @@ if (ONION_PRESS_ENABLED) {
                     permalink = `${baseUrl}${wordpressPath}/?p=${post.id}`;
                 }
                 
-                return {
+                const record = {
                     wordpress: {
                         postId: post.id,
                         title: post.title,
@@ -909,9 +909,20 @@ if (ONION_PRESS_ENABLED) {
                         indexedAt: post.date
                     }
                 };
+                
+                // Debug log for DID posts
+                if (post.id >= 29 && post.id <= 33) {
+                    console.log(`🔍 [WordPressPosts] Building record for post ${post.id}: author="${post.author}"`);
+                }
+                
+                return record;
             });
             
             console.log(`✅ [WordPressPosts] Returning ${records.length} transformed records`);
+            // Log first few records to verify author field
+            if (records.length > 0) {
+                console.log(`🔍 [WordPressPosts] Sample record (post ${records[0].wordpress.postId}): author="${records[0].wordpress.author}"`);
+            }
             res.json({ records });
             
         } catch (error) {
