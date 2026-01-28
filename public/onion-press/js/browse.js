@@ -254,6 +254,20 @@ function initLogin() {
         recordModal.classList.add('hidden');
     });
     
+    // Handle author link clicks (event delegation)
+    if (recordModal) {
+        recordModal.addEventListener('click', (e) => {
+            const authorLink = e.target.closest('.author-link');
+            if (authorLink) {
+                e.preventDefault();
+                const author = authorLink.getAttribute('data-filter-author');
+                if (author) {
+                    filterByAuthor(author);
+                }
+            }
+        });
+    }
+    
     // Link between Login and Register modals
     if (showRegisterModal) {
         showRegisterModal.addEventListener('click', (e) => {
@@ -796,6 +810,88 @@ async function showWordPressRecordDetail(postId) {
 }
 
 /**
+ * Render markdown content safely
+ */
+function renderMarkdown(markdown) {
+    if (!markdown) return '';
+    try {
+        // Check if marked is available
+        if (typeof marked !== 'undefined') {
+            // Configure marked for safe rendering
+            marked.setOptions({
+                breaks: true,
+                gfm: true,
+                sanitize: false,
+                headerIds: false
+            });
+            return marked.parse(markdown);
+        } else {
+            // Fallback to plain text if marked not loaded
+            return escapeHtml(markdown);
+        }
+    } catch (error) {
+        console.warn('Markdown rendering error:', error);
+        return escapeHtml(markdown);
+    }
+}
+
+/**
+ * Check if author should be clickable (not anonymous)
+ */
+function isAuthorClickable(author) {
+    if (!author) return false;
+    const authorLower = author.toLowerCase().trim();
+    // Don't make "Anonymous" clickable
+    if (authorLower === 'anonymous' || authorLower === 'anon') return false;
+    // Make DIDs and account names clickable
+    return true;
+}
+
+/**
+ * Filter records by author/DID
+ */
+function filterByAuthor(author) {
+    if (!author) return;
+    
+    // Close modal first
+    if (recordModal) {
+        recordModal.classList.add('hidden');
+    }
+    
+    // Set search input to author name/DID
+    if (searchInput) {
+        searchInput.value = author;
+        // Trigger search
+        currentPage = 0;
+        loadRecords();
+    }
+}
+
+// Expose filterByAuthor globally for onclick handlers
+window.onionPressBrowse = {
+    filterByAuthor: filterByAuthor
+};
+
+/**
+ * Render author as clickable link if appropriate
+ */
+function renderAuthorLink(author) {
+    if (!author) return '';
+    
+    // Check if author should be clickable
+    if (!isAuthorClickable(author)) {
+        return escapeHtml(author);
+    }
+    
+    // Make it clickable - use data attribute and event delegation for better security
+    const isDid = author.startsWith('did:arweave:');
+    const linkClass = isDid ? 'author-link did-link' : 'author-link account-link';
+    const escapedAuthor = escapeHtml(author);
+    // Use data attribute instead of inline onclick for better security
+    return `<a href="#" data-filter-author="${escapedAuthor.replace(/"/g, '&quot;')}" class="${linkClass}" style="color: var(--accent-primary); text-decoration: none; border-bottom: 1px solid transparent; transition: var(--transition-fast); cursor: pointer;" onmouseover="this.style.borderBottomColor='var(--accent-primary)'" onmouseout="this.style.borderBottomColor='transparent'">${escapedAuthor}</a>`;
+}
+
+/**
  * Render WordPress post detail
  */
 function renderWordPressRecordDetail(record) {
@@ -808,6 +904,9 @@ function renderWordPressRecordDetail(record) {
     const tags = wp.tags || [];
     const author = wp.author || '';
     
+    // View on WordPress link - commented out per user request
+    // ${permalink ? `<p style="margin-bottom: 1rem;"><a href="${escapeHtml(permalink)}" target="_blank" rel="noopener" style="color: var(--accent-purple);">🔗 View on WordPress</a></p>` : ''}
+    
     return `
         <h2>${escapeHtml(title)}</h2>
         <div class="record-meta" style="margin-bottom: 1rem;">
@@ -816,9 +915,8 @@ function renderWordPressRecordDetail(record) {
             <span class="source-badge wordpress">WordPress</span>
         </div>
         ${author ? `<p style="margin-bottom: 0.5rem; color: var(--text-muted);">By: ${escapeHtml(author)}</p>` : ''}
-        ${permalink ? `<p style="margin-bottom: 1rem;"><a href="${escapeHtml(permalink)}" target="_blank" rel="noopener" style="color: var(--accent-purple);">🔗 View on WordPress</a></p>` : ''}
-        ${excerpt ? `<div style="margin-bottom: 1rem; color: var(--text-muted); font-style: italic;">${excerpt}</div>` : ''}
-        ${content ? `<div style="margin-bottom: 1rem;">${content}</div>` : ''}
+        ${excerpt ? `<div style="margin-bottom: 1rem; color: var(--text-muted); font-style: italic;">${renderMarkdown(excerpt)}</div>` : ''}
+        ${content ? `<div class="markdown-content" style="margin-bottom: 1rem;">${renderMarkdown(content)}</div>` : ''}
         ${tags.length > 0 ? `
             <div class="record-tags" style="margin-bottom: 1rem;">
                 ${tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
@@ -880,10 +978,10 @@ function renderRecordDetail(record) {
             <span>Type: ${type}</span>
             <span>Date: ${dateStr}</span>
         </div>
-        ${author ? `<p style="margin-bottom: 0.5rem; color: var(--text-muted);">By: ${escapeHtml(author)}</p>` : ''}
+        ${author ? `<p style="margin-bottom: 0.5rem; color: var(--text-muted);">By: ${renderAuthorLink(author)}</p>` : ''}
         ${webUrl ? `<p style="margin-bottom: 1rem;"><a href="${escapeHtml(webUrl)}" target="_blank" rel="noopener" style="color: var(--accent-purple);">🔗 Original Source</a></p>` : ''}
-        ${description ? `<p style="margin-bottom: 1rem;">${escapeHtml(description)}</p>` : ''}
-        ${articleContent ? `<div style="margin-bottom: 1rem; white-space: pre-wrap;">${escapeHtml(articleContent)}</div>` : ''}
+        ${description ? `<div class="markdown-content" style="margin-bottom: 1rem;">${renderMarkdown(description)}</div>` : ''}
+        ${articleContent ? `<div class="markdown-content" style="margin-bottom: 1rem;">${renderMarkdown(articleContent)}</div>` : ''}
         ${tags.length > 0 ? `
             <div class="record-tags" style="margin-bottom: 1rem;">
                 ${tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
