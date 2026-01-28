@@ -774,28 +774,68 @@ if (ONION_PRESS_ENABLED) {
                     let displayAuthor = authorName;
                     try {
                         // Get publishing mode
-                        const publisherModeCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_mode --allow-root 2>/dev/null || echo ""`;
-                        const publisherMode = execSync(publisherModeCmd, { encoding: 'utf-8', timeout: 5000 }).trim();
+                        const publisherModeCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_mode --allow-root`;
+                        let publisherMode = '';
+                        try {
+                            publisherMode = execSync(publisherModeCmd, { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+                        } catch (e) {
+                            // Meta field might not exist, that's OK - wp-cli returns error code 1
+                            publisherMode = '';
+                        }
                         const isDidMode = (publisherMode === 'did');
+                        console.log(`🔍 [WordPressPosts] Post ${postDetail.ID}: mode="${publisherMode}", isDidMode=${isDidMode}, authorName="${authorName}"`);
                         
                         if (isDidMode) {
                             // For DID mode, prioritize the DID from op_publisher_creator_did
-                            const creatorDidCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_creator_did --allow-root 2>/dev/null || echo ""`;
-                            const creatorDid = execSync(creatorDidCmd, { encoding: 'utf-8', timeout: 5000 }).trim();
+                            const creatorDidCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_creator_did --allow-root`;
+                            let creatorDid = '';
+                            try {
+                                creatorDid = execSync(creatorDidCmd, { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+                            } catch (e) {
+                                // Meta field might not exist
+                                creatorDid = '';
+                            }
+                            console.log(`🔍 [WordPressPosts] Post ${postDetail.ID}: creatorDid="${creatorDid}"`);
                             if (creatorDid) {
                                 displayAuthor = creatorDid;
+                                console.log(`✅ [WordPressPosts] Post ${postDetail.ID}: Using DID "${creatorDid}"`);
                             } else {
                                 // Fallback to byline meta fields
-                                const bylineCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} _op_byline --allow-root 2>/dev/null || docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_byline --allow-root 2>/dev/null || echo ""`;
-                                const byline = execSync(bylineCmd, { encoding: 'utf-8', timeout: 5000 }).trim();
+                                const bylineCmd1 = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} _op_byline --allow-root`;
+                                const bylineCmd2 = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_byline --allow-root`;
+                                let byline = '';
+                                try {
+                                    byline = execSync(bylineCmd1, { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+                                } catch (e) {
+                                    try {
+                                        byline = execSync(bylineCmd2, { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+                                    } catch (e2) {
+                                        byline = '';
+                                    }
+                                }
+                                console.log(`🔍 [WordPressPosts] Post ${postDetail.ID}: byline="${byline}"`);
                                 displayAuthor = byline || authorName;
+                                console.log(`⚠️ [WordPressPosts] Post ${postDetail.ID}: DID not found, using "${displayAuthor}"`);
                             }
                         } else {
                             // For non-DID modes, use byline if available
-                            const bylineCmd = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} _op_byline --allow-root 2>/dev/null || docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_byline --allow-root 2>/dev/null || echo ""`;
-                            const byline = execSync(bylineCmd, { encoding: 'utf-8', timeout: 5000 }).trim();
-                            displayAuthor = byline || authorName;
+                            const bylineCmd1 = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} _op_byline --allow-root`;
+                            const bylineCmd2 = `docker exec ${wpContainerName} wp post meta get ${postDetail.ID} op_publisher_byline --allow-root`;
+                            let byline = '';
+                            try {
+                                byline = execSync(bylineCmd1, { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+                            } catch (e) {
+                                try {
+                                    byline = execSync(bylineCmd2, { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+                                } catch (e2) {
+                                    byline = '';
+                                }
+                            }
+                            if (byline) {
+                                displayAuthor = byline;
+                            }
                         }
+                        console.log(`✅ [WordPressPosts] Post ${postDetail.ID}: Final displayAuthor="${displayAuthor}"`);
                     } catch (metaError) {
                         // Ignore meta fetch errors - fallback to author name
                         console.warn(`⚠️ [WordPressPosts] Could not fetch meta for post ${postDetail.ID}:`, metaError.message);
