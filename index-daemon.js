@@ -871,8 +871,8 @@ if (ONION_PRESS_ENABLED) {
                 });
             }
             
-            const { limit = 20, offset = 0, search, type } = req.query;
-            console.log(`🔍 [WordPressPosts] Query params: limit=${limit}, offset=${offset}, search=${search || 'none'}, type=${type || 'none'}`);
+            const { limit = 20, offset = 0, search, type, author } = req.query;
+            console.log(`🔍 [WordPressPosts] Query params: limit=${limit}, offset=${offset}, search=${search || 'none'}, type=${type || 'none'}, author=${author || 'none'}`);
             
             if (type && type !== 'post') {
                 // WordPress only has 'post' type by default
@@ -899,6 +899,9 @@ if (ONION_PRESS_ENABLED) {
                 // But we can use --s parameter for basic search
                 wpCommand += ` --s='${search.replace(/'/g, "'\\''")}'`;
             }
+            
+            // Note: Author filtering will be done in code after fetching posts
+            // because wp-cli doesn't support filtering by custom meta fields directly
             
             console.log(`🔧 [WordPressPosts] Executing wp-cli command: ${wpCommand}`);
             
@@ -1052,6 +1055,24 @@ if (ONION_PRESS_ENABLED) {
                     (post.content && post.content.toLowerCase().includes(searchLower)) ||
                     (post.excerpt && post.excerpt.toLowerCase().includes(searchLower))
                 );
+            }
+            
+            // Filter by author if provided (exact match for DIDs and emails)
+            if (author) {
+                console.log(`🔍 [WordPressPosts] Filtering by author: "${author}"`);
+                const authorFiltered = filteredPosts.filter(post => {
+                    // Exact match (case-sensitive for DIDs, case-insensitive for emails)
+                    const postAuthor = post.author || '';
+                    if (author.startsWith('did:arweave:')) {
+                        // DIDs must match exactly (case-sensitive)
+                        return postAuthor === author;
+                    } else {
+                        // Emails match case-insensitively
+                        return postAuthor.toLowerCase() === author.toLowerCase();
+                    }
+                });
+                console.log(`🔍 [WordPressPosts] Author filter: ${filteredPosts.length} -> ${authorFiltered.length} posts`);
+                filteredPosts = authorFiltered;
             }
             
             // Build base URL for permalinks

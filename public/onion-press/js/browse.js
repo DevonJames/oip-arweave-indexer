@@ -8,7 +8,9 @@
 let currentPage = 0;
 const pageSize = 20;
 let totalRecords = 0;
-let currentFilters = {};
+let currentFilters = {
+    author: null  // Track author filter separately from search
+};
 
 // DOM Elements
 const recordsContainer = document.getElementById('recordsContainer');
@@ -171,14 +173,25 @@ function initNavigation() {
  */
 function initSearch() {
     searchBtn.addEventListener('click', () => {
+        // Clear author filter when doing text search
+        currentFilters.author = null;
         currentPage = 0;
         loadRecords();
     });
     
     searchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
+            // Clear author filter when doing text search
+            currentFilters.author = null;
             currentPage = 0;
             loadRecords();
+        }
+    });
+    
+    // Clear author filter when search input changes
+    searchInput.addEventListener('input', () => {
+        if (currentFilters.author && searchInput.value) {
+            currentFilters.author = null;
         }
     });
     
@@ -514,12 +527,20 @@ async function loadRecords() {
                 console.log('Loading WordPress posts...');
                 // Type filter is commented out, default to 'post'
                 const recordType = typeFilter?.value || 'post';
-                const wpRecords = await getWordPressPosts({
+                const wpParams = {
                     limit: pageSize,
                     offset: currentPage * pageSize,
-                    search: searchInput.value,
                     type: recordType
-                });
+                };
+                // Add text search if present
+                if (searchInput.value) {
+                    wpParams.search = searchInput.value;
+                }
+                // Add author filter if present (separate from text search)
+                if (currentFilters.author) {
+                    wpParams.author = currentFilters.author;
+                }
+                const wpRecords = await getWordPressPosts(wpParams);
                 console.log('WordPress posts loaded:', wpRecords.length);
                 allRecords.push(...wpRecords);
                 // Update total if we got WordPress posts
@@ -600,7 +621,11 @@ function sortRecords(records, sortBy) {
  */
 function renderRecords(records) {
     if (records.length === 0) {
-        recordsContainer.innerHTML = '<div class="loading">No records found</div>';
+        let message = 'No records found';
+        if (currentFilters.author) {
+            message = `No records found by ${currentFilters.author}`;
+        }
+        recordsContainer.innerHTML = `<div class="loading">${message}</div>`;
         return;
     }
     
@@ -836,15 +861,25 @@ function renderMarkdown(markdown) {
 }
 
 /**
- * Check if author should be clickable (not anonymous)
+ * Check if author should be clickable (only emails and DIDs)
  */
 function isAuthorClickable(author) {
     if (!author) return false;
-    const authorLower = author.toLowerCase().trim();
-    // Don't make "Anonymous" clickable
-    if (authorLower === 'anonymous' || authorLower === 'anon') return false;
-    // Make DIDs and account names clickable
-    return true;
+    const authorTrimmed = author.trim();
+    
+    // Check if it's a DID (starts with "did:arweave:")
+    if (authorTrimmed.startsWith('did:arweave:')) {
+        return true;
+    }
+    
+    // Check if it's an email address (contains @ and looks like an email)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (emailRegex.test(authorTrimmed)) {
+        return true;
+    }
+    
+    // Everything else (custom bylines from anonymous publishing) should not be clickable
+    return false;
 }
 
 /**
@@ -858,13 +893,18 @@ function filterByAuthor(author) {
         recordModal.classList.add('hidden');
     }
     
-    // Set search input to author name/DID
+    // Store author filter in a custom way (not using search input)
+    // We'll pass it as a query parameter when loading records
+    currentFilters.author = author;
+    
+    // Clear search input (author filtering is separate from text search)
     if (searchInput) {
-        searchInput.value = author;
-        // Trigger search
-        currentPage = 0;
-        loadRecords();
+        searchInput.value = '';
     }
+    
+    // Trigger reload with author filter
+    currentPage = 0;
+    loadRecords();
 }
 
 // Expose filterByAuthor globally for onclick handlers
