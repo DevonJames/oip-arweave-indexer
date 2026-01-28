@@ -828,6 +828,8 @@ async function showRecordDetail(did) {
     try {
         const record = await getRecord(did);
         detailContainer.innerHTML = renderRecordDetail(record);
+        // Attach error handlers to images after insertion
+        attachImageErrorHandlers(detailContainer);
     } catch (error) {
         detailContainer.innerHTML = `<div class="error-msg">Error: ${error.message}</div>`;
     }
@@ -845,6 +847,8 @@ async function showWordPressRecordDetail(postId) {
         // Fetch single WordPress post by ID
         const record = await getRecord(`wp-${postId}`);
         detailContainer.innerHTML = renderWordPressRecordDetail(record);
+        // Attach error handlers to images after insertion
+        attachImageErrorHandlers(detailContainer);
     } catch (error) {
         detailContainer.innerHTML = `<div class="error-msg">Error: ${error.message}</div>`;
     }
@@ -868,6 +872,107 @@ function stripHtmlTags(html) {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
     return tempDiv.textContent || tempDiv.innerText || '';
+}
+
+/**
+ * Convert Imgur album URLs to direct image URLs
+ * Note: This is a best-effort conversion. Imgur albums require API access for reliable conversion.
+ */
+function convertImgurUrl(url) {
+    if (!url) return url;
+    
+    // Imgur album URLs: https://imgur.com/a/XXXXX or https://imgur.com/gallery/XXXXX
+    const albumMatch = url.match(/imgur\.com\/(?:a|gallery)\/([a-zA-Z0-9]+)/);
+    if (albumMatch) {
+        const albumId = albumMatch[1];
+        console.warn(`[Imgur] Album URL detected: ${url}. Albums cannot be embedded directly. Consider using a direct image URL (https://i.imgur.com/XXXXX.jpg)`);
+        // Return the original URL - we'll handle it with error handling
+        return url;
+    }
+    
+    // Imgur single image URLs: https://imgur.com/XXXXX -> https://i.imgur.com/XXXXX.jpg
+    const singleMatch = url.match(/imgur\.com\/([a-zA-Z0-9]+)(?:\.(jpg|png|gif|webp))?$/);
+    if (singleMatch) {
+        const imageId = singleMatch[1];
+        const ext = singleMatch[2] || 'jpg';
+        return `https://i.imgur.com/${imageId}.${ext}`;
+    }
+    
+    return url;
+}
+
+/**
+ * Post-process rendered HTML to fix image URLs
+ * Returns the processed HTML string
+ */
+function postProcessImages(html) {
+    if (!html || !html.includes('<img')) return html;
+    
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    
+    const images = tempDiv.querySelectorAll('img');
+    images.forEach(img => {
+        const originalSrc = img.getAttribute('src') || img.src;
+        
+        // Check if this is an Imgur album URL (can't be embedded)
+        if (originalSrc.includes('imgur.com/a/') || originalSrc.includes('imgur.com/gallery/')) {
+            console.warn(`[Imgur] Album URL detected: ${originalSrc}. Albums cannot be embedded directly.`);
+            // Replace image with a clickable link
+            const link = document.createElement('a');
+            link.href = originalSrc;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = `📷 View Image Album`;
+            link.style.cssText = 'color: var(--accent-primary); text-decoration: underline; display: inline-block; margin: 1rem 0; padding: 0.5rem; border: 1px solid var(--accent-primary); border-radius: 4px;';
+            img.parentNode.replaceChild(link, img);
+            return;
+        }
+        
+        // Convert Imgur single image URLs if needed
+        if (originalSrc.includes('imgur.com') && !originalSrc.includes('i.imgur.com')) {
+            const convertedUrl = convertImgurUrl(originalSrc);
+            if (convertedUrl !== originalSrc) {
+                img.src = convertedUrl;
+                console.log(`[Imgur] Converted URL: ${originalSrc} -> ${convertedUrl}`);
+            }
+        }
+        
+        // Store original src for error handling
+        img.setAttribute('data-original-src', originalSrc);
+        img.loading = 'lazy';
+        img.crossOrigin = 'anonymous';
+    });
+    
+    return tempDiv.innerHTML;
+}
+
+/**
+ * Attach error handlers to images after they're inserted into the DOM
+ */
+function attachImageErrorHandlers(container) {
+    if (!container) return;
+    
+    const images = container.querySelectorAll('img[data-original-src]');
+    images.forEach(img => {
+        // Only attach if not already attached
+        if (img.dataset.errorHandlerAttached) return;
+        img.dataset.errorHandlerAttached = 'true';
+        
+        const originalSrc = img.getAttribute('data-original-src') || img.src;
+        
+        img.addEventListener('error', function() {
+            console.warn(`[Image] Failed to load: ${this.src}`);
+            // Create a fallback link
+            const link = document.createElement('a');
+            link.href = originalSrc;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = `🔗 View Image`;
+            link.style.cssText = 'color: var(--accent-primary); text-decoration: underline; display: inline-block; margin: 1rem 0; padding: 0.5rem; border: 1px solid var(--accent-primary); border-radius: 4px;';
+            this.parentNode.replaceChild(link, this);
+        });
+    });
 }
 
 /**
@@ -912,7 +1017,10 @@ function renderMarkdown(markdown) {
                 sanitize: false,
                 headerIds: false
             });
-            const rendered = marked.parse(decodedMarkdown);
+            let rendered = marked.parse(decodedMarkdown);
+            
+            // Step 4: Post-process images (convert Imgur URLs, add error handling)
+            rendered = postProcessImages(rendered);
             
             // Debug: Log if rendered output contains img tag
             if (rendered.includes('<img')) {
