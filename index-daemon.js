@@ -1610,11 +1610,28 @@ if (WORDPRESS_PROXY_ENABLED) {
                         if (!match.includes('/wordpress/wp-')) {
                             if (url.startsWith('http')) {
                                 // Full URL - insert /wordpress before /wp-admin or /wp-login
-                                return prefix + url.replace(/(\/wp-(admin|login))/, '/wordpress$1');
+                                const fixed = url.replace(/(\/wp-(admin|login))/, '/wordpress$1');
+                                console.log(`🔧 [WordPress Proxy] Fixed redirect_to in HTML: ${url} → ${fixed}`);
+                                return prefix + fixed + path;
                             } else {
                                 // Relative URL - prepend /wordpress
                                 return prefix + '/wordpress' + path;
                             }
+                        }
+                        return match;
+                    }
+                );
+                
+                // Also fix redirect_to in hidden input fields (more specific pattern)
+                html = html.replace(
+                    /(<input[^>]*name=["']redirect_to["'][^>]*value=["'])([^"']*\/wp-(admin|login)[^"']*)(["'])/gi,
+                    (match, prefix, url, wpPath, suffix) => {
+                        if (!url.includes('/wordpress/wp-')) {
+                            const fixed = url.includes('://') 
+                                ? url.replace(/(\/wp-(admin|login))/, '/wordpress$1')
+                                : `/wordpress${url}`;
+                            console.log(`🔧 [WordPress Proxy] Fixed redirect_to input field: ${url} → ${fixed}`);
+                            return prefix + fixed + suffix;
                         }
                         return match;
                     }
@@ -1672,21 +1689,30 @@ if (WORDPRESS_PROXY_ENABLED) {
                     (match, encodedUrl) => {
                         try {
                             const decoded = decodeURIComponent(encodedUrl);
-                            // Only fix if it contains /wp-admin or /wp-login and doesn't already have /wordpress
-                            if ((decoded.includes('/wp-admin') || decoded.includes('/wp-login')) && 
-                                !decoded.includes('/wordpress/wp-')) {
-                                const fixed = decoded.replace(/(\/wp-(admin|login))/, '/wordpress$1');
-                                const newMatch = 'redirect_to=' + encodeURIComponent(fixed);
-                                console.log(`🔧 [WordPress Proxy] Fixed redirect_to: ${decoded} → ${fixed}`);
-                                return newMatch;
-                            }
-                        } catch (e) {
-                            // If decoding fails, try to fix the pattern directly
-                            if (match.includes('/wp-admin') || match.includes('/wp-login')) {
-                                if (!match.includes('/wordpress/wp-')) {
-                                    return match.replace(/(\/wp-(admin|login))/, '/wordpress$1');
+                            // Fix URLs that point to wp-admin or wp-login but are missing /wordpress prefix
+                            if (decoded.includes('/wp-admin') || decoded.includes('/wp-login')) {
+                                // Check if it's a full URL with the host but missing /wordpress
+                                if (decoded.includes(originalHost) && !decoded.includes('/wordpress/wp-')) {
+                                    const fixed = decoded.replace(
+                                        new RegExp(`(https?://${originalHost.replace(/\./g, '\\.')})(/wp-(admin|login))`, 'g'),
+                                        `$1/wordpress$2`
+                                    );
+                                    if (fixed !== decoded) {
+                                        const newMatch = 'redirect_to=' + encodeURIComponent(fixed);
+                                        console.log(`🔧 [WordPress Proxy] Fixed redirect_to query: ${decoded} → ${fixed}`);
+                                        return newMatch;
+                                    }
+                                }
+                                // Check if it's a relative URL starting with /wp-admin or /wp-login
+                                else if (decoded.match(/^\/wp-(admin|login)/) && !decoded.startsWith('/wordpress/wp-')) {
+                                    const fixed = `${req.protocol || 'https'}://${originalHost}/wordpress${decoded}`;
+                                    const newMatch = 'redirect_to=' + encodeURIComponent(fixed);
+                                    console.log(`🔧 [WordPress Proxy] Fixed redirect_to query (relative): ${decoded} → ${fixed}`);
+                                    return newMatch;
                                 }
                             }
+                        } catch (e) {
+                            console.warn(`⚠️ [WordPress Proxy] Error fixing redirect_to: ${e.message}`);
                         }
                         return match;
                     }
@@ -1694,6 +1720,7 @@ if (WORDPRESS_PROXY_ENABLED) {
                 // Update the proxy request path
                 if (req.url !== originalUrl) {
                     proxyReq.path = req.url;
+                    console.log(`🔧 [WordPress Proxy] Updated request path: ${originalUrl} → ${req.url}`);
                 }
             }
         },
